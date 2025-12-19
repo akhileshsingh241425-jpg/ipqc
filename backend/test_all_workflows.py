@@ -8,7 +8,7 @@ import json
 from datetime import datetime, timedelta
 import time
 
-BASE_URL = "http://localhost:5002"
+BASE_URL = "http://localhost:5003"
 API_BASE = f"{BASE_URL}/api"
 
 class Colors:

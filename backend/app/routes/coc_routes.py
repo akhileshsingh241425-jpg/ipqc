@@ -978,8 +978,8 @@ def manual_coc_entry():
             'invoice_qty': invoice_qty,
             'invoice_date': invoice_date,
             'entry_date': datetime.now().strftime('%Y-%m-%d'),
-            'coc_document_url': f"http://localhost:5002{coc_pdf_path}" if coc_pdf_path else None,
-            'iqc_document_url': f"http://localhost:5002{iqc_pdf_path}" if iqc_pdf_path else None,
+            'coc_document_url': f"http://localhost:5003{coc_pdf_path}" if coc_pdf_path else None,
+            'iqc_document_url': f"http://localhost:5003{iqc_pdf_path}" if iqc_pdf_path else None,
             'store_name': 'Manual Entry',
             'product_type': material_name,
             'is_manual': True

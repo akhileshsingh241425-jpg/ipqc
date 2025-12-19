@@ -7,7 +7,7 @@ import requests
 import json
 from datetime import datetime, timedelta
 
-BASE_URL = "http://localhost:5002"
+BASE_URL = "http://localhost:5003"
 API_BASE = f"{BASE_URL}/api"
 
 class Colors:
@@ -113,7 +113,7 @@ try:
     record_result(True)
 except Exception as e:
     print_error(f"Server not accessible: {str(e)}")
-    print_warning("Make sure backend server is running on port 5002")
+    print_warning("Make sure backend server is running on port 5003")
     record_result(False)
     exit(1)
 
