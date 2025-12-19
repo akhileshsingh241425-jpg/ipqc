@@ -8,7 +8,8 @@ from .database import db
 
 class MasterOrder(db.Model):
     """Master order with pre-generated module data"""
-    __tablename__ = 'master_orders'
+    __tablename__ = 'master_orders_old'
+    __table_args__ = {'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
     company_name = db.Column(db.String(200), nullable=False)
@@ -18,8 +19,8 @@ class MasterOrder(db.Model):
     serial_prefix = db.Column(db.String(50), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
-    # Relationships
-    modules = db.relationship('MasterModule', backref='order', lazy=True, cascade='all, delete-orphan')
+    # Relationships - commented out to avoid conflicts with new pdi_models
+    # modules = db.relationship('MasterModule', backref='order', lazy=True, cascade='all, delete-orphan')
 
 class MasterModule(db.Model):
     """Pre-generated module data with FTR/Rejection status"""

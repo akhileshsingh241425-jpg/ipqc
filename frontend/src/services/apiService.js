@@ -1,9 +1,15 @@
 /**
  * API Service for IPQC Backend
+ * Production: Uses /api (same domain, no port conflicts)
+ * Development: Uses localhost:5002
  */
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+// Smart API URL detection
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+                     (window.location.hostname === 'localhost' 
+                      ? 'http://localhost:5002/api' 
+                      : '/api');
 
 /**
  * Get the full API URL for fetch requests

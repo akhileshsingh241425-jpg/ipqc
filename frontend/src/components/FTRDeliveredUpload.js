@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import '../styles/RejectionAnalysis.css'; // Reuse same styling
 import { getApiUrl } from '../services/apiService';
 
 const FTRDeliveredUpload = () => {

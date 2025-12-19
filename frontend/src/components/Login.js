@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import '../styles/Login.css';
 
 const Login = ({ onLogin }) => {
@@ -8,6 +8,21 @@ const Login = ({ onLogin }) => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Default users
+  const DEFAULT_USERS = [
+    { id: 1, username: 'admin@gautam', password: 'Admin@2025', name: 'Super Admin', role: 'super_admin' },
+    { id: 2, username: 'user@gautam', password: 'User@2025', name: 'Production User', role: 'user' },
+    { id: 3, username: 'Gautam@123', password: 'Gautam@321', name: 'Gautam Solar', role: 'super_admin' }
+  ];
+
+  // Initialize default users in localStorage on mount
+  useEffect(() => {
+    const storedUsers = localStorage.getItem('system_users');
+    if (!storedUsers) {
+      localStorage.setItem('system_users', JSON.stringify(DEFAULT_USERS));
+    }
+  }, []);
 
   const handleChange = (e) => {
     setCredentials({
@@ -22,13 +37,50 @@ const Login = ({ onLogin }) => {
     setLoading(true);
     setError('');
 
-    // Hardcoded credentials
-    const VALID_USERNAME = 'Gautam@123';
-    const VALID_PASSWORD = 'Gautam@321';
-
     setTimeout(() => {
-      if (credentials.username === VALID_USERNAME && credentials.password === VALID_PASSWORD) {
+      // Load users from localStorage
+      const storedUsers = localStorage.getItem('system_users');
+      let users = {};
+
+      if (storedUsers) {
+        try {
+          const usersArray = JSON.parse(storedUsers);
+          // Convert array to object for easier lookup
+          usersArray.forEach(user => {
+            users[user.username] = {
+              password: user.password,
+              role: user.role,
+              name: user.name
+            };
+          });
+        } catch (error) {
+          console.error('Failed to load users:', error);
+          // Fallback to default users
+          DEFAULT_USERS.forEach(user => {
+            users[user.username] = {
+              password: user.password,
+              role: user.role,
+              name: user.name
+            };
+          });
+        }
+      } else {
+        // Fallback to default users
+        DEFAULT_USERS.forEach(user => {
+          users[user.username] = {
+            password: user.password,
+            role: user.role,
+            name: user.name
+          };
+        });
+      }
+
+      const user = users[credentials.username];
+      
+      if (user && credentials.password === user.password) {
         localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('userRole', user.role);
+        localStorage.setItem('userName', user.name);
         localStorage.setItem('loginTime', new Date().toISOString());
         onLogin();
       } else {
@@ -82,6 +134,22 @@ const Login = ({ onLogin }) => {
             {loading ? '⏳ Logging in...' : '🔐 Login'}
           </button>
         </form>
+
+        <div className="user-info-box">
+          <h3>👤 Login Credentials</h3>
+          <div className="credential-item">
+            <strong>Super Admin:</strong>
+            <p>Username: <code>admin@gautam</code></p>
+            <p>Password: <code>Admin@2025</code></p>
+            <span className="badge badge-admin">Full Access (Edit/Delete)</span>
+          </div>
+          <div className="credential-item">
+            <strong>Normal User:</strong>
+            <p>Username: <code>user@gautam</code></p>
+            <p>Password: <code>User@2025</code></p>
+            <span className="badge badge-user">View/Update Only</span>
+          </div>
+        </div>
 
         <div className="login-footer">
           <p>© 2025 Gautam Solar. All rights reserved.</p>

@@ -10,6 +10,69 @@ import random
 
 master_bp = Blueprint('master', __name__, url_prefix='/api/master')
 
+@master_bp.route('/bom', methods=['GET'])
+def get_bom_data():
+    """Get BOM (Bill of Materials) data"""
+    try:
+        from app.models.ipqc_data import BOMData
+        
+        # Get all BOM data
+        bom_items = BOMData.query.all()
+        
+        return jsonify({
+            "success": True,
+            "data": [item.to_dict() for item in bom_items] if bom_items else [],
+            "count": len(bom_items) if bom_items else 0
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e),
+            "data": []
+        }), 200
+
+
+@master_bp.route('/cell-specs', methods=['GET'])
+def get_cell_specifications():
+    """Get cell specifications data"""
+    try:
+        # Return standard cell specifications
+        specs = {
+            "standard_cells": [
+                {
+                    "type": "Mono PERC",
+                    "size": "158.75 x 158.75 mm",
+                    "efficiency": "22.8%",
+                    "power": "5.2W"
+                },
+                {
+                    "type": "Mono Bifacial",
+                    "size": "182 x 182 mm",
+                    "efficiency": "23.1%",
+                    "power": "6.5W"
+                }
+            ],
+            "cells_per_module": {
+                "60_cell": 60,
+                "66_cell": 66,
+                "72_cell": 72,
+                "144_cell": 144
+            }
+        }
+        
+        return jsonify({
+            "success": True,
+            "data": specs
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
+
+
 @master_bp.route('/upload-excel', methods=['POST'])
 def upload_excel_data():
     """
@@ -972,3 +1035,77 @@ def delete_order(order_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+@master_bp.route('/check-serials', methods=['POST'])
+def check_serials():
+    """Check if serial numbers exist in master data"""
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        
+        # Support both formats: serial_range object or direct serial_start/serial_end
+        serial_range = data.get('serial_range')
+        if serial_range:
+            serial_start = serial_range.get('start', '').strip()
+            serial_end = serial_range.get('end', '').strip()
+        else:
+            serial_start = data.get('serial_start', '').strip()
+            serial_end = data.get('serial_end', '').strip()
+        
+        if not order_id or not serial_start or not serial_end:
+            return jsonify({'valid': False, 'message': 'Missing required fields'}), 400
+        
+        # Check if order exists
+        order = MasterOrder.query.get(order_id)
+        if not order:
+            return jsonify({'valid': False, 'message': 'Order not found'}), 404
+        
+        # Check if both serials exist
+        start_module = MasterModule.query.filter_by(
+            order_id=order_id,
+            serial_number=serial_start
+        ).first()
+        
+        end_module = MasterModule.query.filter_by(
+            order_id=order_id,
+            serial_number=serial_end
+        ).first()
+        
+        if not start_module or not end_module:
+            # Get available serial range
+            first_serial = MasterModule.query.filter_by(order_id=order_id).order_by(MasterModule.id).first()
+            last_serial = MasterModule.query.filter_by(order_id=order_id).order_by(MasterModule.id.desc()).first()
+            
+            available_range = f"{first_serial.serial_number} to {last_serial.serial_number}" if first_serial and last_serial else "No serials available"
+            
+            return jsonify({
+                'valid': False, 
+                'message': f'Serials not found. Available: {available_range}'
+            }), 200
+        
+        # Count modules in range (including rejected)
+        modules_in_range = MasterModule.query.filter(
+            MasterModule.order_id == order_id,
+            MasterModule.serial_number >= serial_start,
+            MasterModule.serial_number <= serial_end
+        ).count()
+        
+        # Count non-rejected modules
+        good_modules = MasterModule.query.filter(
+            MasterModule.order_id == order_id,
+            MasterModule.serial_number >= serial_start,
+            MasterModule.serial_number <= serial_end,
+            MasterModule.is_rejected == False
+        ).count()
+        
+        rejected_count = modules_in_range - good_modules
+        
+        return jsonify({
+            'valid': True,
+            'total_modules': modules_in_range,
+            'good_modules': good_modules,
+            'rejected_modules': rejected_count,
+            'message': f'{good_modules} FTR modules available ({rejected_count} rejected)'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'valid': False, 'message': str(e)}), 500

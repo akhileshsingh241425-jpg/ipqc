@@ -94,45 +94,47 @@ def add_production_record(company_id):
         company = Company.query.get_or_404(company_id)
         data = request.get_json()
         
-        # Validate lot number
-        lot_number = data.get('lotNumber', '').strip()
-        if not lot_number:
-            return jsonify({'error': 'Lot number is mandatory'}), 400
+        # Validate PDI Number and Running Order
+        pdi = data.get('pdi', '').strip()
+        running_order = data.get('runningOrder', '').strip()
         
-        # Check if lot number already exists
-        existing = ProductionRecord.query.filter_by(lot_number=lot_number).first()
-        if existing:
-            return jsonify({'error': f'Lot number "{lot_number}" already exists'}), 400
+        if not pdi:
+            return jsonify({'error': 'PDI Number is mandatory'}), 400
+        
+        if not running_order:
+            return jsonify({'error': 'Running Order is mandatory'}), 400
         
         # Get total production quantity
         total_production = int(data.get('dayProduction', 0)) + int(data.get('nightProduction', 0))
         
-        # Validate raw material availability before production entry
-        from app.services.coc_service import COCService
-        material_requirements = {
-            'Solar Cell': total_production * company.cells_per_module,
-            'Glass': total_production * 2,  # Front + Back
-            'Aluminium Frame': total_production * 4,  # 4 pieces per module
-            'Ribbon': total_production * 0.5,  # Approximate
-            'EPE': total_production * 2  # Packaging
-        }
-        
-        validation = COCService.validate_production(company.company_name, material_requirements)
-        if not validation.get('valid'):
-            return jsonify({
-                'error': 'Insufficient raw material for production',
-                'message': 'Production cannot proceed due to insufficient raw materials',
-                'details': validation.get('insufficient', []),
-                'required_materials': material_requirements
-            }), 400
+        # Validate raw material availability only if production > 0
+        if total_production > 0:
+            from app.services.coc_service import COCService
+            material_requirements = {
+                'Solar Cell': total_production * company.cells_per_module,
+                'Glass': total_production * 2,  # Front + Back
+                'Aluminium Frame': total_production * 4,  # 4 pieces per module
+                'Ribbon': total_production * 0.5,  # Approximate
+                'EPE': total_production * 2  # Packaging
+            }
+            
+            validation = COCService.validate_production(company.company_name, material_requirements)
+            if not validation.get('valid'):
+                return jsonify({
+                    'error': 'Insufficient raw material for production',
+                    'message': 'Production cannot proceed due to insufficient raw materials',
+                    'details': validation.get('insufficient', []),
+                    'required_materials': material_requirements
+                }), 400
         
         record = ProductionRecord(
             company_id=company_id,
             date=datetime.strptime(data.get('date'), '%Y-%m-%d').date(),
-            lot_number=lot_number,
             day_production=int(data.get('dayProduction', 0)),
             night_production=int(data.get('nightProduction', 0)),
-            pdi=data.get('pdi', ''),
+            pdi=pdi,
+            running_order=running_order,
+            pdi_approved=data.get('pdiApproved', False),
             cell_rejection_percent=float(data.get('cellRejectionPercent', 0.0)),
             module_rejection_percent=float(data.get('moduleRejectionPercent', 0.0)),
             is_closed=False
@@ -141,16 +143,17 @@ def add_production_record(company_id):
         db.session.add(record)
         db.session.commit()
         
-        # Auto-consume materials after successful production entry
-        from app.services.coc_service import COCService
-        for material_name, quantity in material_requirements.items():
-            COCService.consume_material(
-                company.company_name,
-                material_name,
-                quantity,
-                record.date,
-                lot_number
-            )
+        # Auto-consume materials only if production > 0
+        if total_production > 0:
+            from app.services.coc_service import COCService
+            for material_name, quantity in material_requirements.items():
+                COCService.consume_material(
+                    company.company_name,
+                    material_name,
+                    quantity,
+                    record.date,
+                    pdi  # Use PDI number instead of lot number
+                )
         
         # Initialize BOM materials for this record
         for material_name in BOM_MATERIALS:
@@ -181,9 +184,16 @@ def update_production_record(company_id, record_id):
         
         if data.get('date'):
             record.date = datetime.strptime(data.get('date'), '%Y-%m-%d').date()
+        if 'runningOrder' in data:
+            record.running_order = data.get('runningOrder')
         record.day_production = int(data.get('dayProduction', record.day_production))
         record.night_production = int(data.get('nightProduction', record.night_production))
         record.pdi = data.get('pdi', record.pdi)
+        if 'pdiApproved' in data:
+            record.pdi_approved = data.get('pdiApproved')
+        record.serial_number_start = data.get('serialNumberStart', record.serial_number_start)
+        record.serial_number_end = data.get('serialNumberEnd', record.serial_number_end)
+        record.serial_count = int(data.get('serialCount', record.serial_count or 0))
         record.cell_rejection_percent = float(data.get('cellRejectionPercent', record.cell_rejection_percent))
         record.module_rejection_percent = float(data.get('moduleRejectionPercent', record.module_rejection_percent))
         
@@ -192,6 +202,22 @@ def update_production_record(company_id, record_id):
             record.lot_number = data.get('lotNumber')
         if 'bomImage' in data:
             record.bom_image = data.get('bomImage')
+        if 'bomMaterials' in data:
+            # Update BomMaterial records
+            bom_data = data.get('bomMaterials', [])
+            for bom_item in bom_data:
+                if 'id' in bom_item:
+                    # Find and update existing BomMaterial
+                    bom_material = BomMaterial.query.get(bom_item['id'])
+                    if bom_material and bom_material.production_record_id == record.id:
+                        if 'lotNumber' in bom_item:
+                            bom_material.lot_number = bom_item['lotNumber']
+                        if 'cocQty' in bom_item:
+                            bom_material.coc_qty = bom_item['cocQty']
+                        if 'invoiceQty' in bom_item:
+                            bom_material.invoice_qty = bom_item['invoiceQty']
+                        if 'lotBatchNo' in bom_item:
+                            bom_material.lot_batch_no = bom_item['lotBatchNo']
         
         db.session.commit()
         

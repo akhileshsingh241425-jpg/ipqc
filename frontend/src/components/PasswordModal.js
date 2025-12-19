@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import '../styles/PasswordModal.css';
 import { getApiUrl } from '../services/apiService';
 
 const PasswordModal = ({ isOpen, onClose, onVerify, title, message }) => {

@@ -15,6 +15,26 @@ import zipfile
 peel_test_bp = Blueprint('peel_test', __name__, url_prefix='/api/peel-test')
 
 
+@peel_test_bp.route('/data', methods=['GET'])
+def get_peel_test_data():
+    """Get all peel test data"""
+    try:
+        reports = PeelTestReport.query.order_by(PeelTestReport.report_date.desc()).limit(100).all()
+        
+        return jsonify({
+            "success": True,
+            "data": [report.to_dict() for report in reports],
+            "count": len(reports)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e),
+            "data": []
+        }), 200
+
+
 @peel_test_bp.route('/reports', methods=['POST'])
 def create_peel_test_report():
     """Create a new peel test report"""

@@ -946,22 +946,27 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   border-radius: 8px;
   overflow: hidden;
+  font-size: 13px; /* Compact font */
 }
 
 .production-table th {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 15px;
-  text-align: left;
+  padding: 10px 8px; /* Reduced padding */
+  text-align: center; /* Center align for better look */
   font-weight: 600;
-  font-size: 14px;
+  font-size: 11px; /* Smaller header text */
   text-transform: uppercase;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
 }
 
 .production-table td {
-  padding: 12px 15px;
+  padding: 8px 6px; /* Compact padding */
   border-bottom: 1px solid #e0e0e0;
   color: #2c3e50;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .production-table tbody tr:hover {
@@ -970,32 +975,34 @@
 
 .table-input {
   width: 100%;
-  padding: 8px 12px;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 15px;
+  padding: 5px 8px; /* Compact input */
+  border: 1px solid #e0e0e0; /* Thinner border */
+  border-radius: 4px;
+  font-size: 13px; /* Smaller font */
   transition: all 0.3s ease;
+  text-align: center;
 }
 
 .table-input:focus {
   outline: none;
   border-color: #3498db;
-  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
 }
 
 .total-cell {
-  font-weight: 600;
+  font-weight: 700;
   color: #3498db;
-  font-size: 16px;
+  font-size: 14px;
+  background: #e3f2fd;
 }
 
 .total-row {
   background: #f8f9fa !important;
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .total-row td {
-  padding: 15px;
+  padding: 12px 8px;
   border-top: 2px solid #3498db;
   border-bottom: none;
 }

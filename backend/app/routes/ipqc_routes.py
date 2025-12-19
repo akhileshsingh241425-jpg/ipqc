@@ -29,6 +29,57 @@ def health_check():
     })
 
 
+@ipqc_bp.route('/data', methods=['GET'])
+def get_ipqc_data():
+    """Get all IPQC data/records"""
+    try:
+        from app.models.database import db
+        from sqlalchemy import text
+        
+        # Get query parameters
+        company_id = request.args.get('company_id')
+        from_date = request.args.get('from_date')
+        to_date = request.args.get('to_date')
+        
+        # Build query
+        query = "SELECT * FROM production_records WHERE 1=1"
+        params = {}
+        
+        if company_id:
+            query += " AND company_id = :company_id"
+            params['company_id'] = company_id
+        
+        if from_date:
+            query += " AND production_date >= :from_date"
+            params['from_date'] = from_date
+        
+        if to_date:
+            query += " AND production_date <= :to_date"
+            params['to_date'] = to_date
+        
+        query += " ORDER BY production_date DESC LIMIT 100"
+        
+        result = db.session.execute(text(query), params).fetchall()
+        
+        # Convert to dict
+        data = []
+        for row in result:
+            data.append(dict(row._mapping))
+        
+        return jsonify({
+            "success": True,
+            "data": data,
+            "count": len(data)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": str(e),
+            "data": []
+        }), 200
+
+
 @ipqc_bp.route('/generate-ipqc', methods=['POST'])
 def generate_ipqc():
     """

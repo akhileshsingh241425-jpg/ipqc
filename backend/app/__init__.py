@@ -44,8 +44,13 @@ def create_app():
     from app.routes.coc_routes import coc_bp
     from app.routes.production_validation_routes import production_validation_bp
     from app.routes.auth_routes import auth_bp
+    from app.routes.order_routes import orders_bp
+    from app.routes.pdi_routes import pdi_bp
+    from app.routes.coc_new_routes import coc_new_bp
+    from app.routes.ftr_routes import ftr_bp
+    from app.routes.ftr_upload_routes import ftr_upload_bp
     
-    app.register_blueprint(ipqc_bp, url_prefix='/api')
+    app.register_blueprint(ipqc_bp, url_prefix='/api/ipqc')
     app.register_blueprint(production_bp)
     app.register_blueprint(company_bp)
     app.register_blueprint(peel_test_bp, url_prefix='/api/peel-test')
@@ -53,6 +58,23 @@ def create_app():
     app.register_blueprint(coc_bp, url_prefix='/api/coc')
     app.register_blueprint(production_validation_bp, url_prefix='/api')
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    app.register_blueprint(orders_bp)
+    app.register_blueprint(pdi_bp)
+    app.register_blueprint(coc_new_bp)
+    app.register_blueprint(ftr_bp)
+    app.register_blueprint(ftr_upload_bp)
+    
+    # Serve uploaded files (IPQC PDFs, FTR documents, BOM images)
+    @app.route('/uploads/<path:filename>')
+    def serve_uploads(filename):
+        uploads_folder = os.path.join(os.path.dirname(__file__), '..', 'uploads')
+        return send_from_directory(uploads_folder, filename)
+    
+    # Serve generated PDFs
+    @app.route('/generated_pdfs/<path:filename>')
+    def serve_pdfs(filename):
+        pdf_folder = os.path.join(os.path.dirname(__file__), '..', 'generated_pdfs')
+        return send_from_directory(pdf_folder, filename)
     
     # Serve React frontend
     @app.route('/', defaults={'path': ''})

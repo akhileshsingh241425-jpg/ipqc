@@ -6,6 +6,43 @@ import os
 
 production_bp = Blueprint('production', __name__)
 
+@production_bp.route('/api/production/<int:company_id>/days', methods=['GET'])
+def get_production_days(company_id):
+    """Get all production days for a company"""
+    try:
+        from app.models.database import db
+        from sqlalchemy import text
+        
+        # Get production days from database
+        query = text("""
+            SELECT DISTINCT 
+                production_date as date,
+                COUNT(*) as record_count
+            FROM production_records 
+            WHERE company_id = :company_id
+            GROUP BY production_date
+            ORDER BY production_date DESC
+        """)
+        
+        result = db.session.execute(query, {'company_id': company_id}).fetchall()
+        
+        days = []
+        for row in result:
+            days.append({
+                'id': company_id,  # Using company_id as placeholder
+                'date': str(row[0]) if row[0] else None,
+                'record_count': row[1]
+            })
+        
+        return jsonify(days), 200
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "data": []
+        }), 200
+
+
 @production_bp.route('/api/generate-production-report', methods=['POST'])
 def generate_production_report():
     """Generate production report PDF"""

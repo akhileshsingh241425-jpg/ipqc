@@ -51,6 +51,43 @@
   transform: scale(1.1);
 }
 
+/* User Role Badge */
+.user-role-badge {
+  padding: 15px 20px;
+  margin: 15px;
+  background: linear-gradient(135deg, rgba(52, 152, 219, 0.2), rgba(41, 128, 185, 0.2));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  flex-direction: column;
+}
+
+.user-role-badge.collapsed {
+  padding: 10px;
+  margin: 10px;
+  justify-content: center;
+}
+
+.user-role-badge .role-icon {
+  font-size: 24px;
+}
+
+.user-role-badge .role-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ecf0f1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.user-role-badge .user-name {
+  font-size: 12px;
+  color: #bdc3c7;
+  margin-top: 4px;
+}
+
 .sidebar-menu {
   list-style: none;
   padding: 0;
