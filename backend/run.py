@@ -30,7 +30,7 @@ if __name__ == '__main__':
     print("=" * 60)
     
     # Hardcoded port for production deployment
-    port = 5002
+    port = 5003
     print(f"✅ Running on FIXED PORT: {port}")
     
     print("=" * 60)

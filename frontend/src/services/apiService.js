@@ -8,7 +8,7 @@ import axios from 'axios';
 // Smart API URL detection
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
                      (window.location.hostname === 'localhost' 
-                      ? 'http://localhost:5002/api' 
+                      ? 'http://localhost:5003/api' 
                       : '/api');
 
 /**
