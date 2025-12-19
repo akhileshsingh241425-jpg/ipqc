@@ -8,8 +8,8 @@ load_dotenv()
 class Config:
     # MySQL Database Configuration
     MYSQL_HOST = os.getenv('MYSQL_HOST', 'localhost')
-    MYSQL_USER = os.getenv('MYSQL_USER', 'root')
-    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'root')
+    MYSQL_USER = os.getenv('MYSQL_USER', 'rohit')
+    MYSQL_PASSWORD = os.getenv('MYSQL_PASSWORD', 'rohit0101')
     MYSQL_DB = os.getenv('MYSQL_DB', 'pdi_database')
     
     # URL encode password to handle special characters
