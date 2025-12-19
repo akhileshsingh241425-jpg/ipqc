@@ -135,22 +135,6 @@ const Login = ({ onLogin }) => {
           </button>
         </form>
 
-        <div className="user-info-box">
-          <h3>👤 Login Credentials</h3>
-          <div className="credential-item">
-            <strong>Super Admin:</strong>
-            <p>Username: <code>admin@gautam</code></p>
-            <p>Password: <code>Admin@2025</code></p>
-            <span className="badge badge-admin">Full Access (Edit/Delete)</span>
-          </div>
-          <div className="credential-item">
-            <strong>Normal User:</strong>
-            <p>Username: <code>user@gautam</code></p>
-            <p>Password: <code>User@2025</code></p>
-            <span className="badge badge-user">View/Update Only</span>
-          </div>
-        </div>
-
         <div className="login-footer">
           <p>© 2025 Gautam Solar. All rights reserved.</p>
         </div>

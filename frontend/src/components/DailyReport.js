@@ -1,10 +1,14 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import axios from 'axios';
 import { companyService } from '../services/apiService';
 import COCSelectionModal from './COCSelectionModal';
 import PasswordModal from './PasswordModal';
 import '../styles/DailyReport.css';
+
+// Smart API URL helper
+const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
+const getAPIBase = () => window.location.hostname === 'localhost' ? 'http://localhost:5003/api' : '/api';
 
 // BOM Materials List
 const BOM_MATERIALS = [
@@ -118,7 +122,7 @@ function DailyReport() {
   const loadAvailableCocData = async () => {
     try {
       setLoading(true);
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+      const API_BASE_URL = getAPIBaseURL();
       const response = await axios.get(`${API_BASE_URL}/api/coc/list`);
       
       if (response.data && response.data.coc_data) {
@@ -150,7 +154,7 @@ function DailyReport() {
   const handleUploadCocToPdi = async (selectedMaterials) => {
     try {
       setLoading(true);
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+      const API_BASE_URL = getAPIBaseURL();
       
       // Upload selected COC materials to PDI batch
       const response = await axios.post(`${API_BASE_URL}/api/pdi/upload-coc-materials`, {
@@ -415,7 +419,7 @@ function DailyReport() {
 
   const autoGenerateIPQCPDF = async (record) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+      const API_BASE_URL = getAPIBaseURL();
       
       // Extract serial prefix and start number from serial
       const serialStart = record.serialNumberStart || '';
@@ -453,7 +457,7 @@ function DailyReport() {
 
   const autoLinkFTRFromMasterData = async (recordId, recordData) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+      const API_BASE_URL = getAPIBaseURL();
       
       // Get master orders for this company
       const ordersResponse = await axios.get(`${API_BASE_URL}/api/master/orders`);
@@ -491,7 +495,7 @@ function DailyReport() {
 
   const validateCOCAvailability = async (recordId, dayProduction, nightProduction) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+      const API_BASE_URL = getAPIBaseURL();
       const response = await axios.post(`${API_BASE_URL}/api/production/validate-materials`, {
         company_id: selectedCompany.id,
         day_production: dayProduction,
@@ -620,7 +624,7 @@ function DailyReport() {
           }
 
           // Upload to server
-          const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+          const API_BASE_URL = getAPIBaseURL();
           const formData = new FormData();
           formData.append('file', file);
           formData.append('company_name', selectedCompany.companyName);
@@ -737,7 +741,7 @@ function DailyReport() {
           }
 
           // Find master order for this company
-          const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+          const API_BASE_URL = getAPIBaseURL();
           const ordersResponse = await axios.get(`${API_BASE_URL}/api/master/orders`);
           
           const companyOrders = ordersResponse.data.orders.filter(
@@ -961,7 +965,7 @@ function DailyReport() {
     setCocInvoiceFilter('');
 
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+      const API_BASE_URL = getAPIBaseURL();
       const response = await axios.get(`${API_BASE_URL}/api/coc/list`);
       if (response.data && response.data.coc_data) {
         setMaterialCocData(response.data.coc_data);
@@ -1039,7 +1043,7 @@ function DailyReport() {
     try {
       setLoading(true);
       const recordId = selectedRecordForBom.id;
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
+      const API_BASE = getAPIBase();
 
       // Upload each BOM material
       for (const materialName of BOM_MATERIALS) {
@@ -1437,7 +1441,7 @@ function DailyReport() {
         report_options: reportOptions
       };
 
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
+      const API_BASE = getAPIBase();
       const response = await axios.post(`${API_BASE.replace('/api', '')}/api/generate-production-report`, payload, {
         responseType: 'blob'
       });
@@ -1534,7 +1538,7 @@ function DailyReport() {
         report_options: reportOptions
       };
 
-      const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5002/api';
+      const API_BASE = getAPIBase();
       const response = await axios.post(`${API_BASE.replace('/api', '')}/api/generate-production-excel`, payload, {
         responseType: 'blob'
       });
@@ -2253,7 +2257,7 @@ function DailyReport() {
                                       await autoGenerateIPQCPDF(record);
                                       
                                       // Download the generated PDF
-                                      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+                                      const API_BASE_URL = getAPIBaseURL();
                                       const serialStart = record.serialNumberStart || '';
                                       const serialPrefix = serialStart.replace(/\\d+$/, '');
                                       const startNum = parseInt(serialStart.match(/\\d+$/)?.[0] || '1');
@@ -2356,7 +2360,7 @@ function DailyReport() {
                                 <button
                                   onClick={async () => {
                                     try {
-                                      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+                                      const API_BASE_URL = getAPIBaseURL();
                                       const ordersResponse = await axios.get(`${API_BASE_URL}/api/master/orders`);
                                       const companyOrders = ordersResponse.data.orders.filter(
                                         order => order.company_name === selectedCompany.companyName
@@ -3106,7 +3110,7 @@ function DailyReport() {
                 onClick={async () => {
                   setLoading(true);
                   try {
-                    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+                    const API_BASE_URL = getAPIBaseURL();
                     let url = `${API_BASE_URL}/api/coc/list`;
                     if (cocInvoiceSearch.trim()) {
                       url += `?invoice_no=${encodeURIComponent(cocInvoiceSearch.trim())}`;
@@ -3194,7 +3198,7 @@ function DailyReport() {
                   
                   try {
                     setLoading(true);
-                    const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+                    const API_BASE_URL = getAPIBaseURL();
                     
                     const response = await axios.post(`${API_BASE_URL}/api/pdi/upload-coc-materials`, {
                       company_id: selectedCompany.id,
@@ -3477,7 +3481,7 @@ function DailyReport() {
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
                               {bm.imagePath ? (
                                 <button
-                                  onClick={() => window.open(`http://localhost:5002${bm.imagePath}`, '_blank')}
+                                  onClick={() => window.open(window.location.hostname === 'localhost' ? `http://localhost:5003${bm.imagePath}` : bm.imagePath, '_blank')}
                                   style={{padding: '3px 6px', background: '#007bff', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '10px'}}
                                 >
                                   📷 View
@@ -3503,7 +3507,7 @@ function DailyReport() {
                   onClick={async () => {
                     setLoading(true);
                     try {
-                      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+                      const API_BASE_URL = getAPIBaseURL();
                       
                       // Collect all unique COC invoice numbers from BOM materials
                       const cocInvoices = new Set();
@@ -3825,7 +3829,7 @@ function DailyReport() {
               setLoading(true);
               
               try {
-                const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+                const API_BASE_URL = getAPIBaseURL();
                 const formData = new FormData();
                 
                 // Add COC details
@@ -4055,3 +4059,4 @@ function DailyReport() {
 }
 
 export default DailyReport;
+

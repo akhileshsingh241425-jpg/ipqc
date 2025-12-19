@@ -24,6 +24,11 @@
   color: white;
   box-shadow: 2px 0 15px rgba(0, 0, 0, 0.15);
   flex-shrink: 0;
+  overflow-y: auto;
+  max-height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
 }
 
 .sidebar-header {
@@ -77,13 +82,17 @@
 }
 
 .sidebar-menu li {
-  padding: 15px 20px;
+  padding: 12px 15px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   transition: all 0.3s;
   border-left: 3px solid transparent;
+  border-radius: 6px;
+  margin-bottom: 5px;
+  white-space: nowrap;
+  font-size: 13px;
 }
 
 .sidebar-menu li:hover {
@@ -97,13 +106,17 @@
 }
 
 .sidebar-menu li .icon {
-  font-size: 20px;
-  min-width: 20px;
+  font-size: 18px;
+  min-width: 18px;
+  flex-shrink: 0;
 }
 
 .sidebar-menu li .label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .logout-btn {

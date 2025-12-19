@@ -22,7 +22,7 @@ function PDIBatchManager() {
   const loadCompaniesWithPDIs = async () => {
     try {
       setLoading(true);
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+      const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
       const response = await axios.get(`${API_BASE_URL}/api/companies`);
       
       if (response.data && Array.isArray(response.data)) {
@@ -346,7 +346,7 @@ function PDIBatchManager() {
                     }}
                     onClick={async () => {
                       try {
-                        const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5002';
+                        const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
                         const response = await axios.post(
                           `${API_BASE_URL}/api/pdi/download-complete-report`,
                           {
