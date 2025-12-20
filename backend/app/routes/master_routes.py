@@ -190,6 +190,9 @@ def upload_excel_data():
             except:
                 pass
         
+        # Calculate total rows first
+        total_rows = len(df)
+        
         # Process modules with optimized batch size for large datasets
         # For 100k+ rows, use larger batches to reduce commits
         if total_rows > 100000:
@@ -204,7 +207,6 @@ def upload_excel_data():
         
         modules_batch = []
         processed = 0
-        total_rows = len(df)
         
         update_progress(0, total_rows, 'Starting processing...')
         
