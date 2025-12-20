@@ -133,6 +133,16 @@ def upload_excel_data():
         # Normalize column names
         df.columns = df.columns.str.strip()
         
+        # Map common abbreviated column names to full names
+        column_mapping = {
+            'Irr_Mon': 'Irr_Monitor',
+            'Cisc_Mon': 'Isc_Monitor',
+            'CT_Mon': 'T_Monitor',
+            'Sweep_Tim': 'Sweep_Time',
+            'T_Ambien': 'T_Ambient'
+        }
+        df.rename(columns=column_mapping, inplace=True)
+        
         # Validate max rows (500,000 limit)
         if len(df) > 500000:
             return jsonify({'error': f'Excel file has {len(df)} rows. Maximum 500,000 rows allowed.'}), 400
