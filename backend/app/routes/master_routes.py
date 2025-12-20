@@ -190,53 +190,72 @@ def upload_excel_data():
             except:
                 pass
         
-        # Process modules in larger batches for performance
-        batch_size = 5000
+        # Process modules with optimized batch size for large datasets
+        # For 100k+ rows, use larger batches to reduce commits
+        if total_rows > 100000:
+            batch_size = 10000
+            commit_frequency = 10000
+        elif total_rows > 50000:
+            batch_size = 5000
+            commit_frequency = 5000
+        else:
+            batch_size = 2000
+            commit_frequency = 2000
+        
         modules_batch = []
         processed = 0
         total_rows = len(df)
         
         update_progress(0, total_rows, 'Starting processing...')
         
-        for idx, row in df.iterrows():
+        # Use itertuples for faster iteration (10x faster than iterrows)
+        for row_tuple in df.itertuples(index=True):
             processed += 1
-            if processed % 5000 == 0:
+            if processed % commit_frequency == 0:
                 print(f"Processed {processed}/{total_rows} rows...")
                 update_progress(processed, total_rows, f'Processing rows... {processed:,} / {total_rows:,}')
-            # Get serial number from ID column
-            serial = str(row['ID']).strip() if pd.notna(row['ID']) else ''
+                # Flush session to free memory
+                db.session.flush()
+            # Get serial number from ID column (using named tuple for speed)
+            # itertuples returns: (Index=0, Date=1, ID=2, Pmax=3, ...)
+            try:
+                serial = str(row_tuple.ID).strip() if pd.notna(row_tuple.ID) else ''
+            except AttributeError:
+                # Fallback if column names have issues
+                serial = str(row_tuple[2]).strip() if len(row_tuple) > 2 and pd.notna(row_tuple[2]) else ''
             
-            if not serial:
+            if not serial or serial == 'nan':
                 continue
             
+            # Use getattr with defaults for safe access
             module = MasterModule(
                 order_id=order.id,
                 serial_number=serial,
-                sequence_number=idx + 1,
-                is_rejected=False,  # All FTR data
+                sequence_number=row_tuple.Index + 1,
+                is_rejected=False,
                 
-                # Store all FTR parameters
-                date=str(row.get('Date', '')) if pd.notna(row.get('Date')) else None,
-                pmax=float(row['Pmax']) if pd.notna(row.get('Pmax')) else None,
-                isc=float(row['Isc']) if pd.notna(row.get('Isc')) else None,
-                voc=float(row['Voc']) if pd.notna(row.get('Voc')) else None,
-                ipm=float(row['Ipm']) if pd.notna(row.get('Ipm')) else None,
-                vpm=float(row['Vpm']) if pd.notna(row.get('Vpm')) else None,
-                ff=float(row['FF']) if pd.notna(row.get('FF')) else None,
-                rs=float(row['Rs']) if pd.notna(row.get('Rs')) else None,
-                rsh=float(row['Rsh']) if pd.notna(row.get('Rsh')) else None,
-                eff=float(row['Eff']) if pd.notna(row.get('Eff')) else None,
-                t_object=float(row['T_Object']) if pd.notna(row.get('T_Object')) else None,
-                t_target=float(row['T_Target']) if pd.notna(row.get('T_Target')) else None,
-                irr_target=float(row['Irr_Target']) if pd.notna(row.get('Irr_Target')) else None,
-                class_grade=str(row.get('Class', '')) if pd.notna(row.get('Class')) else None,
-                sweep_time=float(row['Sweep_Time']) if pd.notna(row.get('Sweep_Time')) else None,
-                irr_monitor=float(row['Irr_Monitor']) if pd.notna(row.get('Irr_Monitor')) else None,
-                isc_monitor=float(row['Isc_Monitor']) if pd.notna(row.get('Isc_Monitor')) else None,
-                t_monitor=float(row['T_Monitor']) if pd.notna(row.get('T_Monitor')) else None,
-                cell_temp=float(row['Cell_Temp']) if pd.notna(row.get('Cell_Temp')) else None,
-                t_ambient=float(row['T_Ambient']) if pd.notna(row.get('T_Ambient')) else None,
-                binning=str(row.get('Binning', '')) if pd.notna(row.get('Binning')) else None
+                # Store FTR parameters with safe getattr
+                date=str(getattr(row_tuple, 'Date', '')) if pd.notna(getattr(row_tuple, 'Date', None)) else None,
+                pmax=float(getattr(row_tuple, 'Pmax', 0)) if pd.notna(getattr(row_tuple, 'Pmax', None)) else None,
+                isc=float(getattr(row_tuple, 'Isc', 0)) if pd.notna(getattr(row_tuple, 'Isc', None)) else None,
+                voc=float(getattr(row_tuple, 'Voc', 0)) if pd.notna(getattr(row_tuple, 'Voc', None)) else None,
+                ipm=float(getattr(row_tuple, 'Ipm', 0)) if pd.notna(getattr(row_tuple, 'Ipm', None)) else None,
+                vpm=float(getattr(row_tuple, 'Vpm', 0)) if pd.notna(getattr(row_tuple, 'Vpm', None)) else None,
+                ff=float(getattr(row_tuple, 'FF', 0)) if pd.notna(getattr(row_tuple, 'FF', None)) else None,
+                rs=float(getattr(row_tuple, 'Rs', 0)) if pd.notna(getattr(row_tuple, 'Rs', None)) else None,
+                rsh=float(getattr(row_tuple, 'Rsh', 0)) if pd.notna(getattr(row_tuple, 'Rsh', None)) else None,
+                eff=float(getattr(row_tuple, 'Eff', 0)) if pd.notna(getattr(row_tuple, 'Eff', None)) else None,
+                t_object=float(getattr(row_tuple, 'T_Object', 0)) if pd.notna(getattr(row_tuple, 'T_Object', None)) else None,
+                t_target=float(getattr(row_tuple, 'T_Target', 0)) if pd.notna(getattr(row_tuple, 'T_Target', None)) else None,
+                irr_target=float(getattr(row_tuple, 'Irr_Target', 0)) if pd.notna(getattr(row_tuple, 'Irr_Target', None)) else None,
+                class_grade=str(getattr(row_tuple, 'Class', '')) if pd.notna(getattr(row_tuple, 'Class', None)) else None,
+                sweep_time=float(getattr(row_tuple, 'Sweep_Time', 0)) if pd.notna(getattr(row_tuple, 'Sweep_Time', None)) else None,
+                irr_monitor=float(getattr(row_tuple, 'Irr_Monitor', 0)) if pd.notna(getattr(row_tuple, 'Irr_Monitor', None)) else None,
+                isc_monitor=float(getattr(row_tuple, 'Isc_Monitor', 0)) if pd.notna(getattr(row_tuple, 'Isc_Monitor', None)) else None,
+                t_monitor=float(getattr(row_tuple, 'T_Monitor', 0)) if pd.notna(getattr(row_tuple, 'T_Monitor', None)) else None,
+                cell_temp=float(getattr(row_tuple, 'Cell_Temp', 0)) if pd.notna(getattr(row_tuple, 'Cell_Temp', None)) else None,
+                t_ambient=float(getattr(row_tuple, 'T_Ambient', 0)) if pd.notna(getattr(row_tuple, 'T_Ambient', None)) else None,
+                binning=str(getattr(row_tuple, 'Binning', '')) if pd.notna(getattr(row_tuple, 'Binning', None)) else None
             )
             modules_batch.append(module)
             

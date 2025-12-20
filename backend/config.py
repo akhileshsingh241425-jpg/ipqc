@@ -19,6 +19,18 @@ class Config:
         f'mysql+pymysql://{MYSQL_USER}:{ENCODED_PASSWORD}@{MYSQL_HOST}/{MYSQL_DB}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # Database connection pool settings for large uploads
+    SQLALCHEMY_POOL_SIZE = 20
+    SQLALCHEMY_POOL_RECYCLE = 3600
+    SQLALCHEMY_POOL_TIMEOUT = 300  # 5 minutes timeout for large operations
+    SQLALCHEMY_MAX_OVERFLOW = 40
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'connect_args': {
+            'connect_timeout': 300,  # 5 minutes connection timeout
+        }
+    }
+    
     # Secret key for session management
     SECRET_KEY = os.getenv('SECRET_KEY', 'gautam-solar-pdi-secret-key-2025-change-in-production')
     
