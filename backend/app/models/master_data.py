@@ -27,7 +27,7 @@ class MasterModule(db.Model):
     __tablename__ = 'master_modules'
     
     id = db.Column(db.Integer, primary_key=True)
-    order_id = db.Column(db.Integer, db.ForeignKey('master_orders.id'), nullable=False)
+    order_id = db.Column(db.Integer, db.ForeignKey('master_orders_old.id'), nullable=False)
     
     # Excel data columns (from RFID FTR format)
     date = db.Column(db.String(50), nullable=True)
