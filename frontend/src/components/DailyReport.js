@@ -600,28 +600,8 @@ function DailyReport() {
 
           const validSerials = Array.from(serialNumbers);
 
-          // Ask for rejection count
-          const rejectionInput = window.prompt(
-            `📊 Master Data Upload\n\n` +
-            `Total Serial Numbers: ${validSerials.length}\n\n` +
-            `Enter Rejection Count (0-${validSerials.length}):`,
-            '0'
-          );
-
-          if (rejectionInput === null) {
-            // User cancelled
-            setLoading(false);
-            event.target.value = '';
-            return;
-          }
-
-          const rejectionCount = parseInt(rejectionInput) || 0;
-          if (rejectionCount < 0 || rejectionCount > validSerials.length) {
-            alert(`❌ Invalid rejection count. Must be between 0 and ${validSerials.length}`);
-            setLoading(false);
-            event.target.value = '';
-            return;
-          }
+          // FTR data contains only passed modules - no rejection count needed
+          const rejectionCount = 0;
 
           // Upload to server
           const API_BASE_URL = getAPIBaseURL();
@@ -630,7 +610,7 @@ function DailyReport() {
           formData.append('company_name', selectedCompany.companyName);
           formData.append('order_number', `${selectedCompany.companyName}-${Date.now()}`);
           formData.append('serial_prefix', '');
-          formData.append('rejection_count', rejectionCount.toString());
+          formData.append('rejection_count', '0');
 
           const response = await axios.post(`${API_BASE_URL}/api/master/upload-excel`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
