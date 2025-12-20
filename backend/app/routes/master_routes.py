@@ -297,7 +297,14 @@ def upload_excel_data():
     except Exception as e:
         db.session.rollback()
         import traceback
-        return jsonify({'error': str(e), 'traceback': traceback.format_exc()}), 500
+        import sys
+        error_details = traceback.format_exc()
+        print("\n" + "=" * 80, file=sys.stderr)
+        print("❌ ERROR IN FTR UPLOAD:", file=sys.stderr)
+        print("=" * 80, file=sys.stderr)
+        print(error_details, file=sys.stderr)
+        print("=" * 80 + "\n", file=sys.stderr)
+        return jsonify({'error': str(e), 'traceback': error_details}), 500
 
 @master_bp.route('/upload-progress/<int:order_id>', methods=['GET'])
 def get_upload_progress(order_id):
