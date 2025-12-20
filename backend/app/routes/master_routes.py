@@ -84,43 +84,12 @@ def upload_excel_data():
     Column C-U: Pmax, Isc, Voc, Ipm, Vpm, FF, Rs, Rsh, Eff, T_Object, T_Target, Irr_Target, Class, Sweep_Time, Irr_Monitor, Isc_Monitor, T_Monitor, Cell_Temp, T_Ambient, Binning
     """
     try:
-        if 'file' not in request.files:
-            return jsonify({'error': 'No file uploaded'}), 400
-        
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-        
-        if not file.filename.endswith(('.xlsx', '.xls')):
-            return jsonify({'error': 'Only Excel files allowed'}), 400
-        
-        # Get form data
-        company_name = request.form.get('company_name')
-        order_number = request.form.get('order_number')
-        
-        if not company_name or not order_number:
-            return jsonify({'error': 'company_name and order_number required'}), 400
-        
         # Create tables if they don't exist
-        db.create_all()
+        try:
+            db.create_all()
+        except Exception as create_err:
+            print(f"Warning: Could not create tables: {create_err}")
         
-        # Check if order already exists
-        existing_order = MasterOrder.query.filter_by(order_number=order_number).first()
-        if existing_order:
-            return jsonify({'error': 'Order number already exists'}), 400
-        
-        # Read Excel file
-        import pandas as pd
-        import io
-        
-        # Read Excel in chunks for large files
-        file_content = file.read()
-        df = pd.read_excel(io.BytesIO(file_content), engine='openpyxl')
-        
-        # Remove completely empty rows
-        df = df.dropna(how='all')
-        
-        # Check if first row contains header keywords
         if 'file' not in request.files:
             return jsonify({'error': 'No file uploaded'}), 400
         
