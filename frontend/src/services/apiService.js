@@ -42,7 +42,7 @@ export const ipqcService = {
    */
   healthCheck: async () => {
     try {
-      const response = await apiClient.get('/health');
+      const response = await apiClient.get('/ipqc/health');
       return response.data;
     } catch (error) {
       console.error('Health check failed:', error);
@@ -55,7 +55,7 @@ export const ipqcService = {
    */
   generateForm: async (formData) => {
     try {
-      const response = await apiClient.post('/generate-ipqc', formData);
+      const response = await apiClient.post('/ipqc/generate-ipqc', formData);
       return response.data;
     } catch (error) {
       console.error('Form generation failed:', error);
@@ -69,7 +69,7 @@ export const ipqcService = {
   generatePDF: async (formData) => {
     try {
       console.log('Sending PDF request with data:', formData);
-      const response = await apiClient.post('/generate-pdf-only', formData, {
+      const response = await apiClient.post('/ipqc/generate-pdf-only', formData, {
         responseType: 'blob',
       });
       
@@ -118,7 +118,7 @@ export const ipqcService = {
   generateExcel: async (formData) => {
     try {
       console.log('Sending Excel request with data:', formData);
-      const response = await apiClient.post('/generate-excel-only', formData, {
+      const response = await apiClient.post('/ipqc/generate-excel-only', formData, {
         responseType: 'blob',
       });
       
@@ -165,7 +165,7 @@ export const ipqcService = {
   generateBoth: async (formData) => {
     try {
       console.log('Sending request for both PDF and Excel:', formData);
-      const response = await apiClient.post('/generate-complete', formData, {
+      const response = await apiClient.post('/ipqc/generate-complete', formData, {
         responseType: 'blob',
       });
       
@@ -211,7 +211,7 @@ export const ipqcService = {
    */
   uploadBOM: async (customerId, bomData) => {
     try {
-      const response = await apiClient.post('/upload-bom', {
+      const response = await apiClient.post('/ipqc/upload-bom', {
         customer_id: customerId,
         bom_data: bomData,
       });
@@ -227,7 +227,7 @@ export const ipqcService = {
    */
   getBOM: async (customerId) => {
     try {
-      const response = await apiClient.get(`/get-bom/${customerId}`);
+      const response = await apiClient.get(`/ipqc/get-bom/${customerId}`);
       return response.data;
     } catch (error) {
       console.error('BOM fetch failed:', error);
@@ -240,7 +240,7 @@ export const ipqcService = {
    */
   listCustomers: async () => {
     try {
-      const response = await apiClient.get('/list-customers');
+      const response = await apiClient.get('/ipqc/list-customers');
       return response.data;
     } catch (error) {
       console.error('Customer list fetch failed:', error);
@@ -253,7 +253,7 @@ export const ipqcService = {
    */
   generateSerials: async (startNumber, count, prefix = '', padding = 5) => {
     try {
-      const response = await apiClient.post('/generate-serials', {
+      const response = await apiClient.post('/ipqc/generate-serials', {
         start_number: startNumber,
         count: count,
         prefix: prefix,
@@ -271,7 +271,7 @@ export const ipqcService = {
    */
   getTemplateInfo: async () => {
     try {
-      const response = await apiClient.get('/template-info');
+      const response = await apiClient.get('/ipqc/template-info');
       return response.data;
     } catch (error) {
       console.error('Template info fetch failed:', error);
