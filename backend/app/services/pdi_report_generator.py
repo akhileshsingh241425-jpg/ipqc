@@ -261,25 +261,47 @@ class PDIReportGenerator:
         """Add COC documents from BOM materials"""
         count = 0
         try:
-            for record in production_records:
-                if record.get('bomMaterials'):
-                    import json
-                    try:
-                        bom_materials = json.loads(record['bomMaterials'])
-                        for material in bom_materials:
-                            if material.get('cocFile'):
-                                coc_path = os.path.join(self.upload_folder, 'ftr_documents', material['cocFile'])
-                                if os.path.exists(coc_path):
-                                    merger.append(coc_path)
-                                    count += 1
-                    except:
-                        pass
+            from app.models.database import BomMaterial
             
-            print(f"Added {count} COC documents")
+            # Get all production record IDs
+            record_ids = [r['id'] for r in production_records]
+            
+            if not record_ids:
+                print("No production records to get COC documents from")
+                return 0
+            
+            # Get all BOM materials for these records
+            bom_materials = BomMaterial.query.filter(
+                BomMaterial.production_record_id.in_(record_ids)
+            ).all()
+            
+            print(f"Found {len(bom_materials)} BOM materials to check for COC images")
+            
+            # Collect unique COC image paths
+            coc_paths_added = set()
+            
+            for bom in bom_materials:
+                if bom.image_path:
+                    # image_path format: "uploads/bom_materials/filename.pdf"
+                    full_path = os.path.join(self.upload_folder, '..', bom.image_path)
+                    full_path = os.path.normpath(full_path)
+                    
+                    if os.path.exists(full_path) and full_path not in coc_paths_added:
+                        try:
+                            merger.append(full_path)
+                            coc_paths_added.add(full_path)
+                            count += 1
+                            print(f"Added COC document: {bom.material_name} - {bom.image_path}")
+                        except Exception as e:
+                            print(f"Error adding COC {bom.image_path}: {e}")
+            
+            print(f"Added {count} COC documents total")
             return count
             
         except Exception as e:
             print(f"Error adding COC documents: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return count
     
     def _add_ipqc_documents(self, merger, production_records):
