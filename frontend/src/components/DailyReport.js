@@ -4365,7 +4365,7 @@ function DailyReport() {
                             </td>
                           </tr>
                         );
-                      })}
+                      })})()}
                     </tbody>
                   </table>
                 </div>
