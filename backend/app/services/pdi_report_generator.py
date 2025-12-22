@@ -148,13 +148,19 @@ class PDIReportGenerator:
                 end_date = max(r['date'] for r in records)
                 running_order = records[0]['runningOrder'] if records else 'N/A'
                 
+                # Convert dates to strings if they're date objects
+                if hasattr(start_date, 'strftime'):
+                    start_date = start_date.strftime('%d-%m-%Y')
+                if hasattr(end_date, 'strftime'):
+                    end_date = end_date.strftime('%d-%m-%Y')
+                
                 # Production Summary Table
                 summary_data = [
                     ['Production Summary', ''],
                     ['Total Production:', f"{total_production:,} modules"],
                     ['Production Days:', f"{production_days} days"],
-                    ['Start Date:', start_date],
-                    ['End Date:', end_date],
+                    ['Start Date:', str(start_date)],
+                    ['End Date:', str(end_date)],
                     ['Running Order:', running_order or 'N/A']
                 ]
                 
@@ -270,17 +276,21 @@ class PDIReportGenerator:
         count = 0
         try:
             for record in production_records:
-                if record.get('ipqcPdf'):
-                    ipqc_path = os.path.join(self.upload_folder, 'ipqc_pdfs', record['ipqcPdf'])
+                ipqc_pdf = record.get('ipqcPdf')
+                if ipqc_pdf and isinstance(ipqc_pdf, str):  # Only process if it's a string path
+                    ipqc_path = os.path.join(self.upload_folder, 'ipqc_pdfs', ipqc_pdf)
                     if os.path.exists(ipqc_path):
                         merger.append(ipqc_path)
                         count += 1
+                        print(f"Added IPQC PDF: {ipqc_pdf}")
             
-            print(f"Added {count} IPQC documents")
+            print(f"Added {count} IPQC documents total")
             return count
             
         except Exception as e:
             print(f"Error adding IPQC documents: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return count
     
     def _add_ftr_documents(self, merger, production_records):
@@ -288,15 +298,19 @@ class PDIReportGenerator:
         count = 0
         try:
             for record in production_records:
-                if record.get('ftrDocument'):
-                    ftr_path = os.path.join(self.upload_folder, 'ftr_documents', record['ftrDocument'])
+                ftr_doc = record.get('ftrDocument')
+                if ftr_doc and isinstance(ftr_doc, str):  # Only process if it's a string path
+                    ftr_path = os.path.join(self.upload_folder, 'ftr_documents', ftr_doc)
                     if os.path.exists(ftr_path):
                         merger.append(ftr_path)
                         count += 1
+                        print(f"Added FTR document: {ftr_doc}")
             
-            print(f"Added {count} FTR documents")
+            print(f"Added {count} FTR documents total")
             return count
             
         except Exception as e:
             print(f"Error adding FTR documents: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return count
