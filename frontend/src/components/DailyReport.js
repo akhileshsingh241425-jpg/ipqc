@@ -1047,14 +1047,14 @@ function DailyReport() {
     const itemsList = materialGroup.items || [materialGroup];
     const materialNames = itemsList.map(item => item.materialName).join(' + ');
     
-    if (!window.confirm(`Are you sure you want to delete ${materialNames} (${materialGroup.lotNumber || 'no invoice'}) from this PDI?`)) {
+    if (!window.confirm(`Are you sure you want to unassign COC from ${materialNames} (${materialGroup.lotNumber || 'no invoice'})?`)) {
       return;
     }
 
     try {
       const API_BASE_URL = getAPIBaseURL();
       
-      // Delete all items in the group
+      // Unassign COC from all items in the group
       for (const item of itemsList) {
         await axios.post(`${API_BASE_URL}/api/pdi/delete-bom-material`, {
           pdi: selectedPdiForDetails,
@@ -1064,7 +1064,7 @@ function DailyReport() {
         });
       }
 
-      alert('✅ BOM material deleted successfully!');
+      alert('✅ COC unassigned successfully!');
       // Refresh data and update modal with fresh company data
       await loadCompanies();
       await refreshSelectedCompany();
@@ -4161,7 +4161,7 @@ function DailyReport() {
                         <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Gap</th>
                         <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Used in PDI</th>
                         <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Image</th>
-                        <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Delete</th>
+                        <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Unassign</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4404,9 +4404,9 @@ function DailyReport() {
                               <button
                                 onClick={() => handleDeleteBomMaterial({...group, lotNumber: bm.lotNumber})}
                                 style={{padding: '3px 6px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold'}}
-                                title="Delete this COC from PDI"
+                                title="Unassign this COC from PDI"
                               >
-                                🗑️ Delete
+                                ✖️ Unassign
                               </button>
                             </td>
                           </tr>

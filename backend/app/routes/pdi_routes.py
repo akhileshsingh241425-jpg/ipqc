@@ -287,7 +287,7 @@ def download_complete_report():
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-# Delete BOM material from PDI
+# Unassign COC from BOM material in PDI
 @pdi_bp.route('/api/pdi/delete-bom-material', methods=['POST'])
 def delete_bom_material():
     try:
@@ -297,7 +297,7 @@ def delete_bom_material():
         material_name = data.get('materialName')
         lot_number = data.get('lotNumber', '')
         
-        print(f"\n=== DELETE BOM MATERIAL REQUEST ===")
+        print(f"\n=== UNASSIGN COC FROM BOM MATERIAL ===")
         print(f"PDI: {pdi_number}")
         print(f"Company: {company_name}")
         print(f"Material: {material_name}")
@@ -326,8 +326,8 @@ def delete_bom_material():
         
         print(f"Found {len(production_records)} production record(s)")
         
-        # Find and delete all matching BomMaterial records
-        deleted_count = 0
+        # Find and unassign COC from all matching BomMaterial records
+        updated_count = 0
         for record in production_records:
             print(f"Checking production record ID: {record.id}")
             
@@ -339,27 +339,32 @@ def delete_bom_material():
             if lot_number:
                 query = query.filter_by(lot_number=lot_number)
             
-            bom_materials = query.all()  # Get all matching records
+            bom_materials = query.all()
             print(f"Found {len(bom_materials)} BOM material(s) matching criteria")
             
             for bom_material in bom_materials:
-                print(f"Deleting BOM material ID {bom_material.id}: {bom_material.material_name} - {bom_material.lot_number}")
-                db.session.delete(bom_material)
-                deleted_count += 1
+                print(f"Unassigning COC from BOM material ID {bom_material.id}: {bom_material.material_name}")
+                # Clear COC-related fields but keep the material
+                bom_material.lot_number = None
+                bom_material.coc_qty = None
+                bom_material.invoice_qty = None
+                bom_material.lot_batch_no = None
+                bom_material.image_path = None
+                updated_count += 1
         
-        if deleted_count == 0:
-            print("No BOM materials found to delete!")
+        if updated_count == 0:
+            print("No BOM materials found to unassign!")
             return jsonify({'error': 'BOM material not found'}), 404
         
         db.session.commit()
-        print(f"Successfully deleted {deleted_count} BOM material(s)")
-        print("=== DELETE COMPLETE ===\n")
+        print(f"Successfully unassigned COC from {updated_count} BOM material(s)")
+        print("=== UNASSIGN COMPLETE ===\n")
         
-        return jsonify({'success': True, 'message': f'{deleted_count} BOM material(s) deleted successfully'}), 200
+        return jsonify({'success': True, 'message': f'COC unassigned from {updated_count} material(s)'}), 200
         
     except Exception as e:
         db.session.rollback()
-        print(f"Error deleting BOM material: {str(e)}")
+        print(f"Error unassigning COC: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
