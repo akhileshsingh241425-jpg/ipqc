@@ -1042,28 +1042,32 @@ function DailyReport() {
   };
 
   // Handle deleting BOM material from PDI
-  const handleDeleteBomMaterial = async (bomMaterial) => {
-    if (!window.confirm(`Are you sure you want to delete ${bomMaterial.materialName} (${bomMaterial.lotNumber || 'no invoice'}) from this PDI?`)) {
+  const handleDeleteBomMaterial = async (materialGroup) => {
+    // If it's a group with multiple items (e.g., EVA Front+Back), show all
+    const itemsList = materialGroup.items || [materialGroup];
+    const materialNames = itemsList.map(item => item.materialName).join(' + ');
+    
+    if (!window.confirm(`Are you sure you want to delete ${materialNames} (${materialGroup.lotNumber || 'no invoice'}) from this PDI?`)) {
       return;
     }
 
     try {
       const API_BASE_URL = getAPIBaseURL();
-      const response = await axios.post(`${API_BASE_URL}/api/pdi/delete-bom-material`, {
-        pdi: selectedPdiForDetails,
-        companyName: selectedCompany.companyName,
-        materialName: bomMaterial.materialName,
-        lotNumber: bomMaterial.lotNumber || ''
-      });
-
-      if (response.data && response.data.success) {
-        alert('✅ BOM material deleted successfully!');
-        // Refresh data
-        await loadCompanies();
-        setShowPdiDetailsModal(false);
-      } else {
-        alert('❌ Failed to delete BOM material');
+      
+      // Delete all items in the group
+      for (const item of itemsList) {
+        await axios.post(`${API_BASE_URL}/api/pdi/delete-bom-material`, {
+          pdi: selectedPdiForDetails,
+          companyName: selectedCompany.companyName,
+          materialName: item.materialName,
+          lotNumber: item.lotNumber || ''
+        });
       }
+
+      alert('✅ BOM material deleted successfully!');
+      // Refresh data
+      await loadCompanies();
+      setShowPdiDetailsModal(false);
     } catch (error) {
       console.error('Error deleting BOM material:', error);
       alert('❌ Error deleting BOM material: ' + (error.response?.data?.error || error.message));
@@ -4397,7 +4401,7 @@ function DailyReport() {
                             </td>
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
                               <button
-                                onClick={() => handleDeleteBomMaterial(bm)}
+                                onClick={() => handleDeleteBomMaterial({...group, lotNumber: bm.lotNumber})}
                                 style={{padding: '3px 6px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold'}}
                                 title="Delete this COC from PDI"
                               >
