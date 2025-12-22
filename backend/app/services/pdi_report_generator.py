@@ -328,33 +328,46 @@ class PDIReportGenerator:
                 BomMaterial.production_record_id.in_(record_ids)
             ).all()
             
-            print(f"Found {len(bom_materials)} BOM materials to check for COC images")
+            print(f"\n=== CHECKING COC DOCUMENTS ===")
+            print(f"Found {len(bom_materials)} BOM materials to check for COC PDFs")
             
             # Collect unique COC image paths
             coc_paths_added = set()
             
             for bom in bom_materials:
+                print(f"Material: {bom.material_name}, Invoice: {bom.lot_number}, Image: '{bom.image_path}'")
+                
                 if bom.image_path:
-                    # image_path is already relative like "bom_materials/filename.pdf"
-                    # Join with upload folder directly
-                    full_path = os.path.join(self.upload_folder, bom.image_path)
-                    full_path = os.path.normpath(full_path)
+                    # Try multiple path formats
+                    possible_paths = [
+                        os.path.join(self.upload_folder, bom.image_path),  # Direct join
+                        os.path.join(self.upload_folder, 'bom_materials', bom.image_path.split('/')[-1]),  # Just filename
+                        bom.image_path if os.path.isabs(bom.image_path) else None  # Absolute path
+                    ]
                     
-                    print(f"Checking COC path: {full_path}")
+                    pdf_found = False
+                    for full_path in possible_paths:
+                        if full_path:
+                            full_path = os.path.normpath(full_path)
+                            
+                            if os.path.exists(full_path) and full_path not in coc_paths_added:
+                                try:
+                                    merger.append(full_path)
+                                    coc_paths_added.add(full_path)
+                                    count += 1
+                                    print(f"✓ Added COC: {bom.material_name} - {full_path}")
+                                    pdf_found = True
+                                    break
+                                except Exception as e:
+                                    print(f"✗ Error adding COC {full_path}: {e}")
                     
-                    if os.path.exists(full_path) and full_path not in coc_paths_added:
-                        try:
-                            merger.append(full_path)
-                            coc_paths_added.add(full_path)
-                            count += 1
-                            print(f"✓ Added COC document: {bom.material_name} - {bom.image_path}")
-                        except Exception as e:
-                            print(f"✗ Error adding COC {bom.image_path}: {e}")
-                    else:
-                        if not os.path.exists(full_path):
-                            print(f"✗ COC file not found: {full_path}")
+                    if not pdf_found:
+                        print(f"✗ COC PDF not found for {bom.material_name}. Tried:")
+                        for p in possible_paths:
+                            if p:
+                                print(f"  - {p} (exists: {os.path.exists(p)})")
             
-            print(f"Added {count} COC documents total")
+            print(f"=== Added {count} COC documents total ===\n")
             return count
             
         except Exception as e:
@@ -367,16 +380,38 @@ class PDIReportGenerator:
         """Add IPQC PDF documents"""
         count = 0
         try:
+            print(f"\n=== CHECKING IPQC DOCUMENTS ===")
             for record in production_records:
                 ipqc_pdf = record.get('ipqcPdf')
+                print(f"Record ID {record.get('id')}: ipqc_pdf = '{ipqc_pdf}'")
+                
                 if ipqc_pdf and isinstance(ipqc_pdf, str):  # Only process if it's a string path
-                    ipqc_path = os.path.join(self.upload_folder, 'ipqc_pdfs', ipqc_pdf)
-                    if os.path.exists(ipqc_path):
-                        merger.append(ipqc_path)
-                        count += 1
-                        print(f"Added IPQC PDF: {ipqc_pdf}")
+                    # Try multiple path formats
+                    possible_paths = [
+                        os.path.join(self.upload_folder, 'ipqc_pdfs', ipqc_pdf),  # Standard path
+                        os.path.join(self.upload_folder, ipqc_pdf),  # Direct path
+                        ipqc_pdf if os.path.isabs(ipqc_pdf) else None  # Absolute path
+                    ]
+                    
+                    pdf_found = False
+                    for ipqc_path in possible_paths:
+                        if ipqc_path and os.path.exists(ipqc_path):
+                            try:
+                                merger.append(ipqc_path)
+                                count += 1
+                                print(f"✓ Added IPQC PDF: {ipqc_pdf} from {ipqc_path}")
+                                pdf_found = True
+                                break
+                            except Exception as e:
+                                print(f"✗ Error adding IPQC PDF {ipqc_path}: {e}")
+                    
+                    if not pdf_found:
+                        print(f"✗ IPQC PDF not found. Tried paths:")
+                        for p in possible_paths:
+                            if p:
+                                print(f"  - {p} (exists: {os.path.exists(p)})")
             
-            print(f"Added {count} IPQC documents total")
+            print(f"=== Added {count} IPQC documents total ===\n")
             return count
             
         except Exception as e:
