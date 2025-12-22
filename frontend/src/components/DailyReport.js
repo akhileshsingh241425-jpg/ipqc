@@ -1059,7 +1059,7 @@ function DailyReport() {
       if (response.data && response.data.success) {
         alert('✅ BOM material deleted successfully!');
         // Refresh data
-        await fetchCompanies();
+        await loadCompanies();
         setShowPdiDetailsModal(false);
       } else {
         alert('❌ Failed to delete BOM material');
