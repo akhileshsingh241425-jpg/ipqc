@@ -4157,6 +4157,8 @@ function DailyReport() {
                         let usedQty = 0;
                         if (materialLower.includes('cell')) {
                           usedQty = totalProduction * 66; // 66 cells per module
+                        } else if (materialLower.includes('eva')) {
+                          usedQty = totalProduction * 2.67; // 2.67 sqm per module
                         } else if (materialLower.includes('glass')) {
                           usedQty = totalProduction * 1; // 1 glass per module
                         } else if (materialLower.includes('ribbon') && !materialLower.includes('bus')) {
