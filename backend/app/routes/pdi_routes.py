@@ -3,7 +3,7 @@ PDI Batch Management API Routes
 """
 from flask import Blueprint, request, jsonify, send_file
 from datetime import datetime
-from app.models.database import db
+from app.models.database import db, ProductionRecord, BomMaterial, Company
 from app.models.pdi_models import PDIBatch, ModuleSerialNumber, MasterOrder, COCDocument, PDICOCUsage
 from io import BytesIO
 import os
@@ -300,22 +300,41 @@ def delete_bom_material():
         if not pdi_number or not company_name or not material_name:
             return jsonify({'error': 'PDI number, company name, and material name are required'}), 400
         
-        # Find and delete the PDICOCUsage record
-        query = PDICOCUsage.query.filter_by(
-            pdi_number=pdi_number,
-            company_name=company_name,
-            material_name=material_name
-        )
+        # Find the company
+        company = Company.query.filter_by(company_name=company_name).first()
+        if not company:
+            return jsonify({'error': 'Company not found'}), 404
         
-        if lot_number:
-            query = query.filter_by(lot_number=lot_number)
+        # Find production records with this PDI
+        production_records = ProductionRecord.query.filter_by(
+            company_id=company.id,
+            pdi=pdi_number
+        ).all()
         
-        usage = query.first()
+        if not production_records:
+            return jsonify({'error': 'PDI not found'}), 404
         
-        if not usage:
+        # Find and delete the BomMaterial record
+        deleted = False
+        for record in production_records:
+            query = BomMaterial.query.filter_by(
+                production_record_id=record.id,
+                material_name=material_name
+            )
+            
+            if lot_number:
+                query = query.filter_by(lot_number=lot_number)
+            
+            bom_material = query.first()
+            
+            if bom_material:
+                db.session.delete(bom_material)
+                deleted = True
+                break
+        
+        if not deleted:
             return jsonify({'error': 'BOM material not found'}), 404
         
-        db.session.delete(usage)
         db.session.commit()
         
         return jsonify({'success': True, 'message': 'BOM material deleted successfully'}), 200
