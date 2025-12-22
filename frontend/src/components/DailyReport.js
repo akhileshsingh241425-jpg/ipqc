@@ -647,9 +647,17 @@ function DailyReport() {
           formData.append('serial_prefix', '');
           formData.append('rejection_count', '0');
 
+          console.log('Uploading FTR Master Data:', {
+            company: selectedCompany.companyName,
+            fileSize: file.size,
+            fileName: file.name
+          });
+
           const response = await axios.post(`${API_BASE_URL}/api/master/upload-excel`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
+
+          console.log('Upload response:', response.data);
 
           if (response.data.order) {
             const ftrCount = response.data.order.ftr_count || (validSerials.length - rejectionCount);
@@ -674,7 +682,12 @@ function DailyReport() {
       };
       reader.readAsArrayBuffer(file);
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Upload error details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        fullError: error
+      });
       alert('❌ Upload failed: ' + (error.response?.data?.error || error.message));
       setLoading(false);
     }
