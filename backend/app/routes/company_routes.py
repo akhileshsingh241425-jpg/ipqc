@@ -4,12 +4,16 @@ from app.models.database import db, Company, ProductionRecord, RejectedModule, B
 
 company_bp = Blueprint('company', __name__)
 
-# BOM Materials list
+# BOM Materials list (matching frontend)
 BOM_MATERIALS = [
+    "Solar Cell", "EVA", "FRONT GLASS", "BACK GLASS",
+    "RIBBON (0.26 mm)", "RIBBON (4.0X0.4)", "RIBBON (6.0X0.4)",
+    "FLUX", "EPE FRONT", "Aluminium Frame LONG", "Aluminium Frame SHORT",
+    "SEALENT", "JB Potting (A and B)", "JUNCTION BOX", "RFID",
+    # Legacy names for backward compatibility
     "Cell", "EVA Front", "EVA Back", "Glass Front", "Glass Back",
-    "Ribbon", "Frame Long", "Frame Short", "JB", "Flux",
-    "Potting Material", "Bus Bar 6mm", "Bus Bar 4mm",
-    "Silicone 2kg", "Silicone 10kg", "Silicone 270kg"
+    "Ribbon", "Frame Long", "Frame Short", "JB", "Potting Material",
+    "Bus Bar 6mm", "Bus Bar 4mm", "Silicone 2kg", "Silicone 10kg", "Silicone 270kg"
 ]
 
 # Get all companies
