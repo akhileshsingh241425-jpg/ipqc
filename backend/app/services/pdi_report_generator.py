@@ -203,6 +203,57 @@ class PDIReportGenerator:
                 story.append(Paragraph("2. Certificate of Conformity (COC) Documents", index_style))
                 story.append(Paragraph("3. In-Process Quality Control (IPQC) Reports", index_style))
                 story.append(Paragraph("4. Final Test Reports (FTR) Documents", index_style))
+                
+                # Add page break before production details
+                story.append(PageBreak())
+                
+                # Production Details Table
+                story.append(Paragraph("<b>Production Details</b>", title_style))
+                story.append(Spacer(1, 5*mm))
+                
+                # Create detailed production table
+                prod_data = [['Date', 'Day Prod.', 'Night Prod.', 'Total', 'Serial Range', 'IPQC', 'FTR']]
+                for r in records:
+                    date_str = r.get('date').strftime('%d-%m-%Y') if hasattr(r.get('date'), 'strftime') else str(r.get('date', 'N/A'))
+                    day_prod = r.get('dayProduction', 0) or 0
+                    night_prod = r.get('nightProduction', 0) or 0
+                    total = day_prod + night_prod
+                    
+                    # Serial range
+                    serial_start = r.get('serialNumberStart', '')
+                    serial_end = r.get('serialNumberEnd', '')
+                    serial_range = f"{serial_start or '-'}\nto\n{serial_end or '-'}" if serial_start and serial_end else '-'
+                    
+                    # Document status
+                    ipqc_status = '✓' if r.get('ipqcPdf') else '✗'
+                    ftr_status = '✓' if r.get('ftrDocument') else '✗'
+                    
+                    prod_data.append([
+                        date_str,
+                        str(day_prod),
+                        str(night_prod),
+                        str(total),
+                        serial_range,
+                        ipqc_status,
+                        ftr_status
+                    ])
+                
+                prod_table = Table(prod_data, colWidths=[25*mm, 20*mm, 20*mm, 20*mm, 45*mm, 15*mm, 15*mm])
+                prod_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1976d2')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 9),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 8),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                    ('TOPPADDING', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#E3F2FD')])
+                ]))
+                story.append(prod_table)
             
             print("Building summary PDF...")
             doc.build(story)
@@ -247,7 +298,9 @@ class PDIReportGenerator:
                     'ipqcPdf': pr.ipqc_pdf,
                     'ftrDocument': pr.ftr_document,
                     'pdi': pr.pdi,
-                    'runningOrder': pr.running_order
+                    'runningOrder': pr.running_order,
+                    'serialNumberStart': pr.serial_number_start,
+                    'serialNumberEnd': pr.serial_number_end
                 })
             
             return records
@@ -282,18 +335,24 @@ class PDIReportGenerator:
             
             for bom in bom_materials:
                 if bom.image_path:
-                    # image_path format: "uploads/bom_materials/filename.pdf"
-                    full_path = os.path.join(self.upload_folder, '..', bom.image_path)
+                    # image_path is already relative like "bom_materials/filename.pdf"
+                    # Join with upload folder directly
+                    full_path = os.path.join(self.upload_folder, bom.image_path)
                     full_path = os.path.normpath(full_path)
+                    
+                    print(f"Checking COC path: {full_path}")
                     
                     if os.path.exists(full_path) and full_path not in coc_paths_added:
                         try:
                             merger.append(full_path)
                             coc_paths_added.add(full_path)
                             count += 1
-                            print(f"Added COC document: {bom.material_name} - {bom.image_path}")
+                            print(f"✓ Added COC document: {bom.material_name} - {bom.image_path}")
                         except Exception as e:
-                            print(f"Error adding COC {bom.image_path}: {e}")
+                            print(f"✗ Error adding COC {bom.image_path}: {e}")
+                    else:
+                        if not os.path.exists(full_path):
+                            print(f"✗ COC file not found: {full_path}")
             
             print(f"Added {count} COC documents total")
             return count
