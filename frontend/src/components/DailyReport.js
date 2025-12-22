@@ -1084,13 +1084,35 @@ function DailyReport() {
 
     try {
       setLoading(true);
+      const API_BASE_URL = getAPIBaseURL();
       
-      // Find all BOM materials for this PDI across all dates
+      // Step 1: Download COC PDF from URL and save to server
+      let imagePath = null;
+      if (cocItem.coc_document_url) {
+        try {
+          console.log('Downloading COC PDF from:', cocItem.coc_document_url);
+          const downloadResponse = await axios.post(`${API_BASE_URL}/api/companies/download-coc-pdf`, {
+            pdf_url: cocItem.coc_document_url,
+            material_name: selectedMaterial,
+            invoice_no: cocItem.invoice_no
+          });
+          
+          if (downloadResponse.data.success) {
+            imagePath = downloadResponse.data.image_path;
+            console.log('✓ COC PDF downloaded and saved:', imagePath);
+          }
+        } catch (pdfError) {
+          console.error('Warning: Could not download COC PDF:', pdfError);
+          // Continue without PDF - just save metadata
+        }
+      }
+      
+      // Step 2: Find all BOM materials for this PDI across all dates
       const pdiRecords = selectedCompany.productionRecords.filter(
         r => r.pdi === selectedPdiForDetails
       );
 
-      // Update each record's BOM material with the selected COC
+      // Step 3: Update each record's BOM material with the selected COC
       for (const record of pdiRecords) {
         // Find and update the specific material in the bomMaterials array
         const updatedBomMaterials = record.bomMaterials.map(bm => {
@@ -1101,7 +1123,8 @@ function DailyReport() {
               lotNumber: cocItem.invoice_no,
               cocQty: cocItem.coc_qty,
               invoiceQty: cocItem.invoice_qty,
-              lotBatchNo: cocItem.lot_batch_no
+              lotBatchNo: cocItem.lot_batch_no,
+              imagePath: imagePath // Add the downloaded PDF path
             };
             console.log('Updated Material Object:', updatedMaterial);
             return updatedMaterial;
@@ -1116,7 +1139,7 @@ function DailyReport() {
         });
       }
 
-      alert(`✅ COC assigned to ${selectedMaterial}: Invoice ${cocItem.invoice_no}`);
+      alert(`✅ COC assigned to ${selectedMaterial}: Invoice ${cocItem.invoice_no}${imagePath ? ' (PDF saved)' : ''}`);
       setShowMaterialCocModal(false);
       
       // Refresh company data

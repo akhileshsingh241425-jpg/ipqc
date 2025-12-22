@@ -222,6 +222,8 @@ def update_production_record(company_id, record_id):
                             bom_material.invoice_qty = bom_item['invoiceQty']
                         if 'lotBatchNo' in bom_item:
                             bom_material.lot_batch_no = bom_item['lotBatchNo']
+                        if 'imagePath' in bom_item:
+                            bom_material.image_path = bom_item['imagePath']
         
         db.session.commit()
         
@@ -529,4 +531,63 @@ def reopen_production_record(company_id, record_id):
         
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+# Download COC PDF from URL and save to server
+@company_bp.route('/api/companies/download-coc-pdf', methods=['POST'])
+def download_coc_pdf():
+    """Download COC PDF from external URL and save to server"""
+    try:
+        import requests
+        import os
+        from flask import current_app
+        from werkzeug.utils import secure_filename
+        from datetime import datetime
+        
+        data = request.get_json()
+        pdf_url = data.get('pdf_url')
+        material_name = data.get('material_name', 'COC')
+        invoice_no = data.get('invoice_no', 'unknown')
+        
+        if not pdf_url:
+            return jsonify({'error': 'PDF URL is required'}), 400
+        
+        # Create bom_materials directory if not exists
+        upload_folder = current_app.config.get('UPLOAD_FOLDER', 'uploads')
+        bom_folder = os.path.join(upload_folder, 'bom_materials')
+        os.makedirs(bom_folder, exist_ok=True)
+        
+        # Generate unique filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        safe_material = secure_filename(material_name.replace(' ', '_'))
+        safe_invoice = secure_filename(invoice_no.replace(' ', '_'))
+        filename = f"COC_{safe_material}_{safe_invoice}_{timestamp}.pdf"
+        filepath = os.path.join(bom_folder, filename)
+        
+        # Download PDF from URL
+        print(f"Downloading COC PDF from: {pdf_url}")
+        response = requests.get(pdf_url, timeout=30)
+        response.raise_for_status()
+        
+        # Save PDF
+        with open(filepath, 'wb') as f:
+            f.write(response.content)
+        
+        # Return relative path
+        relative_path = os.path.join('bom_materials', filename).replace('\\', '/')
+        
+        print(f"✓ COC PDF saved successfully: {relative_path}")
+        
+        return jsonify({
+            'success': True,
+            'image_path': relative_path,
+            'filename': filename
+        }), 200
+        
+    except requests.exceptions.RequestException as e:
+        print(f"✗ Error downloading PDF: {str(e)}")
+        return jsonify({'error': f'Failed to download PDF: {str(e)}'}), 500
+    except Exception as e:
+        print(f"✗ Error saving PDF: {str(e)}")
         return jsonify({'error': str(e)}), 500
