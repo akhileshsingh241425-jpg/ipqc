@@ -119,7 +119,10 @@ def upload_excel_data():
         # Check if order already exists
         existing_order = MasterOrder.query.filter_by(order_number=order_number).first()
         if existing_order:
+            print(f"❌ Error: Order already exists - {order_number}")
             return jsonify({'error': 'Order number already exists'}), 400
+        
+        print("📊 Reading Excel file...")
         
         # Read Excel file
         import pandas as pd
@@ -129,8 +132,12 @@ def upload_excel_data():
         file_content = file.read()
         df = pd.read_excel(io.BytesIO(file_content), engine='openpyxl')
         
+        print(f"📊 Excel loaded: {len(df)} rows")
+        
         # Remove completely empty rows
         df = df.dropna(how='all')
+        
+        print(f"📊 After removing empty rows: {len(df)} rows")
         
         # Check if first row contains header keywords
         first_row_str = ' '.join([str(val).lower() for val in df.iloc[0].values if pd.notna(val)])
@@ -138,9 +145,12 @@ def upload_excel_data():
             # First row is header, use it as column names
             df.columns = df.iloc[0]
             df = df.drop(df.index[0]).reset_index(drop=True)
+            print("📊 Header row detected and used as column names")
         
         # Normalize column names
         df.columns = df.columns.str.strip()
+        
+        print(f"📊 Columns found: {list(df.columns)[:5]}...")  # First 5 columns
         
         # Map common abbreviated column names to full names
         column_mapping = {
@@ -154,10 +164,12 @@ def upload_excel_data():
         
         # Validate max rows (500,000 limit)
         if len(df) > 500000:
+            print(f"❌ Error: Too many rows - {len(df)}")
             return jsonify({'error': f'Excel file has {len(df)} rows. Maximum 500,000 rows allowed.'}), 400
         
         # Check if ID column exists
         if 'ID' not in df.columns:
+            print(f"❌ Error: Missing ID column. Available columns: {list(df.columns)}")
             return jsonify({'error': 'Missing required column: ID (Serial Number)'}), 400
         
         # Remove rows where ID is empty or invalid
