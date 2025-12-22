@@ -169,8 +169,19 @@ def upload_excel_data():
         
         # Check if ID column exists
         if 'ID' not in df.columns:
-            print(f"❌ Error: Missing ID column. Available columns: {list(df.columns)}")
-            return jsonify({'error': 'Missing required column: ID (Serial Number)'}), 400
+            # Try alternative column names
+            if 'SN' in df.columns:
+                df.rename(columns={'SN': 'ID'}, inplace=True)
+                print("✅ Using 'SN' column as ID")
+            elif 'Serial' in df.columns:
+                df.rename(columns={'Serial': 'ID'}, inplace=True)
+                print("✅ Using 'Serial' column as ID")
+            elif 'Barcode' in df.columns:
+                df.rename(columns={'Barcode': 'ID'}, inplace=True)
+                print("✅ Using 'Barcode' column as ID")
+            else:
+                print(f"❌ Error: Missing ID column. Available columns: {list(df.columns)}")
+                return jsonify({'error': 'Missing required column: ID (Serial Number)'}), 400
         
         # Remove rows where ID is empty or invalid
         df = df[df['ID'].notna()]
