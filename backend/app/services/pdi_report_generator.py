@@ -167,10 +167,10 @@ class PDIReportGenerator:
         """Get all production records for PDI"""
         try:
             query = text("""
-                SELECT pr.*, c.companyName 
+                SELECT pr.*, c.company_name 
                 FROM production_records pr
-                JOIN companies c ON pr.companyId = c.id
-                WHERE pr.pdi = :pdi_number AND c.companyName = :company_name
+                JOIN companies c ON pr.company_id = c.id
+                WHERE pr.pdi = :pdi_number AND c.company_name = :company_name
                 ORDER BY pr.date
             """)
             
