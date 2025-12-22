@@ -90,21 +90,30 @@ def upload_excel_data():
         except Exception as create_err:
             print(f"Warning: Could not create tables: {create_err}")
         
+        print(f"📤 Upload Request - Files: {list(request.files.keys())}")
+        print(f"📤 Upload Request - Form Data: {dict(request.form)}")
+        
         if 'file' not in request.files:
+            print("❌ Error: No file in request")
             return jsonify({'error': 'No file uploaded'}), 400
         
         file = request.files['file']
         if file.filename == '':
+            print("❌ Error: Empty filename")
             return jsonify({'error': 'No file selected'}), 400
         
         if not file.filename.endswith(('.xlsx', '.xls')):
+            print(f"❌ Error: Invalid file type: {file.filename}")
             return jsonify({'error': 'Only Excel files allowed'}), 400
         
         # Get form data
         company_name = request.form.get('company_name')
         order_number = request.form.get('order_number')
         
+        print(f"📋 Company: {company_name}, Order: {order_number}")
+        
         if not company_name or not order_number:
+            print(f"❌ Error: Missing data - Company: {company_name}, Order: {order_number}")
             return jsonify({'error': 'company_name and order_number required'}), 400
         
         # Check if order already exists
