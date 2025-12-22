@@ -133,35 +133,41 @@ class PDIReportGenerator:
                 spaceAfter=10
             )
             
-            story.append(Paragraph(f"<b>PDI Number:</b> {pdi_number}", info_style))
-            story.append(Paragraph(f"<b>Company:</b> {company_name}", info_style))
+            story.append(Paragraph(f"<b>PDI Number:</b> {str(pdi_number)}", info_style))
+            story.append(Paragraph(f"<b>Company:</b> {str(company_name)}", info_style))
             story.append(Paragraph(f"<b>Generated:</b> {datetime.now().strftime('%d-%m-%Y %H:%M')}", info_style))
             story.append(Spacer(1, 20*mm))
             
             # Get production summary
             records = self._get_production_records(pdi_number, company_name)
             
-            if records:
-                total_production = sum((r['dayProduction'] or 0) + (r['nightProduction'] or 0) for r in records)
+            if records and len(records) > 0:
+                total_production = sum((r.get('dayProduction', 0) or 0) + (r.get('nightProduction', 0) or 0) for r in records)
                 production_days = len(records)
-                start_date = min(r['date'] for r in records)
-                end_date = max(r['date'] for r in records)
-                running_order = records[0]['runningOrder'] if records else 'N/A'
                 
-                # Convert dates to strings if they're date objects
-                if hasattr(start_date, 'strftime'):
-                    start_date = start_date.strftime('%d-%m-%Y')
-                if hasattr(end_date, 'strftime'):
-                    end_date = end_date.strftime('%d-%m-%Y')
+                # Safely get dates
+                dates = [r.get('date') for r in records if r.get('date')]
+                if dates:
+                    start_date = min(dates)
+                    end_date = max(dates)
+                    
+                    # Convert dates to strings
+                    start_date_str = start_date.strftime('%d-%m-%Y') if hasattr(start_date, 'strftime') else str(start_date)
+                    end_date_str = end_date.strftime('%d-%m-%Y') if hasattr(end_date, 'strftime') else str(end_date)
+                else:
+                    start_date_str = 'N/A'
+                    end_date_str = 'N/A'
                 
-                # Production Summary Table
+                running_order = str(records[0].get('runningOrder', 'N/A') or 'N/A')
+                
+                # Production Summary Table - all values as strings
                 summary_data = [
                     ['Production Summary', ''],
                     ['Total Production:', f"{total_production:,} modules"],
                     ['Production Days:', f"{production_days} days"],
-                    ['Start Date:', str(start_date)],
-                    ['End Date:', str(end_date)],
-                    ['Running Order:', running_order or 'N/A']
+                    ['Start Date:', start_date_str],
+                    ['End Date:', end_date_str],
+                    ['Running Order:', running_order]
                 ]
                 
                 summary_table = Table(summary_data, colWidths=[80*mm, 80*mm])
@@ -198,12 +204,16 @@ class PDIReportGenerator:
                 story.append(Paragraph("3. In-Process Quality Control (IPQC) Reports", index_style))
                 story.append(Paragraph("4. Final Test Reports (FTR) Documents", index_style))
             
+            print("Building summary PDF...")
             doc.build(story)
             buffer.seek(0)
+            print("Summary page generated successfully")
             return buffer
             
         except Exception as e:
             print(f"Error generating summary page: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _get_production_records(self, pdi_number, company_name):
