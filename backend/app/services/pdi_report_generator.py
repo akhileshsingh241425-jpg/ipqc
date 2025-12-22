@@ -219,38 +219,39 @@ class PDIReportGenerator:
     def _get_production_records(self, pdi_number, company_name):
         """Get all production records for PDI"""
         try:
-            query = text("""
-                SELECT pr.*, c.company_name 
-                FROM production_records pr
-                JOIN companies c ON pr.company_id = c.id
-                WHERE pr.pdi = :pdi_number AND c.company_name = :company_name
-                ORDER BY pr.date
-            """)
+            # Use ORM instead of raw SQL to avoid index issues
+            from app.models.database import ProductionRecord, Company
             
-            result = db.session.execute(query, {
-                'pdi_number': pdi_number,
-                'company_name': company_name
-            })
+            # Find company
+            company = Company.query.filter_by(company_name=company_name).first()
+            if not company:
+                print(f"Company {company_name} not found")
+                return []
+            
+            # Get production records
+            production_records = ProductionRecord.query.filter_by(
+                company_id=company.id,
+                pdi=pdi_number
+            ).order_by(ProductionRecord.date).all()
+            
+            print(f"Found {len(production_records)} production records")
             
             records = []
-            for row in result:
+            for pr in production_records:
                 records.append({
-                    'id': row[0],
-                    'date': row[1],
-                    'dayProduction': row[2],
-                    'nightProduction': row[3],
-                    'companyId': row[4],
-                    'ipqcPdf': row[5],
-                    'ftrDocument': row[6],
-                    'pdi': row[7],
-                    'runningOrder': row[8] if len(row) > 8 else None,
-                    'bomMaterials': row[9] if len(row) > 9 else None,
-                    'serialNumberStart': row[10] if len(row) > 10 else None,
-                    'serialNumberEnd': row[11] if len(row) > 11 else None,
-                    'serialCount': row[12] if len(row) > 12 else None
+                    'id': pr.id,
+                    'date': pr.date,
+                    'dayProduction': pr.day_production or 0,
+                    'nightProduction': pr.night_production or 0,
+                    'companyId': pr.company_id,
+                    'ipqcPdf': pr.ipqc_pdf,
+                    'ftrDocument': pr.ftr_document,
+                    'pdi': pr.pdi,
+                    'runningOrder': pr.running_order
                 })
             
             return records
+
             
         except Exception as e:
             print(f"Error getting production records: {str(e)}")
