@@ -10,6 +10,7 @@ import FTRReportManager from './components/FTRReportManager';
 import TestReport from './components/TestReport';
 import GraphManager from './components/GraphManager';
 import UserManagement from './components/UserManagement';
+import FTRManagement from './components/FTRManagement';
 import Login from './components/Login';
 import './styles/Navbar.css';
 import './App.css';
@@ -319,6 +320,8 @@ function App() {
         return <FTRDeliveredUpload />;
       case 'ftr-report':
         return <FTRReportManager />;
+      case 'ftr-management':
+        return <FTRManagement />;
       case 'test-report':
         return <TestReport moduleDatabase={moduleDatabase} />;
       case 'graph-manager':
@@ -417,6 +420,14 @@ function App() {
           >
             <span className="icon">⚡</span>
             {!sidebarCollapsed && <span className="label">FTR & Flash Report</span>}
+          </li>
+          <li 
+            className={activeSection === 'ftr-management' ? 'active' : ''}
+            onClick={() => setActiveSection('ftr-management')}
+            title="FTR Management"
+          >
+            <span className="icon">🏭</span>
+            {!sidebarCollapsed && <span className="label">FTR Management</span>}
           </li>
           <li 
             className={activeSection === 'test-report' ? 'active' : ''}

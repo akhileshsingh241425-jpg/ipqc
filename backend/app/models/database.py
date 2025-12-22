@@ -57,6 +57,7 @@ class ProductionRecord(db.Model):
     module_rejection_percent = db.Column(db.Float, default=0.0)
     ipqc_pdf = db.Column(db.String(500), nullable=True)
     ftr_document = db.Column(db.String(500), nullable=True)
+    ftr_uploaded = db.Column(db.Boolean, default=False)  # Track if FTR has been uploaded
     is_closed = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -82,6 +83,7 @@ class ProductionRecord(db.Model):
             'moduleRejectionPercent': self.module_rejection_percent,
             'ipqcPdf': self.ipqc_pdf,
             'ftrDocument': self.ftr_document,
+            'ftrUploaded': self.ftr_uploaded,
             'isClosed': self.is_closed,
             'bomMaterials': [bm.to_dict() for bm in self.bom_materials]
         }

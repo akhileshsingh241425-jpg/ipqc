@@ -17,7 +17,7 @@ Test script tests all major functionality of the PDI IPQC system including:
 ## 🚀 How to Run Tests
 
 ### Prerequisites
-1. **Backend server must be running** on port 5002
+1. **Backend server must be running** on port 5003
 2. Python 3.x installed
 3. Required Python package: `requests`
 
@@ -190,7 +190,7 @@ Frontend features **must be tested manually** in browser:
 ### Backend Not Accessible
 ```
 ✗ Server not accessible: Connection refused
-⚠ Make sure backend server is running on port 5002
+⚠ Make sure backend server is running on port 5003
 ```
 **Solution:** Start backend server first
 ```bash

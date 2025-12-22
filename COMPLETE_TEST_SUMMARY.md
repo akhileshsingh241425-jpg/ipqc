@@ -22,7 +22,7 @@
 
 ### 1. Server Health & Connectivity ✅
 ```
-✓ Server is accessible on port 5002
+✓ Server is accessible on port 5003
 ✓ All API endpoints responding
 ✓ Database connections working
 ```

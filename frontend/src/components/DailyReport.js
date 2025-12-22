@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import axios from 'axios';
 import { companyService } from '../services/apiService';
 import COCSelectionModal from './COCSelectionModal';
@@ -10,13 +10,43 @@ import '../styles/DailyReport.css';
 const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
 const getAPIBase = () => window.location.hostname === 'localhost' ? 'http://localhost:5003/api' : '/api';
 
-// BOM Materials List
-const BOM_MATERIALS = [
-  "Cell", "EVA Front", "EVA Back", "Glass Front", "Glass Back",
-  "Ribbon", "Frame Long", "Frame Short", "JB", "Flux",
-  "Potting Material", "Bus Bar 6mm", "Bus Bar 4mm",
-  "Silicone 2kg", "Silicone 10kg", "Silicone 270kg"
-];
+// BOM Materials by Wattage (based on PHP logic)
+const BOM_MATERIALS_BY_WATTAGE = {
+  '625wp': [
+    { name: 'Solar Cell', qty: 66, product_type: '25.30%', min_efficiency: 25.30, needsCompany: true },
+    { name: 'EVA', qty: 2.8, product_type: '', needsCompany: true },
+    { name: 'FRONT GLASS', qty: 1, product_type: '2376x1128x2.0 mm', needsCompany: true },
+    { name: 'BACK GLASS', qty: 1, product_type: '2376x1128x2.0 mm(3 hole)', needsCompany: true },
+    { name: 'RIBBON (0.26 mm)', qty: 0.212, product_type: '0.26 mm', needsCompany: true, materialGroup: 'RIBBON' },
+    { name: 'RIBBON (4.0X0.4)', qty: 0.038, product_type: '4.0*0.40', needsCompany: true, materialGroup: 'RIBBON' },
+    { name: 'RIBBON (6.0X0.4)', qty: 0.018, product_type: '6.0X0.40 mm', needsCompany: true, materialGroup: 'RIBBON' },
+    { name: 'FLUX', qty: 0.02, product_type: '', needsCompany: true },
+    { name: 'EPE FRONT', qty: 5.2, product_type: '0.70MM*1125MM*320M (EP304)', needsCompany: true },
+    { name: 'Aluminium Frame LONG', qty: 1, product_type: '6 Hole (2382 mm length)', needsCompany: true },
+    { name: 'Aluminium Frame SHORT', qty: 1, product_type: '1134 mm Width', needsCompany: true },
+    { name: 'SEALENT', qty: 0.35, product_type: '', needsCompany: true },
+    { name: 'JB Potting (A and B)', qty: 0.021, product_type: '', needsCompany: true },
+    { name: 'JUNCTION BOX', qty: 1, product_type: '35A 1200mm', needsCompany: true },
+    { name: 'RFID', qty: 1, product_type: '', needsCompany: true }
+  ],
+  '630wp': [
+    { name: 'Solar Cell', qty: 66, product_type: '25.40%', min_efficiency: 25.40, needsCompany: true },
+    { name: 'EVA', qty: 2.8, product_type: '', needsCompany: true },
+    { name: 'FRONT GLASS', qty: 1, product_type: '2376x1128x2.0 mm', needsCompany: true },
+    { name: 'BACK GLASS', qty: 1, product_type: '2376x1128x2.0 mm(3 hole)', needsCompany: true },
+    { name: 'RIBBON (0.26 mm)', qty: 0.212, product_type: '0.26 mm', needsCompany: true, materialGroup: 'RIBBON' },
+    { name: 'RIBBON (4.0X0.4)', qty: 0.038, product_type: '4.0*0.40', needsCompany: true, materialGroup: 'RIBBON' },
+    { name: 'RIBBON (6.0X0.4)', qty: 0.018, product_type: '6.0X0.40 mm', needsCompany: true, materialGroup: 'RIBBON' },
+    { name: 'FLUX', qty: 0.02, product_type: '', needsCompany: true },
+    { name: 'EPE FRONT', qty: 5.2, product_type: '0.70MM*1125MM*320M (EP304)', needsCompany: true },
+    { name: 'Aluminium Frame LONG', qty: 1, product_type: '6 Hole (2382 mm length)', needsCompany: true },
+    { name: 'Aluminium Frame SHORT', qty: 1, product_type: '1134 mm Width', needsCompany: true },
+    { name: 'SEALENT', qty: 0.35, product_type: '', needsCompany: true },
+    { name: 'JB Potting (A and B)', qty: 0.021, product_type: '', needsCompany: true },
+    { name: 'JUNCTION BOX', qty: 1, product_type: '35A 1200mm', needsCompany: true },
+    { name: 'RFID', qty: 1, product_type: '', needsCompany: true }
+  ]
+};
 
 function DailyReport() {
   const [companies, setCompanies] = useState([]);
@@ -61,6 +91,9 @@ function DailyReport() {
   const [newDayPdiNumber, setNewDayPdiNumber] = useState('');
   const [newDayRunningOrder, setNewDayRunningOrder] = useState('');
   const [showBomModal, setShowBomModal] = useState(false);
+  const [selectedWattage, setSelectedWattage] = useState('625wp'); // Default wattage
+  const [cocBrands, setCocBrands] = useState({}); // Available brands by material name from COC API
+  const [loadingCocBrands, setLoadingCocBrands] = useState(false);
   const [showCOCModal, setShowCOCModal] = useState(false);
   const [currentProductionQty, setCurrentProductionQty] = useState(0);
   const [selectedCOCs, setSelectedCOCs] = useState({});
@@ -85,6 +118,8 @@ function DailyReport() {
   const [editingUsedQty, setEditingUsedQty] = useState(null); // {materialName, lotNumber}
   const [editUsedQtyValue, setEditUsedQtyValue] = useState('');
   const [manualUsedQty, setManualUsedQty] = useState({}); // Store manual overrides
+  const [requiredCocsReport, setRequiredCocsReport] = useState([]);
+  const [loadingRequiredCocs, setLoadingRequiredCocs] = useState(false);
   const [cocMaterialFilter, setCocMaterialFilter] = useState('all');
   const [cocInvoiceFilter, setCocInvoiceFilter] = useState('');
   const [showPDFModal, setShowPDFModal] = useState(false);
@@ -907,16 +942,28 @@ function DailyReport() {
 
   const handleOpenBomModal = (record) => {
     setSelectedRecordForBom(record);
+    
+    // Fetch COC brands when opening modal
+    fetchCOCBrands();
+    
+    // Get wattage from company data or default
+    const wattage = selectedCompany?.wattage || '625wp';
+    setSelectedWattage(wattage);
+    
     // Initialize bomMaterials state with existing data
+    const currentMaterials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
     const materialsData = {};
-    BOM_MATERIALS.forEach(materialName => {
-      const existing = record.bomMaterials?.find(bm => bm.materialName === materialName);
-      materialsData[materialName] = {
+    
+    currentMaterials.forEach(material => {
+      const existing = record.bomMaterials?.find(bm => bm.materialName === material.name);
+      materialsData[material.name] = {
         lotNumber: existing?.lotNumber || '',
+        company: existing?.company || '',
         image: null,
         existingImage: existing?.imagePath || null
       };
     });
+    
     setBomMaterials(materialsData);
     setIpqcPdf(null);
     setFtrDocument(null);
@@ -1017,6 +1064,412 @@ function DailyReport() {
     }
   };
 
+  // Fetch COC brands for Solar Cell when modal opens
+  const fetchCOCBrands = async () => {
+    try {
+      setLoadingCocBrands(true);
+      const API_BASE = getAPIBase();
+      
+      // Get last 6 months data
+      const toDate = new Date().toISOString().split('T')[0];
+      const fromDate = new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0];
+      
+      const response = await axios.get(`${API_BASE}/coc/list?from_date=${fromDate}&to_date=${toDate}`);
+      
+      if (response.data.success) {
+        // Material name mapping for fuzzy matching
+        const materialMapping = {
+          'Solar Cell': ['solar cell', 'cell', 'solar', 'solarcell'],
+          'EVA': ['eva', 'ethylene vinyl acetate'],
+          'FRONT GLASS': ['front glass', 'glass front', 'glass', 'fg'],
+          'BACK GLASS': ['back glass', 'glass back', 'bg', 'backglass'],
+          'RIBBON': ['ribbon', 'tab ribbon', 'tabbing ribbon', 'busbar', 'bus bar'],
+          'FLUX': ['flux', 'soldering flux'],
+          'EPE FRONT': ['epe', 'epe front', 'epe sheet'],
+          'Aluminium Frame LONG': ['aluminium frame', 'al frame', 'frame long', 'aluminum frame'],
+          'Aluminium Frame SHORT': ['aluminium frame', 'al frame', 'frame short', 'aluminum frame'],
+          'SEALENT': ['sealant', 'sealent', 'silicone'],
+          'JB Potting (A and B)': ['jb potting', 'potting', 'junction box potting', 'jb compound'],
+          'JUNCTION BOX': ['junction box', 'jb', 'j box', 'jbox'],
+          'RFID': ['rfid', 'rfid tag', 'tag']
+        };
+        
+        // Helper function to match material name
+        const matchMaterial = (cocMaterialName, bomMaterialName) => {
+          const cocName = cocMaterialName.toLowerCase().trim();
+          const bomName = bomMaterialName.toLowerCase().trim();
+          
+          // Exact match
+          if (cocName === bomName) return true;
+          
+          // Check mapping
+          const keywords = materialMapping[bomMaterialName] || [bomName];
+          return keywords.some(keyword => 
+            cocName.includes(keyword) || keyword.includes(cocName)
+          );
+        };
+        
+        // Group brands by material name
+        const brandsByMaterial = {};
+        
+        // Get all BOM material names
+        const allBomMaterials = [...new Set([
+          ...(BOM_MATERIALS_BY_WATTAGE['625wp'] || []).map(m => m.name),
+          ...(BOM_MATERIALS_BY_WATTAGE['630wp'] || []).map(m => m.name)
+        ])];
+        
+        response.data.coc_data.forEach(item => {
+          if (item.material_name && item.brand) {
+            // Try to match with BOM materials
+            allBomMaterials.forEach(bomMaterial => {
+              // Get the material group (for RIBBON variants)
+              const materialGroup = BOM_MATERIALS_BY_WATTAGE['625wp']?.find(m => m.name === bomMaterial)?.materialGroup || 
+                                   BOM_MATERIALS_BY_WATTAGE['630wp']?.find(m => m.name === bomMaterial)?.materialGroup;
+              
+              const matchKey = materialGroup || bomMaterial.split('(')[0].trim(); // Use group or base name
+              
+              if (matchMaterial(item.material_name, matchKey)) {
+                if (!brandsByMaterial[bomMaterial]) {
+                  brandsByMaterial[bomMaterial] = [];
+                }
+                
+                // Add brand if not already exists for this material
+                const brandExists = brandsByMaterial[bomMaterial].some(b => b.brand === item.brand);
+                if (!brandExists) {
+                  brandsByMaterial[bomMaterial].push({
+                    brand: item.brand,
+                    lot_batch_no: item.lot_batch_no,
+                    product_type: item.product_type
+                  });
+                }
+              }
+            });
+          }
+        });
+        
+        console.log('COC Brands by Material:', brandsByMaterial);
+        setCocBrands(brandsByMaterial);
+      }
+    } catch (error) {
+      console.error('Failed to fetch COC brands:', error);
+    } finally {
+      setLoadingCocBrands(false);
+    }
+  };
+
+  // Generate Excel with Required COCs and Available COCs
+  const generateCOCExcelReport = () => {
+    if (requiredCocsReport.length === 0) {
+      alert('❌ Please click "Show Required COCs Report" first to load data');
+      return;
+    }
+
+    try {
+      // Sheet 1: COMPREHENSIVE COC STATUS (Combined Required + Available)
+      const comprehensiveData = [];
+      comprehensiveData.push(['Material Name', 'Product Type', 'Required Qty', 'Available COCs', 'Company', 'Invoice No', 'COC Qty', 'Lot/Batch', 'Invoice Date', 'Status']);
+      
+      requiredCocsReport.forEach(req => {
+        // Calculate total available
+        let totalAvailable = 0;
+        const allCocs = [];
+        
+        Object.entries(req.availableCocs).forEach(([company, cocs]) => {
+          cocs.forEach(coc => {
+            totalAvailable += coc.cocQty;
+            allCocs.push({ company, ...coc });
+          });
+        });
+        
+        // Sort by date - oldest first (FIFO)
+        allCocs.sort((a, b) => {
+          const dateA = new Date(a.invoiceDate || '2099-01-01');
+          const dateB = new Date(b.invoiceDate || '2099-01-01');
+          return dateA - dateB;
+        });
+        
+        // Status
+        let status = totalAvailable === 0 ? '❌ NO COC' : (totalAvailable >= req.requiredQty ? '✅ SUFFICIENT' : '⚠️ SHORTAGE');
+        
+        if (allCocs.length > 0) {
+          // Add rows for each available COC
+          allCocs.forEach((coc, idx) => {
+            comprehensiveData.push([
+              idx === 0 ? req.materialName : '',
+              idx === 0 ? (req.productType || '-') : '',
+              idx === 0 ? req.requiredQty : '',
+              idx === 0 ? totalAvailable : '',
+              coc.company,
+              coc.invoiceNo || '-',
+              coc.cocQty || 0,
+              coc.lotBatchNo || '-',
+              coc.invoiceDate || '-',
+              idx === 0 ? status : ''
+            ]);
+          });
+        } else {
+          comprehensiveData.push([
+            req.materialName,
+            req.productType || '-',
+            req.requiredQty,
+            0,
+            'No COC Available',
+            '-',
+            0,
+            '-',
+            '-',
+            status
+          ]);
+        }
+      });
+
+      // Create workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Add Sheet 1 - Comprehensive COC Status
+      const ws1 = XLSX.utils.aoa_to_sheet(comprehensiveData);
+      
+      // Style Sheet 1 Header
+      const range1 = XLSX.utils.decode_range(ws1['!ref']);
+      for (let col = range1.s.c; col <= range1.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (!ws1[cellAddress]) continue;
+        ws1[cellAddress].s = {
+          fill: { fgColor: { rgb: "1565C0" } },
+          font: { bold: true, color: { rgb: "FFFFFF" }, sz: 13 },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "medium", color: { rgb: "000000" } },
+            bottom: { style: "medium", color: { rgb: "000000" } },
+            left: { style: "medium", color: { rgb: "000000" } },
+            right: { style: "medium", color: { rgb: "000000" } }
+          }
+        };
+      }
+      
+      // Style Sheet 1 Data rows
+      for (let row = range1.s.r + 1; row <= range1.e.r; row++) {
+        const statusCell = ws1[XLSX.utils.encode_cell({ r: row, c: 9 })];
+        const statusValue = statusCell ? statusCell.v : '';
+        
+        let rowColor = "FFFFFF";
+        if (statusValue.includes('NO COC')) {
+          rowColor = "FFCDD2"; // Red
+        } else if (statusValue.includes('SHORTAGE')) {
+          rowColor = "FFE082"; // Yellow
+        } else if (statusValue.includes('SUFFICIENT')) {
+          rowColor = "C8E6C9"; // Green
+        }
+        
+        for (let col = range1.s.c; col <= range1.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!ws1[cellAddress]) continue;
+          
+          ws1[cellAddress].s = {
+            fill: { fgColor: { rgb: rowColor } },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+              top: { style: "thin", color: { rgb: "BDBDBD" } },
+              bottom: { style: "thin", color: { rgb: "BDBDBD" } },
+              left: { style: "thin", color: { rgb: "BDBDBD" } },
+              right: { style: "thin", color: { rgb: "BDBDBD" } }
+            }
+          };
+          
+          // Bold for material name and status
+          if (col === 0 || col === 9) {
+            ws1[cellAddress].s.font = { bold: true, sz: 11 };
+          }
+        }
+      }
+      
+      ws1['!cols'] = [
+        { wch: 25 }, // Material Name
+        { wch: 28 }, // Product Type
+        { wch: 14 }, // Required Qty
+        { wch: 15 }, // Available COCs
+        { wch: 28 }, // Company
+        { wch: 20 }, // Invoice No
+        { wch: 12 }, // COC Qty
+        { wch: 18 }, // Lot/Batch
+        { wch: 15 }, // Invoice Date
+        { wch: 16 }  // Status
+      ];
+      
+      // Set row heights
+      ws1['!rows'] = [{ hpt: 25 }]; // Header row height
+      
+      XLSX.utils.book_append_sheet(wb, ws1, 'COC Status Report');
+      
+      // Sheet 2: Smart COC Suggestions (Which COC to use for fulfillment)
+      const summaryData = [];
+      summaryData.push(['Material Name', 'Product Type', 'Required Qty', 'Available', 'Shortage', 'Status', '🎯 USE THIS COC', 'Company', 'Invoice No', 'COC Qty', 'Lot/Batch', 'Date']);
+      
+      // Add summary data from required COCs
+      requiredCocsReport.forEach(req => {
+        // Calculate total available across all companies
+        let totalAvailable = 0;
+        const allCocs = [];
+        
+        Object.entries(req.availableCocs).forEach(([company, cocs]) => {
+          cocs.forEach(coc => {
+            totalAvailable += coc.cocQty;
+            allCocs.push({
+              company: company,
+              ...coc
+            });
+          });
+        });
+        
+        // Calculate shortage
+        const shortage = req.requiredQty - totalAvailable;
+        const shortageText = shortage > 0 ? Math.round(shortage * 100) / 100 : 0;
+        
+        // Find suggested COC (OLDEST date - FIFO principle)
+        let suggestedCoc = null;
+        let suggestionText = '-';
+        
+        if (allCocs.length > 0) {
+          // Sort by date - OLDEST first (FIFO principle)
+          const sortedCocs = allCocs.sort((a, b) => {
+            const dateA = new Date(a.invoiceDate || '2099-01-01');
+            const dateB = new Date(b.invoiceDate || '2099-01-01');
+            return dateA - dateB;
+          });
+          
+          if (shortage > 0) {
+            // Find COC that can fulfill shortage
+            suggestedCoc = sortedCocs.find(coc => coc.cocQty >= shortage) || sortedCocs[0];
+            suggestionText = '✅ ADD THIS';
+          } else {
+            // Show oldest COC for FIFO
+            suggestedCoc = sortedCocs[0];
+            suggestionText = '✅ USE FIRST';
+          }
+        }
+        
+        // Status
+        let status = '';
+        if (totalAvailable === 0) {
+          status = '❌ NO COC';
+        } else if (shortage <= 0) {
+          status = '✅ OK';
+        } else {
+          status = '⚠️ SHORT';
+        }
+        
+        summaryData.push([
+          req.materialName,
+          req.productType || '-',
+          req.requiredQty,
+          totalAvailable,
+          shortageText,
+          status,
+          suggestionText,
+          suggestedCoc ? suggestedCoc.company : '-',
+          suggestedCoc ? suggestedCoc.invoiceNo : '-',
+          suggestedCoc ? suggestedCoc.cocQty : '-',
+          suggestedCoc ? suggestedCoc.lotBatchNo : '-',
+          suggestedCoc ? (suggestedCoc.invoiceDate || '-') : '-'
+        ]);
+      });
+      
+      // Add Sheet 2 - COC Suggestions
+      const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
+      
+      // Apply advanced styling to Sheet 2
+      const range2 = XLSX.utils.decode_range(ws2['!ref']);
+      
+      // Header row styling - Gradient effect with dark blue
+      for (let col = range2.s.c; col <= range2.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
+        if (!ws2[cellAddress]) continue;
+        ws2[cellAddress].s = {
+          fill: { fgColor: { rgb: "0D47A1" } },
+          font: { bold: true, color: { rgb: "FFFFFF" }, sz: 13 },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "medium", color: { rgb: "000000" } },
+            bottom: { style: "medium", color: { rgb: "000000" } },
+            left: { style: "medium", color: { rgb: "000000" } },
+            right: { style: "medium", color: { rgb: "000000" } }
+          }
+        };
+      }
+      
+      // Data rows styling with conditional colors
+      for (let row = range2.s.r + 1; row <= range2.e.r; row++) {
+        const statusCell = ws2[XLSX.utils.encode_cell({ r: row, c: 5 })];
+        const statusValue = statusCell ? statusCell.v : '';
+        
+        let rowColor = "FFFFFF";
+        let statusColor = "FFFFFF";
+        
+        if (statusValue.includes('NO COC')) {
+          rowColor = "FFCDD2"; // Light red
+          statusColor = "F44336"; // Red
+        } else if (statusValue.includes('SHORT')) {
+          rowColor = "FFF9C4"; // Light yellow
+          statusColor = "FFC107"; // Amber
+        } else if (statusValue.includes('OK')) {
+          rowColor = "C8E6C9"; // Light green
+          statusColor = "4CAF50"; // Green
+        }
+        
+        for (let col = range2.s.c; col <= range2.e.c; col++) {
+          const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+          if (!ws2[cellAddress]) continue;
+          
+          const cellColor = col === 5 ? statusColor : rowColor;
+          
+          ws2[cellAddress].s = {
+            fill: { fgColor: { rgb: cellColor } },
+            font: { 
+              bold: col === 0 || col === 5 || col === 6,
+              color: { rgb: col === 5 ? "FFFFFF" : "000000" },
+              sz: col === 6 ? 12 : 11
+            },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+              top: { style: "thin", color: { rgb: "BDBDBD" } },
+              bottom: { style: "thin", color: { rgb: "BDBDBD" } },
+              left: { style: "thin", color: { rgb: "BDBDBD" } },
+              right: { style: "thin", color: { rgb: "BDBDBD" } }
+            }
+          };
+        }
+      }
+      
+      ws2['!cols'] = [
+        { wch: 25 }, // Material Name
+        { wch: 28 }, // Product Type
+        { wch: 14 }, // Required Qty
+        { wch: 12 }, // Available
+        { wch: 12 }, // Shortage
+        { wch: 12 }, // Status
+        { wch: 16 }, // USE THIS COC
+        { wch: 28 }, // Company
+        { wch: 20 }, // Invoice No
+        { wch: 12 }, // COC Qty
+        { wch: 20 }, // Lot/Batch
+        { wch: 15 }  // Date
+      ];
+      
+      ws2['!rows'] = [{ hpt: 30 }]; // Header row height
+      
+      XLSX.utils.book_append_sheet(wb, ws2, 'Smart Suggestions');
+      
+      // Download
+      const fileName = `COC_Report_PDI_${selectedPdiForDetails || 'All'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      alert('✅ Professional Excel Report Downloaded!\n📊 Sheet 1: Complete COC Status\n🎯 Sheet 2: Smart COC Suggestions (FIFO)');
+    } catch (error) {
+      console.error('Failed to generate Excel:', error);
+      alert('❌ Failed to generate Excel report');
+    }
+  };
+
   const handleSaveBomMaterials = async () => {
     if (!selectedRecordForBom) return;
 
@@ -1024,16 +1477,22 @@ function DailyReport() {
       setLoading(true);
       const recordId = selectedRecordForBom.id;
       const API_BASE = getAPIBase();
+      
+      // Get current wattage materials
+      const currentMaterials = BOM_MATERIALS_BY_WATTAGE[selectedWattage] || [];
 
       // Upload each BOM material
-      for (const materialName of BOM_MATERIALS) {
-        const material = bomMaterials[materialName];
-        if (material && (material.lotNumber || material.image)) {
+      for (const material of currentMaterials) {
+        const materialData = bomMaterials[material.name];
+        if (materialData && (materialData.lotNumber || materialData.image || materialData.company)) {
           const formData = new FormData();
-          formData.append('materialName', materialName);
-          formData.append('lotNumber', material.lotNumber || '');
-          if (material.image) {
-            formData.append('image', material.image);
+          formData.append('materialName', material.name);
+          formData.append('lotNumber', materialData.lotNumber || '');
+          formData.append('company', materialData.company || '');
+          formData.append('qty', material.qty);
+          formData.append('product_type', material.product_type);
+          if (materialData.image) {
+            formData.append('image', materialData.image);
           }
 
           await axios.post(
@@ -1090,6 +1549,92 @@ function DailyReport() {
       alert(error.response?.data?.error || 'Failed to upload BOM materials');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Calculate required COCs for a PDI based on production and suggest available COCs
+  const calculateRequiredCocs = async (pdiNumber, wattage) => {
+    try {
+      setLoadingRequiredCocs(true);
+      const API_BASE = getAPIBase();
+      
+      // Get PDI records
+      const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === pdiNumber);
+      const totalProduction = pdiRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
+      
+      // Get BOM materials for this wattage
+      const bomMaterials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
+      
+      // Calculate required quantities
+      const requiredMaterials = bomMaterials.map(material => {
+        const requiredQty = totalProduction * material.qty;
+        return {
+          materialName: material.name,
+          productType: material.product_type,
+          requiredQty: Math.round(requiredQty * 100) / 100,
+          perModuleQty: material.qty
+        };
+      });
+      
+      // Fetch available COCs from database
+      const toDate = new Date().toISOString().split('T')[0];
+      const fromDate = new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0];
+      const response = await axios.get(`${API_BASE}/coc/list?from_date=${fromDate}&to_date=${toDate}`);
+      
+      if (response.data.success) {
+        // Group COCs by material and company
+        const requiredCocsData = requiredMaterials.map(req => {
+          // Find matching COCs for this material
+          const matchingCocs = response.data.coc_data.filter(coc => {
+            const cocMaterial = (coc.material_name || '').toLowerCase();
+            const reqMaterial = req.materialName.toLowerCase();
+            
+            // Simple matching logic
+            if (reqMaterial.includes('cell') && cocMaterial.includes('cell')) return true;
+            if (reqMaterial.includes('eva') && cocMaterial.includes('eva')) return true;
+            if (reqMaterial.includes('glass') && cocMaterial.includes('glass')) return true;
+            if (reqMaterial.includes('ribbon') && (cocMaterial.includes('ribbon') || cocMaterial.includes('busbar'))) return true;
+            if (reqMaterial.includes('flux') && cocMaterial.includes('flux')) return true;
+            if (reqMaterial.includes('epe') && cocMaterial.includes('epe')) return true;
+            if (reqMaterial.includes('frame') && cocMaterial.includes('frame')) return true;
+            if (reqMaterial.includes('sealent') && cocMaterial.includes('sealant')) return true;
+            if (reqMaterial.includes('potting') && cocMaterial.includes('potting')) return true;
+            if (reqMaterial.includes('junction') && cocMaterial.includes('junction')) return true;
+            if (reqMaterial.includes('rfid') && cocMaterial.includes('rfid')) return true;
+            
+            return false;
+          });
+          
+          // Group by company/brand
+          const cocsByCompany = {};
+          matchingCocs.forEach(coc => {
+            const company = coc.brand || 'Unknown';
+            if (!cocsByCompany[company]) {
+              cocsByCompany[company] = [];
+            }
+            cocsByCompany[company].push({
+              invoiceNo: coc.invoice_no,
+              cocQty: parseFloat(coc.coc_qty) || 0,
+              invoiceQty: parseFloat(coc.invoice_qty) || 0,
+              lotBatchNo: coc.lot_batch_no,
+              invoiceDate: coc.invoice_date,
+              cocDocUrl: coc.coc_document_url,
+              iqcDocUrl: coc.iqc_document_url
+            });
+          });
+          
+          return {
+            ...req,
+            availableCocs: cocsByCompany
+          };
+        });
+        
+        setRequiredCocsReport(requiredCocsData);
+      }
+    } catch (error) {
+      console.error('Failed to calculate required COCs:', error);
+    } finally {
+      setLoadingRequiredCocs(false);
     }
   };
 
@@ -1721,11 +2266,11 @@ function DailyReport() {
       <div className="production-view-container">
         <div className="production-header">
           <h2>{selectedCompany.companyName} - Production Management</h2>
-          <div style={{display: 'flex', gap: '10px'}}>
+          <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center'}}>
             <button 
               className="btn-primary" 
               onClick={() => document.getElementById('master-data-upload').click()}
-              style={{padding: '10px 20px', background: '#ff9800', fontWeight: 'bold'}}
+              style={{padding: '10px 20px', background: '#ff9800', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
             >
               📤 Upload Master Data
             </button>
@@ -1739,7 +2284,7 @@ function DailyReport() {
             <button 
               className="btn-primary" 
               onClick={() => document.getElementById('rejection-upload').click()}
-              style={{padding: '10px 20px', background: '#dc3545', fontWeight: 'bold'}}
+              style={{padding: '10px 20px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
             >
               🚫 Upload Rejections
             </button>
@@ -1750,7 +2295,10 @@ function DailyReport() {
               style={{display: 'none'}}
               onChange={handleRejectionUpload}
             />
-            <button className="btn-back" onClick={() => { setSelectedCompany(null); setViewMode('list'); }}>
+            <button 
+              style={{padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
+              onClick={() => { setSelectedCompany(null); setViewMode('list'); }}
+            >
               ← Back to List
             </button>
           </div>
@@ -1761,26 +2309,7 @@ function DailyReport() {
         <div className="production-section">
           <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
             <h3>Daily Production Records</h3>
-            <button className="btn-add-day" onClick={handleAddNewDay}>
-              + Add New Day
-            </button>
-          </div>
-
-          {/* PDI Status Filter */}
-          <div style={{
-            backgroundColor: '#f8f9fa',
-            padding: '12px 15px',
-            borderRadius: '8px',
-            marginBottom: '15px',
-            border: '1px solid #dee2e6',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '15px'
-          }}>
-            <label style={{fontWeight: 'bold', color: '#495057', fontSize: '14px'}}>
-              📄 PDI Status Filter:
-            </label>
-            <div style={{display: 'flex', gap: '10px'}}>
+            <div style={{display: 'flex', gap: '8px'}}>
               <button
                 onClick={() => setPdiFilter('all')}
                 style={{
@@ -1870,7 +2399,7 @@ function DailyReport() {
                         <strong>Production:</strong> {totalProduction} modules
                       </p>
                       
-                      <div style={{display: 'flex', gap: '8px', marginTop: '10px'}}>
+                      <div style={{display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap'}}>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1878,7 +2407,7 @@ function DailyReport() {
                             setShowPdiDetailsModal(true);
                           }}
                           style={{
-                            flex: 1,
+                            flex: '1 1 45%',
                             padding: '8px',
                             background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
                             color: 'white',
@@ -1897,7 +2426,7 @@ function DailyReport() {
                             alert('Download Report for ' + pdiNumber);
                           }}
                           style={{
-                            flex: 1,
+                            flex: '1 1 45%',
                             padding: '8px',
                             background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
                             color: 'white',
@@ -1910,10 +2439,33 @@ function DailyReport() {
                         >
                           📄 Report
                         </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const wattage = selectedCompany.moduleWattage || '625wp';
+                            setSelectedPdiForDetails(pdiNumber);
+                            calculateRequiredCocs(pdiNumber, wattage);
+                          }}
+                          style={{
+                            flex: '1 1 100%',
+                            padding: '8px',
+                            background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '5px',
+                            fontWeight: 'bold',
+                            cursor: 'pointer',
+                            fontSize: '12px'
+                          }}
+                          disabled={loadingRequiredCocs}
+                        >
+                          {loadingRequiredCocs && selectedPdiForDetails === pdiNumber ? '⏳ Loading...' : '🔍 Required COCs'}
+                        </button>
                       </div>
                     </div>
                   );
                 })}
+
               </div>
             ) : <p className="no-data">No completed PDI records yet.</p>;
           })()}
@@ -2026,44 +2578,151 @@ function DailyReport() {
                     Total Production: <strong>{dateRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0).toLocaleString()}</strong> modules
                   </span>
                 </div>
-                {dateRecords.length > 0 && isSuperAdmin() && (
+                <div style={{display: 'flex', gap: '8px'}}>
                   <button
-                    onClick={async () => {
-                      if (window.confirm(`Delete all ${dateRecords.length} production records for ${selectedCompany.companyName}? This action cannot be undone!`)) {
-                        try {
-                          setLoading(true);
-                          for (const record of dateRecords) {
-                            await companyService.deleteProductionRecord(selectedCompany.id, record.id);
-                          }
-                          await refreshSelectedCompany();
-                          alert('All production records deleted successfully!');
-                        } catch (error) {
-                          console.error('Failed to delete records:', error);
-                          alert('Failed to delete some records');
-                        } finally {
-                          setLoading(false);
-                        }
+                    onClick={() => {
+                      const pdiNumber = dateRecords[0]?.pdi;
+                      const wattage = dateRecords[0]?.wattage || '625wp';
+                      if (pdiNumber) {
+                        setSelectedPdiForDetails(pdiNumber);
+                        calculateRequiredCocs(pdiNumber, wattage);
                       }
                     }}
                     style={{
                       padding: '8px 16px',
-                      background: '#dc2626',
+                      background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      fontWeight: '600',
+                      borderRadius: '5px',
                       cursor: 'pointer',
-                      transition: 'all 0.2s'
+                      fontWeight: 'bold',
+                      fontSize: '12px',
+                      whiteSpace: 'nowrap',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                     }}
-                    title="Delete all production records"
+                    disabled={loadingRequiredCocs}
                   >
-                    🗑️ Clear All Records
+                    {loadingRequiredCocs ? '⏳ Loading...' : '🔍 Required COCs'}
                   </button>
-                )}
+                  {dateRecords.length > 0 && isSuperAdmin() && (
+                    <button
+                      onClick={async () => {
+                        if (window.confirm(`Delete all ${dateRecords.length} production records for ${selectedCompany.companyName}? This action cannot be undone!`)) {
+                          try {
+                            setLoading(true);
+                            for (const record of dateRecords) {
+                              await companyService.deleteProductionRecord(selectedCompany.id, record.id);
+                            }
+                            await refreshSelectedCompany();
+                            alert('All production records deleted successfully!');
+                          } catch (error) {
+                            console.error('Failed to delete records:', error);
+                            alert('Failed to delete some records');
+                          } finally {
+                            setLoading(false);
+                          }
+                        }
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#dc2626',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      title="Delete all production records"
+                    >
+                      🗑️ Clear All Records
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {/* Required COCs Report Section */}
+              {requiredCocsReport.length > 0 && selectedPdiForDetails && (
+                <div style={{marginBottom: '25px', padding: '20px', backgroundColor: '#fff3cd', borderRadius: '8px', border: '2px solid #FF9800'}}>
+                  <h4 style={{marginTop: 0, color: '#FF6F00', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    📊 Required COCs for {selectedPdiForDetails}
+                    <button
+                      onClick={() => setRequiredCocsReport([])}
+                      style={{
+                        marginLeft: 'auto',
+                        padding: '4px 12px',
+                        background: '#666',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '11px'
+                      }}
+                    >
+                      ✕ Close
+                    </button>
+                  </h4>
+                  <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>
+                    Based on <strong>{dateRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0)} modules</strong> production
+                  </p>
+                  
+                  <div style={{maxHeight: '500px', overflowY: 'auto'}}>
+                    {requiredCocsReport.map((req, idx) => (
+                      <div key={idx} style={{marginBottom: '15px', padding: '12px', backgroundColor: 'white', borderRadius: '5px', border: '1px solid #dee2e6'}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                          <div>
+                            <strong style={{fontSize: '13px', color: '#1976d2'}}>{req.materialName}</strong>
+                            {req.productType && <span style={{fontSize: '10px', color: '#666', marginLeft: '8px'}}>({req.productType})</span>}
+                          </div>
+                          <div style={{fontSize: '12px', fontWeight: 'bold', color: '#d32f2f'}}>
+                            Need: {req.requiredQty}
+                          </div>
+                        </div>
+                        
+                        {Object.keys(req.availableCocs).length > 0 ? (
+                          <div>
+                            {Object.entries(req.availableCocs).map(([company, cocs]) => {
+                              const totalAvailable = cocs.reduce((sum, coc) => sum + coc.cocQty, 0);
+                              const isEnough = totalAvailable >= req.requiredQty;
+                              
+                              return (
+                                <div key={company} style={{marginTop: '8px', padding: '8px', backgroundColor: isEnough ? '#e8f5e9' : '#ffebee', borderRadius: '4px', border: `1px solid ${isEnough ? '#4caf50' : '#f44336'}`}}>
+                                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
+                                    <strong style={{fontSize: '11px', color: '#333'}}>{company}</strong>
+                                    <span style={{fontSize: '11px', fontWeight: 'bold', color: isEnough ? '#4caf50' : '#f44336'}}>
+                                      {totalAvailable} {isEnough ? '✅' : '⚠️'}
+                                    </span>
+                                  </div>
+                                  
+                                  <div style={{maxHeight: '100px', overflowY: 'auto'}}>
+                                    {cocs.slice(0, 3).map((coc, cocIdx) => (
+                                      <div key={cocIdx} style={{padding: '4px', backgroundColor: 'rgba(255,255,255,0.6)', marginBottom: '3px', borderRadius: '3px', fontSize: '10px'}}>
+                                        <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                                          <span>Inv: <strong>{coc.invoiceNo}</strong></span>
+                                          <span>Qty: <strong>{coc.cocQty}</strong></span>
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {cocs.length > 3 && <div style={{fontSize: '10px', color: '#666', textAlign: 'center'}}>+{cocs.length - 3} more</div>}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <div style={{padding: '8px', backgroundColor: '#ffebee', borderRadius: '4px', textAlign: 'center', color: '#d32f2f', fontSize: '11px'}}>
+                            ❌ No COC in database
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
               <div className="production-table-wrapper" style={{overflowX: 'auto', maxWidth: '100%'}}>
-              <table className="production-table" style={{fontSize: '12px', minWidth: '1550px'}}>
+                <table className="production-table" style={{fontSize: '12px', minWidth: '1550px'}}>
                 <thead>
                   <tr>
                     <th style={{width: '80px'}}>DATE</th>
@@ -2207,7 +2866,7 @@ function DailyReport() {
                                     const path = record.ipqcPdf.startsWith('/') ? record.ipqcPdf : `/${record.ipqcPdf}`;
                                     const url = record.ipqcPdf.startsWith('http') 
                                       ? record.ipqcPdf 
-                                      : `http://localhost:5002${path}`;
+                                      : `http://localhost:5003${path}`;
                                     window.open(url, '_blank', 'noopener,noreferrer');
                                   }}
                                   style={{
@@ -2314,7 +2973,7 @@ function DailyReport() {
                                     const path = record.ftrDocument.startsWith('/') ? record.ftrDocument : `/${record.ftrDocument}`;
                                     const url = record.ftrDocument.startsWith('http') 
                                       ? record.ftrDocument 
-                                      : `http://localhost:5002${path}`;
+                                      : `http://localhost:5003${path}`;
                                     window.open(url, '_blank', 'noopener,noreferrer');
                                   }}
                                   style={{
@@ -2493,7 +3152,7 @@ function DailyReport() {
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
             </>
           )}
         </div>
@@ -2708,34 +3367,89 @@ function DailyReport() {
       {/* BOM Materials Upload Modal */}
       {showBomModal && (
         <div className="modal-overlay" onClick={() => setShowBomModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto'}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto'}}>
             <h3>📦 Upload BOM Materials & Documents - {selectedRecordForBom?.date}</h3>
             
+            {/* Wattage Selection */}
+            <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f0f0f0', borderRadius: '8px'}}>
+              <label style={{fontWeight: 'bold', marginRight: '10px', fontSize: '16px'}}>
+                ⚡ Select Module Wattage:
+              </label>
+              <select
+                value={selectedWattage}
+                onChange={(e) => {
+                  setSelectedWattage(e.target.value);
+                  // Reset BOM materials when wattage changes
+                  const newMaterials = BOM_MATERIALS_BY_WATTAGE[e.target.value] || [];
+                  const materialsData = {};
+                  newMaterials.forEach(material => {
+                    materialsData[material.name] = {
+                      lotNumber: '',
+                      company: '',
+                      image: null,
+                      existingImage: null
+                    };
+                  });
+                  setBomMaterials(materialsData);
+                }}
+                style={{padding: '8px 15px', fontSize: '15px', fontWeight: 'bold', borderRadius: '5px', border: '2px solid #1976d2'}}
+              >
+                <option value="625wp">625 Wp</option>
+                <option value="630wp">630 Wp</option>
+              </select>
+            </div>
+            
             <div style={{marginBottom: '20px'}}>
-              <h4 style={{color: '#1976d2', marginBottom: '10px'}}>📋 BOM Materials (Image + Lot Number)</h4>
+              <h4 style={{color: '#1976d2', marginBottom: '10px'}}>📋 BOM Materials</h4>
+              {loadingCocBrands && (
+                <div style={{padding: '10px', backgroundColor: '#fff3cd', borderRadius: '5px', marginBottom: '10px'}}>
+                  Loading COC brands...
+                </div>
+              )}
               <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px'}}>
-                {BOM_MATERIALS.map(materialName => (
-                  <div key={materialName} style={{border: '1px solid #ddd', padding: '10px', borderRadius: '5px'}}>
-                    <label style={{fontWeight: 'bold', marginBottom: '5px', display: 'block'}}>{materialName}</label>
+                {(BOM_MATERIALS_BY_WATTAGE[selectedWattage] || []).map(material => (
+                  <div key={material.name} style={{border: '1px solid #ddd', padding: '10px', borderRadius: '5px', backgroundColor: material.needsCompany ? '#e3f2fd' : 'white'}}>
+                    <label style={{fontWeight: 'bold', marginBottom: '5px', display: 'block'}}>
+                      {material.name}
+                      {material.product_type && <span style={{fontSize: '11px', color: '#666', display: 'block'}}>({material.product_type})</span>}
+                      <span style={{fontSize: '11px', color: '#1976d2', display: 'block'}}>Qty: {material.qty}</span>
+                    </label>
+                    
+                    {/* Company dropdown - filtered by material name */}
+                    {material.needsCompany && (
+                      <select
+                        value={bomMaterials[material.name]?.company || ''}
+                        onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
+                        style={{width: '100%', marginBottom: '5px', padding: '5px', border: '2px solid #1976d2'}}
+                      >
+                        <option value="">Select Company/Brand</option>
+                        {(cocBrands[material.name] || []).map((brand, idx) => (
+                          <option key={idx} value={brand.brand}>
+                            {brand.brand}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    
                     <input
                       type="text"
                       placeholder="Lot Number"
-                      value={bomMaterials[materialName]?.lotNumber || ''}
-                      onChange={(e) => handleBomMaterialChange(materialName, 'lotNumber', e.target.value)}
+                      value={bomMaterials[material.name]?.lotNumber || ''}
+                      onChange={(e) => handleBomMaterialChange(material.name, 'lotNumber', e.target.value)}
                       style={{width: '100%', marginBottom: '5px', padding: '5px'}}
                     />
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={(e) => handleBomMaterialChange(materialName, 'image', e.target.files[0])}
+                      onChange={(e) => handleBomMaterialChange(material.name, 'image', e.target.files[0])}
                       style={{width: '100%', fontSize: '11px'}}
                     />
-                    {bomMaterials[materialName]?.image && (
+                    {bomMaterials[material.name]?.image && (
                       <small style={{color: '#4CAF50', display: 'block', marginTop: '3px'}}>
-                        ✓ {bomMaterials[materialName].image.name}
+                        ✓ {bomMaterials[material.name].image.name}
                       </small>
                     )}
-                    {bomMaterials[materialName]?.existingImage && !bomMaterials[materialName]?.image && (
+                    {bomMaterials[material.name]?.existingImage && !bomMaterials[material.name]?.image && (
                       <small style={{color: '#2196F3', display: 'block', marginTop: '3px'}}>
                         📄 Already uploaded
                       </small>
@@ -2755,7 +3469,7 @@ function DailyReport() {
                       const path = selectedRecordForBom.ipqcPdf.startsWith('/') ? selectedRecordForBom.ipqcPdf : `/${selectedRecordForBom.ipqcPdf}`;
                       const url = selectedRecordForBom.ipqcPdf.startsWith('http') 
                         ? selectedRecordForBom.ipqcPdf 
-                        : `http://localhost:5002${path}`;
+                        : `http://localhost:5003${path}`;
                       window.open(url, '_blank', 'noopener,noreferrer');
                     }}
                     style={{
@@ -2795,7 +3509,7 @@ function DailyReport() {
                       const path = selectedRecordForBom.ftrDocument.startsWith('/') ? selectedRecordForBom.ftrDocument : `/${selectedRecordForBom.ftrDocument}`;
                       const url = selectedRecordForBom.ftrDocument.startsWith('http') 
                         ? selectedRecordForBom.ftrDocument 
-                        : `http://localhost:5002${path}`;
+                        : `http://localhost:5003${path}`;
                       window.open(url, '_blank', 'noopener,noreferrer');
                     }}
                     style={{
@@ -3241,7 +3955,108 @@ function DailyReport() {
                 <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Total Records:</strong> {pdiRecords.length} days</p>
                 <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Total Production:</strong> {totalProduction} modules</p>
                 <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Date Range:</strong> {pdiRecords[0]?.date} to {pdiRecords[pdiRecords.length - 1]?.date}</p>
+                <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
+                  <button
+                    onClick={() => {
+                      const wattage = pdiRecords[0]?.wattage || '625wp';
+                      calculateRequiredCocs(selectedPdiForDetails, wattage);
+                    }}
+                    style={{
+                      padding: '8px 16px',
+                      background: '#FF9800',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '5px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '13px'
+                    }}
+                    disabled={loadingRequiredCocs}
+                  >
+                    {loadingRequiredCocs ? '⏳ Calculating...' : '🔍 Show Required COCs Report'}
+                  </button>
+                  <button
+                    onClick={generateCOCExcelReport}
+                    style={{
+                      padding: '8px 16px',
+                      background: 'linear-gradient(135deg, #4CAF50 0%, #388E3C 100%)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '5px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      fontSize: '13px',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }}
+                    disabled={requiredCocsReport.length === 0}
+                  >
+                    📊 Download Excel Report
+                  </button>
+                </div>
               </div>
+
+              {/* Required COCs Report Section */}
+              {requiredCocsReport.length > 0 && (
+                <div style={{marginBottom: '25px', padding: '20px', backgroundColor: '#fff3cd', borderRadius: '5px', border: '2px solid #FF9800'}}>
+                  <h4 style={{marginTop: 0, color: '#FF6F00'}}>📊 Required COCs for {selectedPdiForDetails}</h4>
+                  <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>
+                    Based on <strong>{totalProduction} modules</strong> production
+                  </p>
+                  
+                  {requiredCocsReport.map((req, idx) => (
+                    <div key={idx} style={{marginBottom: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '5px', border: '1px solid #dee2e6'}}>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                        <div>
+                          <strong style={{fontSize: '14px', color: '#1976d2'}}>{req.materialName}</strong>
+                          {req.productType && <span style={{fontSize: '11px', color: '#666', marginLeft: '8px'}}>({req.productType})</span>}
+                        </div>
+                        <div style={{fontSize: '13px', fontWeight: 'bold', color: '#d32f2f'}}>
+                          Required: {req.requiredQty} <span style={{fontSize: '10px', color: '#666'}}>({req.perModuleQty} per module)</span>
+                        </div>
+                      </div>
+                      
+                      {/* Available COCs by Company */}
+                      {Object.keys(req.availableCocs).length > 0 ? (
+                        <div>
+                          {Object.entries(req.availableCocs).map(([company, cocs]) => {
+                            const totalAvailable = cocs.reduce((sum, coc) => sum + coc.cocQty, 0);
+                            const isEnough = totalAvailable >= req.requiredQty;
+                            
+                            return (
+                              <div key={company} style={{marginTop: '10px', padding: '10px', backgroundColor: isEnough ? '#e8f5e9' : '#ffebee', borderRadius: '4px', border: `1px solid ${isEnough ? '#4caf50' : '#f44336'}`}}>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                                  <strong style={{fontSize: '12px', color: '#333'}}>{company}</strong>
+                                  <span style={{fontSize: '12px', fontWeight: 'bold', color: isEnough ? '#4caf50' : '#f44336'}}>
+                                    Available: {totalAvailable} {isEnough ? '✅' : '⚠️'}
+                                  </span>
+                                </div>
+                                
+                                {/* Individual COCs */}
+                                <div style={{maxHeight: '120px', overflowY: 'auto'}}>
+                                  {cocs.map((coc, cocIdx) => (
+                                    <div key={cocIdx} style={{padding: '5px', backgroundColor: 'white', marginBottom: '5px', borderRadius: '3px', fontSize: '11px'}}>
+                                      <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                                        <span>Invoice: <strong>{coc.invoiceNo}</strong></span>
+                                        <span>Qty: <strong>{coc.cocQty}</strong></span>
+                                      </div>
+                                      {coc.lotBatchNo && <div style={{color: '#666'}}>Lot: {coc.lotBatchNo}</div>}
+                                      {coc.invoiceDate && <div style={{color: '#666'}}>Date: {coc.invoiceDate}</div>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px', textAlign: 'center', color: '#d32f2f', fontSize: '12px'}}>
+                          ❌ No COC available in database
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <h4 style={{marginTop: '20px', marginBottom: '15px'}}>📦 BOM Materials for Complete PDI:</h4>
               {consolidatedBom.length > 0 ? (
@@ -3437,8 +4252,6 @@ function DailyReport() {
                                       <span 
                                         key={pdiIdx}
                                         style={{
-                                          padding: '3px 8px',
-                                          backgroundColor: isCurrentPdi ? '#007bff' : '#6c757d',
                                           padding: '3px 8px',
                                           backgroundColor: isCurrentPdi ? '#007bff' : '#6c757d',
                                           color: 'white',
@@ -3864,7 +4677,11 @@ function DailyReport() {
                     style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
                   >
                     <option value="">Select Material</option>
-                    {BOM_MATERIALS.map(mat => (
+                    {/* Get unique material names from both wattages */}
+                    {[...new Set([
+                      ...BOM_MATERIALS_BY_WATTAGE['625wp'].map(m => m.name),
+                      ...BOM_MATERIALS_BY_WATTAGE['630wp'].map(m => m.name)
+                    ])].map(mat => (
                       <option key={mat} value={mat}>{mat}</option>
                     ))}
                   </select>
@@ -4039,4 +4856,3 @@ function DailyReport() {
 }
 
 export default DailyReport;
-

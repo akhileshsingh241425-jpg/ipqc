@@ -120,11 +120,11 @@ PassengerPython /home/username/virtualenv/public_html/api/3.9/bin/python
 ```javascript
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
                      (window.location.hostname === 'localhost' 
-                      ? 'http://localhost:5002/api' 
+                      ? 'http://localhost:5003/api' 
                       : '/api');
 ```
 
-✅ **Development:** Uses `localhost:5002/api`  
+✅ **Development:** Uses `localhost:5003/api`  
 ✅ **Production:** Uses `/api` (relative path - same domain!)
 
 ---
