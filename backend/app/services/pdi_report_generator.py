@@ -25,28 +25,64 @@ class PDIReportGenerator:
     def generate_complete_report(self, pdi_number, company_name):
         """Generate complete PDI report with all documents"""
         try:
-            # Create PDF merger for combining all documents
-            merger = PdfMerger()
+            print(f"Starting report generation for {pdi_number} - {company_name}")
             
-            # Step 1: Generate cover page and production summary
-            summary_pdf = self._generate_summary_page(pdi_number, company_name)
-            if summary_pdf:
-                merger.append(summary_pdf)
-            
-            # Step 2: Get all production records for this PDI
+            # Step 1: Get all production records for this PDI
             production_records = self._get_production_records(pdi_number, company_name)
             
             if not production_records:
+                print("No production records found!")
                 return None
             
+            print(f"Found {len(production_records)} production records")
+            
+            # Create PDF merger for combining all documents
+            merger = PdfMerger()
+            pages_added = 0
+            
+            # Step 2: Generate cover page and production summary
+            summary_pdf = self._generate_summary_page(pdi_number, company_name)
+            if summary_pdf:
+                try:
+                    merger.append(summary_pdf)
+                    pages_added += 1
+                    print("Added summary page")
+                except Exception as e:
+                    print(f"Error adding summary page: {e}")
+            
             # Step 3: Add COC documents
-            coc_count = self._add_coc_documents(merger, production_records)
+            try:
+                coc_count = self._add_coc_documents(merger, production_records)
+                if coc_count > 0:
+                    pages_added += coc_count
+                    print(f"Added {coc_count} COC documents")
+            except Exception as e:
+                print(f"Error adding COC documents: {e}")
             
             # Step 4: Add IPQC PDFs
-            ipqc_count = self._add_ipqc_documents(merger, production_records)
+            try:
+                ipqc_count = self._add_ipqc_documents(merger, production_records)
+                if ipqc_count > 0:
+                    pages_added += ipqc_count
+                    print(f"Added {ipqc_count} IPQC documents")
+            except Exception as e:
+                print(f"Error adding IPQC documents: {e}")
             
             # Step 5: Add FTR documents
-            ftr_count = self._add_ftr_documents(merger, production_records)
+            try:
+                ftr_count = self._add_ftr_documents(merger, production_records)
+                if ftr_count > 0:
+                    pages_added += ftr_count
+                    print(f"Added {ftr_count} FTR documents")
+            except Exception as e:
+                print(f"Error adding FTR documents: {e}")
+            
+            # Check if we have any pages to merge
+            if pages_added == 0:
+                print("ERROR: No pages added to report!")
+                return None
+            
+            print(f"Total pages added: {pages_added}")
             
             # Create final PDF
             output_buffer = BytesIO()
@@ -54,6 +90,7 @@ class PDIReportGenerator:
             merger.close()
             
             output_buffer.seek(0)
+            print("Report generation successful")
             return output_buffer
             
         except Exception as e:
