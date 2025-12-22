@@ -3980,9 +3980,22 @@ function DailyReport() {
         pdiRecords.forEach(record => {
           if (record.bomMaterials && record.bomMaterials.length > 0) {
             record.bomMaterials.forEach(bm => {
-              const key = `${bm.materialName}_${bm.lotNumber || 'no_invoice'}`;
+              // Combine EVA Front and EVA Back into single EVA
+              let materialKey = bm.materialName;
+              if (materialKey === 'EVA Front' || materialKey === 'EVA Back') {
+                materialKey = 'EVA';
+              }
+              
+              const key = `${materialKey}_${bm.lotNumber || 'no_invoice'}`;
               if (!consolidatedBomMap[key]) {
-                consolidatedBomMap[key] = { ...bm };
+                consolidatedBomMap[key] = { 
+                  ...bm, 
+                  materialName: materialKey,
+                  cocQty: parseFloat(bm.cocQty) || 0
+                };
+              } else {
+                // Add quantities if same material with same invoice
+                consolidatedBomMap[key].cocQty = (parseFloat(consolidatedBomMap[key].cocQty) || 0) + (parseFloat(bm.cocQty) || 0);
               }
             });
           }
@@ -4117,9 +4130,29 @@ function DailyReport() {
                       </tr>
                     </thead>
                     <tbody>
-                      {consolidatedBom.map((bm, idx) => {
-                        // Calculate total used quantity based on total production
-                        const materialLower = bm.materialName.toLowerCase();
+                      {(() => {
+                        // Consolidate similar materials (EVA Front+Back, Glass Front+Back, etc.)
+                        const materialGroups = {};
+                        
+                        consolidatedBom.forEach(bm => {
+                          const displayName = getDisplayMaterialName(bm.materialName);
+                          
+                          if (!materialGroups[displayName]) {
+                            materialGroups[displayName] = {
+                              displayName,
+                              items: [],
+                              totalCocQty: 0
+                            };
+                          }
+                          
+                          materialGroups[displayName].items.push(bm);
+                          materialGroups[displayName].totalCocQty += parseFloat(bm.cocQty) || 0;
+                        });
+                        
+                        // Render consolidated rows
+                        return Object.values(materialGroups).map((group, idx) => {
+                          const bm = group.items[0]; // Use first item for reference
+                          const materialLower = bm.materialName.toLowerCase();
                         
                         let usedQty = 0;
                         if (materialLower.includes('cell')) {
@@ -4151,12 +4184,18 @@ function DailyReport() {
                         // Round to 2 decimal places
                         usedQty = Math.round(usedQty * 100) / 100;
                         
-                        // Check if manual override exists
+                        // Check if manual override exists (use first item's key for reference)
                         const key = `${bm.materialName}_${bm.lotNumber || 'no_invoice'}`;
                         const finalUsedQty = manualUsedQty[key] !== undefined ? manualUsedQty[key] : usedQty;
                         
-                        const cocQty = parseFloat(bm.cocQty) || 0;
+                        const cocQty = group.totalCocQty; // Use consolidated COC quantity
                         const gap = Math.round((cocQty - finalUsedQty) * 100) / 100;
+                        
+                        // Combine invoice numbers from all items
+                        const invoiceNos = group.items
+                          .map(item => item.lotNumber)
+                          .filter(inv => inv)
+                          .join(', ');
                         
                         return (
                           <tr key={idx}>
@@ -4172,11 +4211,11 @@ function DailyReport() {
                                 }}
                                 title="Click to select COC for this material"
                               >
-                                {getDisplayMaterialName(bm.materialName)}
+                                {group.displayName}
                               </span>
                             </td>
-                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>{bm.lotNumber || '-'}</td>
-                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>{bm.cocQty || '-'}</td>
+                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>{invoiceNos || '-'}</td>
+                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>{cocQty || '-'}</td>
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
                               {editingUsedQty && editingUsedQty.materialName === bm.materialName && editingUsedQty.lotNumber === bm.lotNumber ? (
                                 <div style={{display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center'}}>
