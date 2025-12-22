@@ -314,8 +314,8 @@ def delete_bom_material():
         if not production_records:
             return jsonify({'error': 'PDI not found'}), 404
         
-        # Find and delete the BomMaterial record
-        deleted = False
+        # Find and delete all matching BomMaterial records
+        deleted_count = 0
         for record in production_records:
             query = BomMaterial.query.filter_by(
                 production_record_id=record.id,
@@ -325,19 +325,18 @@ def delete_bom_material():
             if lot_number:
                 query = query.filter_by(lot_number=lot_number)
             
-            bom_material = query.first()
+            bom_materials = query.all()  # Get all matching records
             
-            if bom_material:
+            for bom_material in bom_materials:
                 db.session.delete(bom_material)
-                deleted = True
-                break
+                deleted_count += 1
         
-        if not deleted:
+        if deleted_count == 0:
             return jsonify({'error': 'BOM material not found'}), 404
         
         db.session.commit()
         
-        return jsonify({'success': True, 'message': 'BOM material deleted successfully'}), 200
+        return jsonify({'success': True, 'message': f'{deleted_count} BOM material(s) deleted successfully'}), 200
         
     except Exception as e:
         db.session.rollback()
