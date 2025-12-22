@@ -257,22 +257,32 @@ def download_complete_report():
         pdi_number = data.get('pdi_number')
         company_name = data.get('company_name')
         
+        print(f"\n=== DOWNLOAD COMPLETE REPORT REQUEST ===")
+        print(f"PDI: {pdi_number}")
+        print(f"Company: {company_name}")
+        
         if not pdi_number or not company_name:
+            print("ERROR: Missing PDI number or company name")
             return jsonify({'error': 'PDI number and company name are required'}), 400
         
         # Import here to avoid circular imports
         from app.services.pdi_report_generator import PDIReportGenerator
         
+        print("Generating complete report...")
         # Generate complete report
         generator = PDIReportGenerator()
         pdf_buffer = generator.generate_complete_report(pdi_number, company_name)
         
         if not pdf_buffer:
-            return jsonify({'error': 'Failed to generate report'}), 500
+            print("ERROR: generate_complete_report returned None")
+            return jsonify({'error': 'Failed to generate report - no data found'}), 500
         
         # Send file
         pdf_buffer.seek(0)
         filename = f"Complete_Report_{pdi_number}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        
+        print(f"Sending file: {filename}")
+        print("=== REPORT GENERATION COMPLETE ===\n")
         
         return send_file(
             pdf_buffer,
@@ -282,7 +292,7 @@ def download_complete_report():
         )
         
     except Exception as e:
-        print(f"Error generating complete report: {str(e)}")
+        print(f"ERROR generating complete report: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
