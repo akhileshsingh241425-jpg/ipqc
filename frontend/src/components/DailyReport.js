@@ -2886,7 +2886,7 @@ function DailyReport() {
                                     const path = record.ipqcPdf.startsWith('/') ? record.ipqcPdf : `/${record.ipqcPdf}`;
                                     const url = record.ipqcPdf.startsWith('http') 
                                       ? record.ipqcPdf 
-                                      : `http://localhost:5003${path}`;
+                                      : `${getAPIBaseURL()}${path}`;
                                     window.open(url, '_blank', 'noopener,noreferrer');
                                   }}
                                   style={{
@@ -2993,7 +2993,7 @@ function DailyReport() {
                                     const path = record.ftrDocument.startsWith('/') ? record.ftrDocument : `/${record.ftrDocument}`;
                                     const url = record.ftrDocument.startsWith('http') 
                                       ? record.ftrDocument 
-                                      : `http://localhost:5003${path}`;
+                                      : `${getAPIBaseURL()}${path}`;
                                     window.open(url, '_blank', 'noopener,noreferrer');
                                   }}
                                   style={{
