@@ -10,6 +10,29 @@ import '../styles/DailyReport.css';
 const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
 const getAPIBase = () => window.location.hostname === 'localhost' ? 'http://localhost:5003/api' : '/api';
 
+// Material name mapping (Legacy DB names → Modern Display names)
+const MATERIAL_NAME_MAP = {
+  'Cell': 'Solar Cell',
+  'EVA Front': 'EVA',
+  'EVA Back': 'EVA',
+  'Glass Front': 'FRONT GLASS',
+  'Glass Back': 'BACK GLASS',
+  'Ribbon': 'RIBBON (0.26 mm)',
+  'Frame Long': 'Aluminium Frame LONG',
+  'Frame Short': 'Aluminium Frame SHORT',
+  'JB': 'JUNCTION BOX',
+  'Flux': 'FLUX',
+  'Potting Material': 'JB Potting (A and B)',
+  'Bus Bar 6mm': 'RIBBON (6.0X0.4)',
+  'Bus Bar 4mm': 'RIBBON (4.0X0.4)',
+  'Silicone 2kg': 'SEALENT',
+  'Silicone 10kg': 'SEALENT',
+  'Silicone 270kg': 'SEALENT'
+};
+
+// Helper function to get display name
+const getDisplayMaterialName = (dbName) => MATERIAL_NAME_MAP[dbName] || dbName;
+
 // BOM Materials by Wattage (based on PHP logic)
 const BOM_MATERIALS_BY_WATTAGE = {
   '625wp': [
@@ -4149,7 +4172,7 @@ function DailyReport() {
                                 }}
                                 title="Click to select COC for this material"
                               >
-                                {bm.materialName}
+                                {getDisplayMaterialName(bm.materialName)}
                               </span>
                             </td>
                             <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>{bm.lotNumber || '-'}</td>
