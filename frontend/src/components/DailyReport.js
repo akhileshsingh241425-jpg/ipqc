@@ -2269,6 +2269,13 @@ function DailyReport() {
           <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center'}}>
             <button 
               className="btn-primary" 
+              onClick={handleAddNewDay}
+              style={{padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
+            >
+              ➕ Add New Day
+            </button>
+            <button 
+              className="btn-primary" 
               onClick={() => document.getElementById('master-data-upload').click()}
               style={{padding: '10px 20px', background: '#ff9800', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
             >
