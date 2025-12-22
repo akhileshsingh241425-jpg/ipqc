@@ -286,3 +286,43 @@ def download_complete_report():
         import traceback
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
+
+# Delete BOM material from PDI
+@pdi_bp.route('/api/pdi/delete-bom-material', methods=['POST'])
+def delete_bom_material():
+    try:
+        data = request.get_json()
+        pdi_number = data.get('pdi')
+        company_name = data.get('companyName')
+        material_name = data.get('materialName')
+        lot_number = data.get('lotNumber', '')
+        
+        if not pdi_number or not company_name or not material_name:
+            return jsonify({'error': 'PDI number, company name, and material name are required'}), 400
+        
+        # Find and delete the PDICOCUsage record
+        query = PDICOCUsage.query.filter_by(
+            pdi_number=pdi_number,
+            company_name=company_name,
+            material_name=material_name
+        )
+        
+        if lot_number:
+            query = query.filter_by(lot_number=lot_number)
+        
+        usage = query.first()
+        
+        if not usage:
+            return jsonify({'error': 'BOM material not found'}), 404
+        
+        db.session.delete(usage)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'BOM material deleted successfully'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting BOM material: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500

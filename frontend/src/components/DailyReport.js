@@ -1041,6 +1041,35 @@ function DailyReport() {
     }
   };
 
+  // Handle deleting BOM material from PDI
+  const handleDeleteBomMaterial = async (bomMaterial) => {
+    if (!window.confirm(`Are you sure you want to delete ${bomMaterial.materialName} (${bomMaterial.lotNumber || 'no invoice'}) from this PDI?`)) {
+      return;
+    }
+
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.post(`${API_BASE_URL}/api/pdi/delete-bom-material`, {
+        pdi: selectedPdiForDetails,
+        companyName: selectedCompany.companyName,
+        materialName: bomMaterial.materialName,
+        lotNumber: bomMaterial.lotNumber || ''
+      });
+
+      if (response.data && response.data.success) {
+        alert('✅ BOM material deleted successfully!');
+        // Refresh data
+        await fetchCompanies();
+        setShowPdiDetailsModal(false);
+      } else {
+        alert('❌ Failed to delete BOM material');
+      }
+    } catch (error) {
+      console.error('Error deleting BOM material:', error);
+      alert('❌ Error deleting BOM material: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   // Handle selecting COC for a material
   const handleSelectCoc = async (cocItem) => {
     if (!selectedMaterial || !selectedPdiForDetails) {
@@ -4127,6 +4156,7 @@ function DailyReport() {
                         <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Gap</th>
                         <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Used in PDI</th>
                         <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Image</th>
+                        <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Delete</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4364,6 +4394,15 @@ function DailyReport() {
                                   📷 View
                                 </button>
                               ) : '-'}
+                            </td>
+                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
+                              <button
+                                onClick={() => handleDeleteBomMaterial(bm)}
+                                style={{padding: '3px 6px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold'}}
+                                title="Delete this COC from PDI"
+                              >
+                                🗑️ Delete
+                              </button>
                             </td>
                           </tr>
                         );
