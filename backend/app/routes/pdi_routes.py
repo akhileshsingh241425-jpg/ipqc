@@ -297,13 +297,22 @@ def delete_bom_material():
         material_name = data.get('materialName')
         lot_number = data.get('lotNumber', '')
         
+        print(f"\n=== DELETE BOM MATERIAL REQUEST ===")
+        print(f"PDI: {pdi_number}")
+        print(f"Company: {company_name}")
+        print(f"Material: {material_name}")
+        print(f"Lot Number: {lot_number}")
+        
         if not pdi_number or not company_name or not material_name:
             return jsonify({'error': 'PDI number, company name, and material name are required'}), 400
         
         # Find the company
         company = Company.query.filter_by(company_name=company_name).first()
         if not company:
+            print(f"Company '{company_name}' not found!")
             return jsonify({'error': 'Company not found'}), 404
+        
+        print(f"Found company ID: {company.id}")
         
         # Find production records with this PDI
         production_records = ProductionRecord.query.filter_by(
@@ -312,11 +321,16 @@ def delete_bom_material():
         ).all()
         
         if not production_records:
+            print(f"No production records found for PDI {pdi_number}")
             return jsonify({'error': 'PDI not found'}), 404
+        
+        print(f"Found {len(production_records)} production record(s)")
         
         # Find and delete all matching BomMaterial records
         deleted_count = 0
         for record in production_records:
+            print(f"Checking production record ID: {record.id}")
+            
             query = BomMaterial.query.filter_by(
                 production_record_id=record.id,
                 material_name=material_name
@@ -326,15 +340,20 @@ def delete_bom_material():
                 query = query.filter_by(lot_number=lot_number)
             
             bom_materials = query.all()  # Get all matching records
+            print(f"Found {len(bom_materials)} BOM material(s) matching criteria")
             
             for bom_material in bom_materials:
+                print(f"Deleting BOM material ID {bom_material.id}: {bom_material.material_name} - {bom_material.lot_number}")
                 db.session.delete(bom_material)
                 deleted_count += 1
         
         if deleted_count == 0:
+            print("No BOM materials found to delete!")
             return jsonify({'error': 'BOM material not found'}), 404
         
         db.session.commit()
+        print(f"Successfully deleted {deleted_count} BOM material(s)")
+        print("=== DELETE COMPLETE ===\n")
         
         return jsonify({'success': True, 'message': f'{deleted_count} BOM material(s) deleted successfully'}), 200
         
