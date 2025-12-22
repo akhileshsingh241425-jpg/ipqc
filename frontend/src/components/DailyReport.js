@@ -1065,9 +1065,9 @@ function DailyReport() {
       }
 
       alert('✅ BOM material deleted successfully!');
-      // Refresh data
+      // Refresh data but keep modal open to show updated list
       await loadCompanies();
-      setShowPdiDetailsModal(false);
+      // Don't close modal - let user see the updated list
     } catch (error) {
       console.error('Error deleting BOM material:', error);
       alert('❌ Error deleting BOM material: ' + (error.response?.data?.error || error.message));
