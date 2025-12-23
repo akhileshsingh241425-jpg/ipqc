@@ -4730,6 +4730,7 @@ function DailyReport() {
                   <thead style={{position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>
                     <tr style={{backgroundColor: '#007bff', color: 'white'}}>
                       <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Material Name</th>
+                      <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Specification</th>
                       <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Brand</th>
                       <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Invoice No</th>
                       <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>Invoice Date</th>
@@ -4741,9 +4742,19 @@ function DailyReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredData.map((coc, idx) => (
+                    {filteredData.map((coc, idx) => {
+                      // Get specification for this material
+                      const getSpec = (materialName) => {
+                        const wattage = selectedCompany?.wattage || '625wp';
+                        const materials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
+                        const material = materials.find(m => m.name === materialName || m.name.toLowerCase().includes(materialName.toLowerCase()));
+                        return material?.product_type || '-';
+                      };
+                      
+                      return (
                       <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
                         <td style={{padding: '6px', border: '1px solid #dee2e6', fontWeight: '500'}}>{coc.material_name || '-'}</td>
+                        <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '9px', color: '#666'}}>{getSpec(coc.material_name)}</td>
                         <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '10px'}}>{coc.brand || '-'}</td>
                         <td style={{padding: '6px', border: '1px solid #dee2e6'}}>{coc.invoice_no || '-'}</td>
                         <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>{coc.invoice_date || '-'}</td>
