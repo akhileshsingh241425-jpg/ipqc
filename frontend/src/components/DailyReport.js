@@ -4118,6 +4118,7 @@ function DailyReport() {
           { name: 'RIBBON', unit: 'KG', spec: '0.26mm' },
           { name: 'Ribbon(BUSBAR)', unit: 'KG', spec: '4.0X0.4 mm' },
           { name: 'Ribbon(BUSBAR)', unit: 'KG', spec: '6.0X0.4 mm' },
+          { name: 'FLUX', unit: 'KG' },
           { name: 'EPE FRONT', unit: 'sqm' },
           { name: 'Aluminium Frame LONG', unit: 'SETS' },
           { name: 'Aluminium Frame SHORT', unit: 'SETS' },

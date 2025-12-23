@@ -201,27 +201,14 @@ class ProductionPDFGenerator:
             total_modules_rejected += modules_rejected_today
         
         if production_records and report_options.get('includeProductionDetails', True):
-            # Detailed production table - with or without cell data based on options
-            include_cells = report_options.get('includeCellInventory', True)
-            print(f"🔍 Include Cells in Production Table: {include_cells}")
-            
-            if include_cells:
-                prod_data = [['Date', 'Day', 'Night', 'Total\nProduced', 'Cells\nUsed', 'Cell\nRej %', 'Cells\nRejected', 'Module\nRej %', 'Modules\nRejected']]
-            else:
-                prod_data = [['Date', 'Day', 'Night', 'Total\nProduced', 'Module\nRej %', 'Modules\nRejected']]
+            # Detailed production table - without cell calculations
+            prod_data = [['Date', 'Day', 'Night', 'Total\nProduced', 'Module\nRej %', 'Modules\nRejected']]
             
             for record in production_records:
                 date_str = record.get('date', '')
                 day_prod = record.get('day_production', 0)
                 night_prod = record.get('night_production', 0)
                 daily_total = day_prod + night_prod
-                
-                # Calculate cells used for this day
-                cells_used_today = daily_total * cells_per_module
-                
-                # Cell rejection percentage and count
-                cell_rej_percent = record.get('cell_rejection_percent', 0)
-                cells_rejected_today = int((cells_used_today * cell_rej_percent) / 100)
                 
                 # Module rejection percentage and count
                 module_rej_percent = record.get('module_rejection_percent', 0)
@@ -234,52 +221,25 @@ class ProductionPDFGenerator:
                 if actual_rejected > 0:
                     modules_rejected_today = actual_rejected
                 
-                if include_cells:
-                    prod_data.append([
-                        date_str,
-                        str(int(day_prod)),
-                        str(int(night_prod)),
-                        str(int(daily_total)),
-                        str(int(cells_used_today)),
-                        f"{cell_rej_percent:.1f}%",
-                        str(int(cells_rejected_today)),
-                        f"{module_rej_percent:.1f}%",
-                        str(int(modules_rejected_today))
-                    ])
-                else:
-                    prod_data.append([
-                        date_str,
-                        str(int(day_prod)),
-                        str(int(night_prod)),
-                        str(int(daily_total)),
-                        f"{module_rej_percent:.1f}%",
-                        str(int(modules_rejected_today))
-                    ])
+                prod_data.append([
+                    date_str,
+                    str(int(day_prod)),
+                    str(int(night_prod)),
+                    str(int(daily_total)),
+                    f"{module_rej_percent:.1f}%",
+                    str(int(modules_rejected_today))
+                ])
             
             # Add totals row
-            if include_cells:
-                prod_data.append([
-                    'TOTAL',
-                    '',
-                    '',
-                    str(int(total_produced)),
-                    str(int(total_cells_used)),
-                    '',
-                    str(int(total_cells_rejected)),
-                    '',
-                    str(int(total_modules_rejected))
-                ])
-                prod_table = Table(prod_data, colWidths=[28*mm, 18*mm, 18*mm, 20*mm, 20*mm, 18*mm, 20*mm, 18*mm, 22*mm])
-            else:
-                prod_data.append([
-                    'TOTAL',
-                    '',
-                    '',
-                    str(int(total_produced)),
-                    '',
-                    str(int(total_modules_rejected))
-                ])
-                prod_table = Table(prod_data, colWidths=[40*mm, 25*mm, 25*mm, 30*mm, 25*mm, 30*mm])
+            prod_data.append([
+                'TOTAL',
+                '',
+                '',
+                str(int(total_produced)),
+                '',
+                str(int(total_modules_rejected))
+            ])
+            prod_table = Table(prod_data, colWidths=[50*mm, 30*mm, 30*mm, 35*mm, 30*mm, 35*mm])
             prod_table.setStyle(TableStyle([
                 # Header row - Enhanced
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#64b5f6')),
@@ -317,46 +277,6 @@ class ProductionPDFGenerator:
             ]))
             story.append(prod_table)
         
-        story.append(Spacer(1, 10))
-        
-        # Cell Inventory Summary
-        if report_options.get('includeCellInventory', True):
-            story.append(Paragraph("📦 CELL INVENTORY", self.styles['SectionHeader']))
-            story.append(Spacer(1, 4))
-        
-        cells_remaining = cells_received_qty - total_cells_used
-        
-        inventory_data = [
-            ['📥 Cells Received', '⚙️ Cells Used', '🔴 Cells Rejected', '✅ Cells Remaining'],
-            [
-                f"{int(cells_received_qty):,} cells",
-                f"{int(total_cells_used):,} cells",
-                f"{int(total_cells_rejected):,} cells",
-                f"{int(cells_remaining):,} cells"
-            ]
-        ]
-        
-        inventory_table = Table(inventory_data, colWidths=[46*mm] * 4)
-        inventory_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#81c784')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#1b5e20')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('FONTSIZE', (0, 1), (-1, 1), 11),
-            ('BACKGROUND', (0, 1), (0, 1), colors.HexColor('#e3f2fd')),
-            ('BACKGROUND', (1, 1), (1, 1), colors.HexColor('#fff9c4')),
-            ('BACKGROUND', (2, 1), (2, 1), colors.HexColor('#ffccbc')),
-            ('BACKGROUND', (3, 1), (3, 1), colors.HexColor('#c8e6c9')),
-            ('TEXTCOLOR', (0, 1), (-1, 1), colors.HexColor('#1a237e')),
-            ('GRID', (0, 0), (-1, -1), 1.5, colors.HexColor('#81c784')),
-            ('TOPPADDING', (0, 0), (-1, -1), 8),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]))
-        if report_options.get('includeCellInventory', True):
-            story.append(inventory_table)
         story.append(Spacer(1, 10))
         
         # Key Performance Metrics - Enhanced Cards
@@ -609,183 +529,93 @@ class ProductionPDFGenerator:
                 story.append(reject_table)
                 story.append(Spacer(1, 10))
         
-        # BOM Materials & Documents Section
+        # BOM Materials & Documents Section - SEPARATE PAGE with Day/Night Shift Tables
         if report_options.get('includeBomMaterials', True):
-            story.append(Spacer(1, 18))
-            story.append(Paragraph("📦 BOM MATERIALS & DOCUMENTS SUMMARY", self.styles['SectionHeader']))
+            story.append(PageBreak())
+            story.append(Paragraph("📦 BOM MATERIALS SUMMARY (Day & Night Shift)", self.styles['SectionHeader']))
             story.append(Spacer(1, 8))
             
-            # Group production records by date with BOM info
+            # Collect all BOM materials grouped by shift
+            day_shift_materials = []
+            night_shift_materials = []
+            
             for record in production_records:
                 if start_date and end_date:
                     if not (start_date <= record.get('date', '') <= end_date):
                         continue
                 
                 date = record.get('date', 'N/A')
-                lot_number = record.get('lot_number', 'N/A')
                 bom_materials = record.get('bom_materials', [])
-                ipqc_pdf = record.get('ipqc_pdf', None)
-                ftr_document = record.get('ftr_document', None)
                 
-                # Debug logging
-                print(f"DEBUG: Processing record for date={date}, lot_number={lot_number}")
-                print(f"DEBUG: BOM materials count: {len(bom_materials)}")
-                if bom_materials:
-                    print(f"DEBUG: First BOM material keys: {list(bom_materials[0].keys())}")
-                
-                # Date header
-                date_header_style = ParagraphStyle(
-                    'DateHeader',
-                    parent=self.styles['Normal'],
-                    fontSize=11,
-                    textColor=colors.HexColor('#1976d2'),
-                    fontName='Helvetica-Bold',
-                    spaceBefore=8,
-                    spaceAfter=4
-                )
-                story.append(Paragraph(f"📅 Date: {date} | Lot Number: {lot_number}", date_header_style))
-                
-                # BOM Materials in TWO COLUMN layout - left and right side
-                if bom_materials and len(bom_materials) > 0:
-                    import os
+                for bom in bom_materials:
+                    material_name = bom.get('materialName', bom.get('material_name', 'N/A'))
+                    material_company = bom.get('company', '-')
+                    material_lot = bom.get('lotNumber', bom.get('lot_number', '-'))
+                    shift = bom.get('shift', 'day')  # Default to day if not specified
                     
-                    # Process all BOM materials
-                    processed_materials = []
-                    for bom in bom_materials:
-                        material_name = bom.get('materialName', bom.get('material_name', 'N/A'))
-                        material_company = bom.get('company', '-')
-                        material_lot = bom.get('lotNumber', bom.get('lot_number', '-'))
-                        image_path = bom.get('imagePath', bom.get('image_path'))
-                        
-                        # Try to embed actual image
-                        print(f"🔍 Processing {material_name}: imagePath={image_path}")
-                        img_element = None
-                        if image_path:
-                            try:
-                                # Construct full path relative to backend directory
-                                if not os.path.isabs(image_path):
-                                    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-                                    full_path = os.path.join(backend_dir, image_path)
-                                else:
-                                    full_path = image_path
-                                
-                                print(f"   Full path: {full_path}")
-                                print(f"   File exists: {os.path.exists(full_path)}")
-                                
-                                if os.path.exists(full_path):
-                                    # Very small images for 2-column layout
-                                    img_element = Image(full_path, width=18*mm, height=18*mm)
-                                    print(f"   ✓ Image embedded successfully")
-                                else:
-                                    print(f"   ✗ WARNING: Image not found at {full_path}")
-                                    img_element = '✗ Not Found'
-                            except Exception as e:
-                                print(f"   ✗ ERROR embedding image for {material_name}: {str(e)}")
-                                import traceback
-                                traceback.print_exc()
-                                img_element = '✗ Error'
-                        else:
-                            print(f"   ✗ No image path provided")
-                            img_element = '✗ No Image'
-                        
-                        processed_materials.append([material_name, material_company, material_lot, img_element])
+                    material_row = [date, material_name, material_company, material_lot]
                     
-                    # Split into two columns: left half and right half
-                    mid_point = (len(processed_materials) + 1) // 2
-                    left_materials = processed_materials[:mid_point]
-                    right_materials = processed_materials[mid_point:]
-                    
-                    # Create left table
-                    left_data = [['Material Name', 'Company', 'Lot #', 'Image']] + left_materials
-                    left_table = Table(left_data, colWidths=[32*mm, 22*mm, 22*mm, 18*mm], rowHeights=22)
-                    left_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-                        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
-                        ('ALIGN', (2, 1), (2, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, -1), 6),
-                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f8e9')]),
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('TOPPADDING', (0, 0), (-1, -1), 1),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-                    ]))
-                    
-                    # Create right table
-                    right_data = [['Material Name', 'Company', 'Lot #', 'Image']] + right_materials
-                    right_table = Table(right_data, colWidths=[32*mm, 22*mm, 22*mm, 18*mm], rowHeights=22)
-                    right_table.setStyle(TableStyle([
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-                        ('ALIGN', (0, 1), (1, -1), 'LEFT'),
-                        ('ALIGN', (2, 1), (2, -1), 'CENTER'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, -1), 6),
-                        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
-                        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f1f8e9')]),
-                        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                        ('TOPPADDING', (0, 0), (-1, -1), 1),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 2),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
-                    ]))
-                    
-                    # Combine both tables side by side
-                    two_column_table = Table([[left_table, right_table]], colWidths=[93*mm, 93*mm])
-                    two_column_table.setStyle(TableStyle([
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                        ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                        ('RIGHTPADDING', (0, 0), (-1, -1), 0),
-                        ('TOPPADDING', (0, 0), (-1, -1), 0),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
-                    ]))
-                    
-                    story.append(two_column_table)
-                    story.append(Spacer(1, 2))
-                else:
-                    # No BOM materials uploaded yet
-                    story.append(Paragraph("<i>No BOM materials uploaded yet for this date.</i>", self.styles['Normal']))
-                    story.append(Spacer(1, 4))
+                    if shift == 'night':
+                        night_shift_materials.append(material_row)
+                    else:
+                        day_shift_materials.append(material_row)
+            
+            # Create Day Shift Table
+            if day_shift_materials:
+                story.append(Paragraph("🌞 DAY SHIFT BOM MATERIALS", self.styles['Normal']))
+                story.append(Spacer(1, 4))
                 
-                # Supporting Documents Section with clickable file paths
-                story.append(Paragraph("📄 SUPPORTING DOCUMENTS", date_header_style))
+                day_data = [['Date', 'Material Name', 'Company', 'Lot Number']] + day_shift_materials
+                day_table = Table(day_data, colWidths=[30*mm, 60*mm, 50*mm, 40*mm])
+                day_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#FF9800')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                    ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#FFF3E0')]),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ]))
+                story.append(day_table)
+                story.append(Spacer(1, 15))
+            else:
+                story.append(Paragraph("🌞 DAY SHIFT: <i>No BOM materials uploaded</i>", self.styles['Normal']))
+                story.append(Spacer(1, 15))
+            
+            # Create Night Shift Table
+            if night_shift_materials:
+                story.append(Paragraph("🌙 NIGHT SHIFT BOM MATERIALS", self.styles['Normal']))
+                story.append(Spacer(1, 4))
                 
-                # Create links for documents
-                if ipqc_pdf:
-                    ipqc_filename = os.path.basename(ipqc_pdf) if ipqc_pdf else 'N/A'
-                    ipqc_full_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ipqc_pdf)
-                    ipqc_link = f'<link href="file:///{ipqc_full_path}" color="blue"><u>📄 {ipqc_filename}</u></link>'
-                    story.append(Paragraph(f"<b>IPQC PDF:</b> ✓ Uploaded - {ipqc_link}", self.styles['Normal']))
-                else:
-                    story.append(Paragraph("<b>IPQC PDF:</b> ✗ Not Uploaded", self.styles['Normal']))
-                
-                story.append(Spacer(1, 2))
-                
-                if ftr_document:
-                    ftr_filename = os.path.basename(ftr_document) if ftr_document else 'N/A'
-                    ftr_full_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ftr_document)
-                    ftr_link = f'<link href="file:///{ftr_full_path}" color="blue"><u>📑 {ftr_filename}</u></link>'
-                    story.append(Paragraph(f"<b>FTR Document:</b> ✓ Uploaded - {ftr_link}", self.styles['Normal']))
-                else:
-                    story.append(Paragraph("<b>FTR Document:</b> ✗ Not Uploaded", self.styles['Normal']))
-                
-                # Note about documents
-                if ipqc_pdf or ftr_document:
-                    note_style = ParagraphStyle(
-                        'Note',
-                        parent=self.styles['Normal'],
-                        fontSize=8,
-                        textColor=colors.grey,
-                        spaceAfter=4
-                    )
-                    story.append(Spacer(1, 4))
-                    story.append(Paragraph("<i>Note: Click on the blue links above to open the documents. Files are stored in the uploads folder.</i>", note_style))
-                
+                night_data = [['Date', 'Material Name', 'Company', 'Lot Number']] + night_shift_materials
+                night_table = Table(night_data, colWidths=[30*mm, 60*mm, 50*mm, 40*mm])
+                night_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3F51B5')),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                    ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
+                    ('ALIGN', (0, 1), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 8),
+                    ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#E8EAF6')]),
+                    ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                    ('TOPPADDING', (0, 0), (-1, -1), 4),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                    ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+                ]))
+                story.append(night_table)
+                story.append(Spacer(1, 10))
+            else:
+                story.append(Paragraph("🌙 NIGHT SHIFT: <i>No BOM materials uploaded</i>", self.styles['Normal']))
                 story.append(Spacer(1, 10))
         
         # Remarks Section
