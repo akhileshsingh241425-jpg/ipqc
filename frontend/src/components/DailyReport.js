@@ -13,8 +13,6 @@ const getAPIBase = () => window.location.hostname === 'localhost' ? 'http://loca
 // Material name mapping (Legacy DB names → Modern Display names)
 const MATERIAL_NAME_MAP = {
   'Cell': 'Solar Cell',
-  'EVA Front': 'EVA',
-  'EVA Back': 'EVA',
   'Glass Front': 'FRONT GLASS',
   'Glass Back': 'BACK GLASS',
   'Ribbon': 'RIBBON (0.26 mm)',
@@ -1172,7 +1170,6 @@ function DailyReport() {
         // Material name mapping for fuzzy matching
         const materialMapping = {
           'Solar Cell': ['solar cell', 'cell', 'solar', 'solarcell'],
-          'EVA': ['eva', 'ethylene vinyl acetate'],
           'FRONT GLASS': ['front glass', 'glass front', 'glass', 'fg'],
           'BACK GLASS': ['back glass', 'glass back', 'bg', 'backglass'],
           'RIBBON': ['ribbon', 'tab ribbon', 'tabbing ribbon', 'busbar', 'bus bar'],
@@ -4084,12 +4081,7 @@ function DailyReport() {
         pdiRecords.forEach(record => {
           if (record.bomMaterials && record.bomMaterials.length > 0) {
             record.bomMaterials.forEach(bm => {
-              // Combine EVA Front and EVA Back into single EVA
-              let materialKey = bm.materialName;
-              if (materialKey === 'EVA Front' || materialKey === 'EVA Back') {
-                materialKey = 'EVA';
-              }
-              
+              const materialKey = bm.materialName;
               const key = `${materialKey}_${bm.lotNumber || 'no_invoice'}`;
               if (!consolidatedBomMap[key]) {
                 consolidatedBomMap[key] = { 
@@ -4264,8 +4256,6 @@ function DailyReport() {
                         let usedQty = 0;
                         if (materialLower.includes('cell')) {
                           usedQty = totalProduction * 66; // 66 cells per module
-                        } else if (materialLower.includes('eva')) {
-                          usedQty = totalProduction * 2.67; // 2.67 sqm per module
                         } else if (materialLower.includes('glass')) {
                           usedQty = totalProduction * 1; // 1 glass per module
                         } else if (materialLower.includes('ribbon') && !materialLower.includes('bus')) {
