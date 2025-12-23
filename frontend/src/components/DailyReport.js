@@ -48,9 +48,9 @@ const BOM_MATERIALS_BY_WATTAGE = {
     { name: 'Aluminium Frame LONG', qty: 1, product_type: '6 Hole (2382 mm length)', needsCompany: true },
     { name: 'Aluminium Frame SHORT', qty: 1, product_type: '1134 mm Width', needsCompany: true },
     { name: 'SEALENT', qty: 0.35, product_type: '', needsCompany: true },
-    { name: 'JB Potting (A and B)', qty: 0.021, product_type: '', needsCompany: true },
-    { name: 'JUNCTION BOX', qty: 1, product_type: '35A 1200mm', needsCompany: true },
-    { name: 'RFID', qty: 1, product_type: '', needsCompany: true }
+    { name: 'JB Potting A', qty: 0.0105, product_type: 'Part A', needsCompany: true },
+    { name: 'JB Potting B', qty: 0.0105, product_type: 'Part B', needsCompany: true },
+    { name: 'JUNCTION BOX', qty: 1, product_type: '35A 1200mm', needsCompany: true }
   ],
   '630wp': [
     { name: 'Solar Cell', qty: 66, product_type: '25.40%', min_efficiency: 25.40, needsCompany: true },
@@ -65,9 +65,9 @@ const BOM_MATERIALS_BY_WATTAGE = {
     { name: 'Aluminium Frame LONG', qty: 1, product_type: '6 Hole (2382 mm length)', needsCompany: true },
     { name: 'Aluminium Frame SHORT', qty: 1, product_type: '1134 mm Width', needsCompany: true },
     { name: 'SEALENT', qty: 0.35, product_type: '', needsCompany: true },
-    { name: 'JB Potting (A and B)', qty: 0.021, product_type: '', needsCompany: true },
-    { name: 'JUNCTION BOX', qty: 1, product_type: '35A 1200mm', needsCompany: true },
-    { name: 'RFID', qty: 1, product_type: '', needsCompany: true }
+    { name: 'JB Potting A', qty: 0.0105, product_type: 'Part A', needsCompany: true },
+    { name: 'JB Potting B', qty: 0.0105, product_type: 'Part B', needsCompany: true },
+    { name: 'JUNCTION BOX', qty: 1, product_type: '35A 1200mm', needsCompany: true }
   ]
 };
 
