@@ -4229,6 +4229,7 @@ function DailyReport() {
                     <thead>
                       <tr style={{backgroundColor: '#e9ecef'}}>
                         <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Material</th>
+                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Specification</th>
                         <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Invoice No</th>
                         <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>COC Qty</th>
                         <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Used Qty</th>
@@ -4321,6 +4322,16 @@ function DailyReport() {
                           .filter(inv => inv)
                           .join(', ');
                         
+                        // Get specification from BOM_MATERIALS_BY_WATTAGE
+                        const getMaterialSpec = (materialName) => {
+                          const wattage = selectedCompany?.wattage || '625wp';
+                          const materials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
+                          const material = materials.find(m => m.name === materialName);
+                          return material?.product_type || '-';
+                        };
+                        
+                        const specification = getMaterialSpec(bm.materialName);
+                        
                         return (
                           <tr key={idx}>
                             <td style={{padding: '8px', border: '1px solid #dee2e6'}}>
@@ -4337,6 +4348,9 @@ function DailyReport() {
                               >
                                 {group.displayName}
                               </span>
+                            </td>
+                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px', color: '#666'}}>
+                              {specification}
                             </td>
                             <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>{invoiceNos || '-'}</td>
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>{cocQty || '-'}</td>
