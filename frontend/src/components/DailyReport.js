@@ -4281,7 +4281,7 @@ function DailyReport() {
                           usedQty = totalProduction * 5.2; // 5.2 sqm per module
                         } else if (materialLower.includes('frame')) {
                           usedQty = totalProduction * 1; // 1 set per module
-                        } else if (materialLower.includes('sealant') || materialLower.includes('silicone 270')) {
+                        } else if (materialLower.includes('sealent') || materialLower.includes('sealant') || materialLower.includes('silicone 270')) {
                           usedQty = totalProduction * 0.35; // 0.35 kg per module
                         } else if (materialLower.includes('potting')) {
                           usedQty = totalProduction * 0.021; // 0.021 kg per module
