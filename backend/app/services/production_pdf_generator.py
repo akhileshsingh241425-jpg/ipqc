@@ -333,31 +333,31 @@ class ProductionPDFGenerator:
             # Use lot_batch_no instead of lot_number (which contains COC invoice number)
             lot = mat.get('lotBatchNo', mat.get('lot_batch_no', ''))
             
-            # Image link handling - Create web URL for server access
-            image_path = mat.get('imagePath', mat.get('image_path', ''))
-            if image_path:
-                # Convert local path to web URL
-                # Example: uploads/bom_materials/file.jpg -> https://your-domain.com/uploads/bom_materials/file.jpg
+            # Image link handling - Multiple images support
+            image_paths = mat.get('imagePaths', mat.get('image_paths', []))
+            if not isinstance(image_paths, list):
+                # If single path string, convert to list
+                image_paths = [image_paths] if image_paths else []
+            
+            if image_paths:
+                # Create clickable links for all images
+                base_url = "http://103.108.220.227"
+                links = []
+                for i, img_path in enumerate(image_paths, 1):
+                    # Remove 'uploads/' prefix if present
+                    if img_path.startswith('uploads/'):
+                        web_path = img_path
+                    elif img_path.startswith('/'):
+                        web_path = img_path.lstrip('/')
+                    else:
+                        web_path = img_path
+                    
+                    image_url = f"{base_url}/{web_path}"
+                    links.append(f'<link href="{image_url}" color="blue"><u>Image {i}</u></link>')
+                    print(f"Image URL created: {image_url}")
                 
-                # Remove 'uploads/' prefix if present
-                if image_path.startswith('uploads/'):
-                    web_path = image_path
-                elif image_path.startswith('/'):
-                    web_path = image_path.lstrip('/')
-                else:
-                    web_path = image_path
-                
-                # Create web URL (adjust domain as needed)
-                # For local testing: http://localhost:5000/uploads/...
-                # For production: https://your-domain.com/uploads/...
-                base_url = "http://103.108.220.227"  # Your server IP
-                image_url = f"{base_url}/{web_path}"
-                
-                # Create clickable hyperlink
-                remarks = f'<link href="{image_url}" color="blue"><u>View Image</u></link>'
-                
-                # Debug: Print the URL to console
-                print(f"Image URL created: {image_url}")
+                # Join multiple image links
+                remarks = ' | '.join(links)
             else:
                 remarks = ''
             

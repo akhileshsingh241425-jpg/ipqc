@@ -94,47 +94,30 @@ class BomMaterial(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     production_record_id = db.Column(db.Integer, db.ForeignKey('production_records.id'), nullable=False)
-    material_name = db.Column(db.String(100), nullable=False)  # Cell, EVA Front, EVA Back, etc.
-    shift = db.Column(db.String(10), nullable=True)  # 'day' or 'night'
-    company = db.Column(db.String(200), nullable=True)  # Company/Brand name
-    image_path = db.Column(db.String(500), nullable=True)
-    lot_number = db.Column(db.String(200), nullable=True)  # Invoice number from COC
-    coc_qty = db.Column(db.String(50), nullable=True)  # COC quantity
-    invoice_qty = db.Column(db.String(50), nullable=True)  # Invoice quantity
+    material_name = db.Column(db.String(100), nullable=False)  # Fixed from 14-item list
+    shift = db.Column(db.String(10), nullable=False)  # 'day' or 'night'
+    company = db.Column(db.String(200), nullable=True)  # Supplier/Brand name
     lot_batch_no = db.Column(db.String(200), nullable=True)  # Lot/Batch number
+    image_paths = db.Column(db.Text, nullable=True)  # JSON array of image paths
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     def to_dict(self):
-        # Find all PDI batches using this COC invoice number
-        used_in_pdis = []
-        if self.lot_number:  # lot_number is the invoice number from COC
-            # Query all BomMaterials with same invoice number but different PDI
-            other_materials = BomMaterial.query.filter_by(
-                lot_number=self.lot_number,
-                material_name=self.material_name
-            ).all()
-            
-            # Get unique PDI numbers with company names
-            pdi_map = {}
-            for mat in other_materials:
-                if mat.production_record and mat.production_record.pdi:
-                    pdi = mat.production_record.pdi
-                    company_name = mat.production_record.company.company_name if mat.production_record.company else 'Unknown'
-                    pdi_map[pdi] = company_name
-            
-            # Format as "PDI-1 (Company Name)"
-            used_in_pdis = [f"{pdi} ({company})" for pdi, company in sorted(pdi_map.items())]
+        import json
+        # Parse image paths from JSON
+        images = []
+        if self.image_paths:
+            try:
+                images = json.loads(self.image_paths)
+            except:
+                images = []
         
         return {
             'id': self.id,
             'materialName': self.material_name,
+            'shift': self.shift,
             'company': self.company,
-            'imagePath': self.image_path,
-            'lotNumber': self.lot_number,
-            'cocQty': self.coc_qty,
-            'invoiceQty': self.invoice_qty,
             'lotBatchNo': self.lot_batch_no,
-            'usedInPdis': used_in_pdis  # New field: list with "PDI (Company)" format
+            'imagePaths': images  # Array of image paths
         }
 
 
