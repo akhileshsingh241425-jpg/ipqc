@@ -37,7 +37,6 @@ const getDisplayMaterialName = (dbName) => MATERIAL_NAME_MAP[dbName] || dbName;
 const BOM_MATERIALS_BY_WATTAGE = {
   '625wp': [
     { name: 'Solar Cell', qty: 66, product_type: '25.30%', min_efficiency: 25.30, needsCompany: true },
-    { name: 'EVA', qty: 2.8, product_type: '', needsCompany: true },
     { name: 'FRONT GLASS', qty: 1, product_type: '2376x1128x2.0 mm', needsCompany: true },
     { name: 'BACK GLASS', qty: 1, product_type: '2376x1128x2.0 mm(3 hole)', needsCompany: true },
     { name: 'RIBBON (0.26 mm)', qty: 0.212, product_type: '0.26 mm', needsCompany: true, materialGroup: 'RIBBON' },
@@ -54,7 +53,6 @@ const BOM_MATERIALS_BY_WATTAGE = {
   ],
   '630wp': [
     { name: 'Solar Cell', qty: 66, product_type: '25.40%', min_efficiency: 25.40, needsCompany: true },
-    { name: 'EVA', qty: 2.8, product_type: '', needsCompany: true },
     { name: 'FRONT GLASS', qty: 1, product_type: '2376x1128x2.0 mm', needsCompany: true },
     { name: 'BACK GLASS', qty: 1, product_type: '2376x1128x2.0 mm(3 hole)', needsCompany: true },
     { name: 'RIBBON (0.26 mm)', qty: 0.212, product_type: '0.26 mm', needsCompany: true, materialGroup: 'RIBBON' },
