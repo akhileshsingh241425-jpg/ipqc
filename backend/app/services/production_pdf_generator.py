@@ -191,31 +191,25 @@ class ProductionPDFGenerator:
             story.append(Paragraph("<i>No rejections in this period</i>", self.styles['Normal']))
         
         # ========== BOM VERIFICATION SHEETS (Shift-wise, Date-wise) ==========
-        # Collect all unique date-shift combinations from BOM materials
-        date_shift_combinations = set()
+        # Create BOM pages for ALL dates with BOTH shifts (day and night)
+        # Even if materials are empty for a shift
         
-        for record in production_records:
-            bom_materials = record.get('bom_materials', [])
-            for mat in bom_materials:
-                date = record.get('date', 'N/A')
-                shift = mat.get('shift', 'day')
-                date_shift_combinations.add((date, shift))
+        # Get all unique dates from production records
+        all_dates = sorted(set(record.get('date', 'N/A') for record in production_records))
         
-        # Sort by date and shift
-        sorted_combinations = sorted(date_shift_combinations, key=lambda x: (x[0], x[1]))
-        
-        # Create BOM page for each date-shift combination
-        for date, shift in sorted_combinations:
-            # Find record for this date
-            record = next((r for r in production_records if r.get('date') == date), None)
-            if not record:
-                continue
-            
-            # Get materials for this specific date and shift
-            bom_materials = record.get('bom_materials', [])
-            shift_materials = [m for m in bom_materials if m.get('shift', 'day') == shift]
-            
-            if shift_materials and len(shift_materials) > 0:
+        # For each date, create both Day and Night shift pages
+        for date in all_dates:
+            for shift in ['day', 'night']:
+                # Find record for this date
+                record = next((r for r in production_records if r.get('date') == date), None)
+                if not record:
+                    continue
+                
+                # Get materials for this specific date and shift
+                bom_materials = record.get('bom_materials', [])
+                shift_materials = [m for m in bom_materials if m.get('shift', 'day') == shift]
+                
+                # Create page even if no materials (empty BOM page)
                 story.append(PageBreak())
                 story.extend(self._create_bom_page(date, shift.upper(), shift_materials, report_data))
         
