@@ -164,13 +164,23 @@ def add_production_record(company_id):
                     pdi  # Use PDI number instead of lot number
                 )
         
-        # Initialize BOM materials for this record
+        # Initialize BOM materials for this record (14 fixed materials for both shifts)
         for material_name in BOM_MATERIALS:
-            bom_material = BomMaterial(
+            # Create Day shift entry
+            bom_material_day = BomMaterial(
                 production_record_id=record.id,
-                material_name=material_name
+                material_name=material_name,
+                shift='day'
             )
-            db.session.add(bom_material)
+            db.session.add(bom_material_day)
+            
+            # Create Night shift entry
+            bom_material_night = BomMaterial(
+                production_record_id=record.id,
+                material_name=material_name,
+                shift='night'
+            )
+            db.session.add(bom_material_night)
         
         db.session.commit()
         
@@ -212,25 +222,24 @@ def update_production_record(company_id, record_id):
         if 'bomImage' in data:
             record.bom_image = data.get('bomImage')
         if 'bomMaterials' in data:
-            # Update BomMaterial records
+            # Update BomMaterial records (new simplified structure)
+            import json
             bom_data = data.get('bomMaterials', [])
             for bom_item in bom_data:
                 if 'id' in bom_item:
                     # Find and update existing BomMaterial
                     bom_material = BomMaterial.query.get(bom_item['id'])
                     if bom_material and bom_material.production_record_id == record.id:
-                        if 'lotNumber' in bom_item:
-                            bom_material.lot_number = bom_item['lotNumber']
+                        # Update fields
                         if 'company' in bom_item:
                             bom_material.company = bom_item['company']
-                        if 'cocQty' in bom_item:
-                            bom_material.coc_qty = bom_item['cocQty']
-                        if 'invoiceQty' in bom_item:
-                            bom_material.invoice_qty = bom_item['invoiceQty']
                         if 'lotBatchNo' in bom_item:
                             bom_material.lot_batch_no = bom_item['lotBatchNo']
-                        if 'imagePath' in bom_item:
-                            bom_material.image_path = bom_item['imagePath']
+                        if 'imagePaths' in bom_item:
+                            # Convert array to JSON string
+                            bom_material.image_paths = json.dumps(bom_item['imagePaths'])
+                        if 'shift' in bom_item:
+                            bom_material.shift = bom_item['shift']
         
         db.session.commit()
         
