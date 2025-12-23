@@ -4752,9 +4752,9 @@ function DailyReport() {
                       };
                       
                       return (
-                      <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
-                        <td style={{padding: '6px', border: '1px solid #dee2e6', fontWeight: '500'}}>{coc.material_name || '-'}</td>
-                        <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '9px', color: '#666'}}>{getSpec(coc.material_name)}</td>
+                        <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
+                          <td style={{padding: '6px', border: '1px solid #dee2e6', fontWeight: '500'}}>{coc.material_name || '-'}</td>
+                          <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '9px', color: '#666'}}>{getSpec(coc.material_name)}</td>
                         <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '10px'}}>{coc.brand || '-'}</td>
                         <td style={{padding: '6px', border: '1px solid #dee2e6'}}>{coc.invoice_no || '-'}</td>
                         <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>{coc.invoice_date || '-'}</td>
@@ -4816,8 +4816,9 @@ function DailyReport() {
                             ✅ Select
                           </button>
                         </td>
-                      </tr>
-                    ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
