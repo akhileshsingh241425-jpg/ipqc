@@ -217,6 +217,8 @@ def update_production_record(company_id, record_id):
                     if bom_material and bom_material.production_record_id == record.id:
                         if 'lotNumber' in bom_item:
                             bom_material.lot_number = bom_item['lotNumber']
+                        if 'company' in bom_item:
+                            bom_material.company = bom_item['company']
                         if 'cocQty' in bom_item:
                             bom_material.coc_qty = bom_item['cocQty']
                         if 'invoiceQty' in bom_item:
@@ -338,6 +340,7 @@ def upload_bom_material(company_id, record_id):
         
         material_name = request.form.get('materialName')
         lot_number = request.form.get('lotNumber', '')
+        company = request.form.get('company', '')
         
         if not material_name or material_name not in BOM_MATERIALS:
             return jsonify({'error': 'Invalid material name'}), 400
@@ -355,8 +358,9 @@ def upload_bom_material(company_id, record_id):
             )
             db.session.add(bom_material)
         
-        # Update lot number
+        # Update lot number and company
         bom_material.lot_number = lot_number
+        bom_material.company = company
         
         # Handle image upload if provided
         if 'image' in request.files:

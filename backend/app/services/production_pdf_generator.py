@@ -653,6 +653,7 @@ class ProductionPDFGenerator:
                     processed_materials = []
                     for bom in bom_materials:
                         material_name = bom.get('materialName', bom.get('material_name', 'N/A'))
+                        material_company = bom.get('company', '-')
                         material_lot = bom.get('lotNumber', bom.get('lot_number', '-'))
                         image_path = bom.get('imagePath', bom.get('image_path'))
                         
@@ -687,7 +688,7 @@ class ProductionPDFGenerator:
                             print(f"   ✗ No image path provided")
                             img_element = '✗ No Image'
                         
-                        processed_materials.append([material_name, material_lot, img_element])
+                        processed_materials.append([material_name, material_company, material_lot, img_element])
                     
                     # Split into two columns: left half and right half
                     mid_point = (len(processed_materials) + 1) // 2
@@ -695,8 +696,8 @@ class ProductionPDFGenerator:
                     right_materials = processed_materials[mid_point:]
                     
                     # Create left table
-                    left_data = [['Material Name', 'Lot #', 'Image']] + left_materials
-                    left_table = Table(left_data, colWidths=[40*mm, 28*mm, 20*mm], rowHeights=22)
+                    left_data = [['Material Name', 'Company', 'Lot #', 'Image']] + left_materials
+                    left_table = Table(left_data, colWidths=[32*mm, 22*mm, 22*mm, 18*mm], rowHeights=22)
                     left_table.setStyle(TableStyle([
                         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
                         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -715,8 +716,8 @@ class ProductionPDFGenerator:
                     ]))
                     
                     # Create right table
-                    right_data = [['Material Name', 'Lot #', 'Image']] + right_materials
-                    right_table = Table(right_data, colWidths=[40*mm, 28*mm, 20*mm], rowHeights=22)
+                    right_data = [['Material Name', 'Company', 'Lot #', 'Image']] + right_materials
+                    right_table = Table(right_data, colWidths=[32*mm, 22*mm, 22*mm, 18*mm], rowHeights=22)
                     right_table.setStyle(TableStyle([
                         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
                         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
