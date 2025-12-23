@@ -147,6 +147,9 @@ function DailyReport() {
     startDate: '',
     endDate: ''
   });
+  const [pdiProductionOverrides, setPdiProductionOverrides] = useState({}); // {pdi: customProductionQty}
+  const [editingPdiProduction, setEditingPdiProduction] = useState(false);
+  const [tempPdiProduction, setTempPdiProduction] = useState('');
   const [reportOptions, setReportOptions] = useState({
     includeCellInventory: true,
     includeRejections: true,
@@ -1109,25 +1112,54 @@ function DailyReport() {
         r => r.pdi === selectedPdiForDetails
       );
 
-      // Step 3: Update each record's BOM material with the selected COC
+      // Step 3: Add COC to material (support multiple COCs per material)
       for (const record of pdiRecords) {
-        // Find and update the specific material in the bomMaterials array
-        const updatedBomMaterials = record.bomMaterials.map(bm => {
-          if (bm.materialName === selectedMaterial) {
-            console.log('Updating material:', selectedMaterial, 'with COC:', cocItem);
-            const updatedMaterial = {
-              ...bm,
-              lotNumber: cocItem.invoice_no,
-              cocQty: cocItem.coc_qty,
-              invoiceQty: cocItem.invoice_qty,
-              lotBatchNo: cocItem.lot_batch_no,
-              imagePath: imagePath // Add the downloaded PDF path
-            };
-            console.log('Updated Material Object:', updatedMaterial);
-            return updatedMaterial;
-          }
-          return bm;
-        });
+        let bomMaterialFound = false;
+        
+        // Check if material already exists with this invoice
+        const existingWithSameInvoice = record.bomMaterials.find(
+          bm => bm.materialName === selectedMaterial && bm.lotNumber === cocItem.invoice_no
+        );
+        
+        if (existingWithSameInvoice) {
+          alert('⚠️ This COC is already assigned to this material!');
+          setLoading(false);
+          return;
+        }
+        
+        // Check if material exists (to add another COC)
+        const materialExists = record.bomMaterials.some(bm => bm.materialName === selectedMaterial);
+        
+        let updatedBomMaterials;
+        
+        if (materialExists) {
+          // Add another COC for the same material
+          const newCocEntry = {
+            materialName: selectedMaterial,
+            lotNumber: cocItem.invoice_no,
+            cocQty: cocItem.coc_qty,
+            invoiceQty: cocItem.invoice_qty,
+            lotBatchNo: cocItem.lot_batch_no,
+            imagePath: imagePath,
+            company: '', // Will be filled from first entry
+            uploadedAt: new Date().toISOString()
+          };
+          updatedBomMaterials = [...record.bomMaterials, newCocEntry];
+          console.log('✅ Added additional COC for material:', selectedMaterial);
+        } else {
+          // First COC for this material
+          updatedBomMaterials = [...record.bomMaterials, {
+            materialName: selectedMaterial,
+            lotNumber: cocItem.invoice_no,
+            cocQty: cocItem.coc_qty,
+            invoiceQty: cocItem.invoice_qty,
+            lotBatchNo: cocItem.lot_batch_no,
+            imagePath: imagePath,
+            company: '',
+            uploadedAt: new Date().toISOString()
+          }];
+          console.log('✅ Added first COC for material:', selectedMaterial);
+        }
         
         console.log('Updated BOM Materials Array:', JSON.stringify(updatedBomMaterials, null, 2));
         
@@ -4135,7 +4167,63 @@ function DailyReport() {
               
               <div style={{padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '5px', marginBottom: '20px', border: '2px solid #28a745'}}>
                 <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Total Records:</strong> {pdiRecords.length} days</p>
-                <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Total Production:</strong> {totalProduction} modules</p>
+                <p style={{margin: '5px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px'}}>
+                  <strong>Total Production:</strong> 
+                  {editingPdiProduction ? (
+                    <>
+                      <input 
+                        type="number" 
+                        value={tempPdiProduction}
+                        onChange={(e) => setTempPdiProduction(e.target.value)}
+                        style={{width: '100px', padding: '4px', border: '1px solid #ccc', borderRadius: '3px'}}
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => {
+                          setPdiProductionOverrides({...pdiProductionOverrides, [selectedPdiForDetails]: parseInt(tempPdiProduction) || totalProduction});
+                          setEditingPdiProduction(false);
+                        }}
+                        style={{padding: '4px 8px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                      >
+                        ✓
+                      </button>
+                      <button
+                        onClick={() => setEditingPdiProduction(false)}
+                        style={{padding: '4px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span style={{fontWeight: 'bold', color: pdiProductionOverrides[selectedPdiForDetails] ? '#ff6b00' : '#000'}}>
+                        {pdiProductionOverrides[selectedPdiForDetails] || totalProduction} modules
+                        {pdiProductionOverrides[selectedPdiForDetails] && ' (edited)'}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setTempPdiProduction((pdiProductionOverrides[selectedPdiForDetails] || totalProduction).toString());
+                          setEditingPdiProduction(true);
+                        }}
+                        style={{padding: '4px 8px', background: '#007bff', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '11px'}}
+                      >
+                        ✏️ Edit
+                      </button>
+                      {pdiProductionOverrides[selectedPdiForDetails] && (
+                        <button
+                          onClick={() => {
+                            const newOverrides = {...pdiProductionOverrides};
+                            delete newOverrides[selectedPdiForDetails];
+                            setPdiProductionOverrides(newOverrides);
+                          }}
+                          style={{padding: '4px 8px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '11px'}}
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </>
+                  )}
+                </p>
                 <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Date Range:</strong> {pdiRecords[0]?.date} to {pdiRecords[pdiRecords.length - 1]?.date}</p>
                 <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
                   <button
