@@ -4101,9 +4101,13 @@ function DailyReport() {
           .filter(bm => {
             // Hide EVA Front and EVA Back materials
             const materialName = bm.materialName;
-            return materialName !== 'EVA Front' && 
-                   materialName !== 'EVA Back' && 
-                   materialName !== 'EVA';
+            if (materialName === 'EVA Front' || materialName === 'EVA Back' || materialName === 'EVA') {
+              return false;
+            }
+            
+            // Only show materials that have been actually uploaded/assigned
+            // (has lotNumber OR company OR imagePath)
+            return bm.lotNumber || bm.company || bm.imagePath;
           });
         
         return (
