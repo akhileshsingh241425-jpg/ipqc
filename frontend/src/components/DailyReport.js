@@ -1610,6 +1610,7 @@ function DailyReport() {
           formData.append('materialName', material.name);
           formData.append('lotNumber', materialData.lotNumber || '');
           formData.append('company', materialData.company || '');
+          formData.append('shift', selectedShift);  // Send current shift (day/night)
           formData.append('qty', material.qty);
           formData.append('product_type', material.product_type);
           if (materialData.image) {
