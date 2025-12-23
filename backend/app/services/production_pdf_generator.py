@@ -14,6 +14,24 @@ class ProductionPDFGenerator:
     Format: BOM Verification Check Sheet (IPQC)
     """
     
+    # Allowed BOM items - only these will appear in BOM report
+    ALLOWED_BOM_ITEMS = [
+        'Solar Cell',
+        'FRONT GLASS',
+        'BACK GLASS',
+        'RIBBON (0.26 mm)',
+        'RIBBON (4.0X0.4)',
+        'RIBBON (6.0X0.4)',
+        'FLUX',
+        'EPE FRONT',
+        'Aluminium Frame LONG',
+        'Aluminium Frame SHORT',
+        'SEALENT',
+        'JB Potting A',
+        'JB Potting B',
+        'JUNCTION BOX'
+    ]
+    
     def __init__(self):
         self.styles = getSampleStyleSheet()
         self._create_custom_styles()
@@ -291,8 +309,14 @@ class ProductionPDFGenerator:
             'Specification/ Model\nno', 'Lot / Batch\nNo.', 'Remarks, if any'
         ]]
         
-        # Display all uploaded materials for this date and shift
-        for idx, mat in enumerate(materials_data, 1):
+        # Filter materials to only show allowed BOM items
+        filtered_materials = [
+            mat for mat in materials_data 
+            if mat.get('materialName', mat.get('material_name', '')) in self.ALLOWED_BOM_ITEMS
+        ]
+        
+        # Display filtered materials for this date and shift
+        for idx, mat in enumerate(filtered_materials, 1):
             material_name = mat.get('materialName', mat.get('material_name', 'N/A'))
             supplier = mat.get('company', '')
             
