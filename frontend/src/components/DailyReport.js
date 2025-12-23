@@ -4291,9 +4291,9 @@ function DailyReport() {
                         } else if (materialLower.includes('frame')) {
                           usedQty = totalProduction * 1; // 1 set per module
                           console.log('  → Matched: FRAME');
-                        } else if (materialLower.includes('sealent') || materialLower.includes('sealant') || materialLower.includes('silicone 270')) {
+                        } else if (materialLower.includes('sealent') || materialLower.includes('sealant') || materialLower.includes('silicone')) {
                           usedQty = totalProduction * 0.35; // 0.35 kg per module
-                          console.log('  → Matched: SEALENT');
+                          console.log('  → Matched: SEALENT/SILICONE');
                         } else if (materialLower.includes('potting')) {
                           usedQty = totalProduction * 0.021; // 0.021 kg per module
                           console.log('  → Matched: POTTING');
