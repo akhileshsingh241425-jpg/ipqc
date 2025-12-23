@@ -4264,31 +4264,45 @@ function DailyReport() {
                           const bm = group.items[0]; // Use first item for reference
                           const materialLower = bm.materialName.toLowerCase();
                         
+                        console.log('Material:', bm.materialName, '| Lower:', materialLower);
+                        
                         let usedQty = 0;
                         if (materialLower.includes('cell')) {
                           usedQty = totalProduction * 66; // 66 cells per module
+                          console.log('  → Matched: CELL');
                         } else if (materialLower.includes('glass')) {
                           usedQty = totalProduction * 1; // 1 glass per module
+                          console.log('  → Matched: GLASS');
                         } else if (materialLower.includes('ribbon') && !materialLower.includes('bus')) {
                           usedQty = totalProduction * 0.212; // 0.212 kg ribbon per module
+                          console.log('  → Matched: RIBBON');
                         } else if (materialLower.includes('flux')) {
                           usedQty = totalProduction * 0.02; // 0.02 ltr per module
+                          console.log('  → Matched: FLUX');
                         } else if (materialLower.includes('bus bar 4mm') || materialLower.includes('busbar 4mm')) {
                           usedQty = totalProduction * 0.038; // 0.038 kg per module
+                          console.log('  → Matched: BUS BAR 4MM');
                         } else if (materialLower.includes('bus bar 6mm') || materialLower.includes('busbar 6mm')) {
                           usedQty = totalProduction * 0.018; // 0.018 kg per module
+                          console.log('  → Matched: BUS BAR 6MM');
                         } else if (materialLower.includes('epe')) {
                           usedQty = totalProduction * 5.2; // 5.2 sqm per module
+                          console.log('  → Matched: EPE');
                         } else if (materialLower.includes('frame')) {
                           usedQty = totalProduction * 1; // 1 set per module
+                          console.log('  → Matched: FRAME');
                         } else if (materialLower.includes('sealent') || materialLower.includes('sealant') || materialLower.includes('silicone 270')) {
                           usedQty = totalProduction * 0.35; // 0.35 kg per module
+                          console.log('  → Matched: SEALENT');
                         } else if (materialLower.includes('potting')) {
                           usedQty = totalProduction * 0.021; // 0.021 kg per module
+                          console.log('  → Matched: POTTING');
                         } else if (materialLower.includes('jb') || materialLower.includes('junction')) {
                           usedQty = totalProduction * 1; // 1 junction box per module
+                          console.log('  → Matched: JUNCTION BOX');
                         } else {
                           usedQty = totalProduction * 1; // Default 1 per module
+                          console.log('  → Matched: DEFAULT (1 per module)');
                         }
                         
                         // Round to 2 decimal places
