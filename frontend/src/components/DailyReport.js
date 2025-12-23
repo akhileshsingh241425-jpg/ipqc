@@ -4105,9 +4105,9 @@ function DailyReport() {
               return false;
             }
             
-            // Only show materials that have been actually uploaded/assigned
-            // (has lotNumber OR company OR imagePath)
-            return bm.lotNumber || bm.company || bm.imagePath;
+            // Show all materials (don't filter by upload status)
+            // This ensures materials are visible even if not fully uploaded
+            return true;
           });
         
         return (
