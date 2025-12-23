@@ -16,20 +16,15 @@ with app.app_context():
     
     print(f"Found {len(eva_materials)} EVA materials to replace with EPE FRONT\n")
     
-    if len(eva_materials) == 0:
-        print("No EVA materials found!")
-    else:
-        confirm = input(f"Replace all {len(eva_materials)} EVA entries with EPE FRONT? (yes/no): ")
+    if len(eva_materials) > 0:
+        updated_count = 0
+        for material in eva_materials:
+            print(f"Updating ID {material.id}: {material.material_name} -> EPE FRONT")
+            material.material_name = 'EPE FRONT'
+            updated_count += 1
         
-        if confirm.lower() == 'yes':
-            updated_count = 0
-            for material in eva_materials:
-                print(f"Updating ID {material.id}: {material.material_name} -> EPE FRONT")
-                material.material_name = 'EPE FRONT'
-                updated_count += 1
-            
-            db.session.commit()
-            print(f"\n✅ Successfully updated {updated_count} records!")
-            print("All EVA materials are now EPE FRONT")
-        else:
-            print("Operation cancelled")
+        db.session.commit()
+        print(f"\n✅ Successfully updated {updated_count} records!")
+        print("All EVA materials are now EPE FRONT")
+    else:
+        print("No EVA materials found!")
