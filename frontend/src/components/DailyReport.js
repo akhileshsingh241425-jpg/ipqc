@@ -976,6 +976,9 @@ function DailyReport() {
   const handleOpenBomModal = (record) => {
     setSelectedRecordForBom(record);
     
+    // Fetch COC brands when opening modal
+    fetchCOCBrands();
+    
     // Get wattage from company data or default
     const wattage = selectedCompany?.wattage || '625wp';
     setSelectedWattage(wattage);
@@ -3542,23 +3545,35 @@ function DailyReport() {
               <h4 style={{color: '#1976d2', marginBottom: '10px'}}>
                 📋 BOM Materials for {selectedShift === 'day' ? '🌞 Day' : '🌙 Night'} Production
               </h4>
+              {loadingCocBrands && (
+                <div style={{padding: '10px', backgroundColor: '#fff3cd', borderRadius: '5px', marginBottom: '10px'}}>
+                  Loading COC brands...
+                </div>
+              )}
               <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px'}}>
                 {(BOM_MATERIALS_BY_WATTAGE[selectedWattage] || []).map(material => (
-                  <div key={material.name} style={{border: '1px solid #ddd', padding: '10px', borderRadius: '5px', backgroundColor: '#e3f2fd'}}>
+                  <div key={material.name} style={{border: '1px solid #ddd', padding: '10px', borderRadius: '5px', backgroundColor: material.needsCompany ? '#e3f2fd' : 'white'}}>
                     <label style={{fontWeight: 'bold', marginBottom: '5px', display: 'block'}}>
                       {material.name}
                       {material.product_type && <span style={{fontSize: '11px', color: '#666', display: 'block'}}>({material.product_type})</span>}
                       <span style={{fontSize: '11px', color: '#1976d2', display: 'block'}}>Qty: {material.qty}</span>
                     </label>
                     
-                    {/* Company/Brand input */}
-                    <input
-                      type="text"
-                      placeholder="Select Company/Brand"
-                      value={bomMaterials[material.name]?.company || ''}
-                      onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
-                      style={{width: '100%', marginBottom: '5px', padding: '5px', border: '2px solid #1976d2'}}
-                    />
+                    {/* Company dropdown - filtered by material name */}
+                    {material.needsCompany && (
+                      <select
+                        value={bomMaterials[material.name]?.company || ''}
+                        onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
+                        style={{width: '100%', marginBottom: '5px', padding: '5px', border: '2px solid #1976d2'}}
+                      >
+                        <option value="">Select Company/Brand</option>
+                        {(cocBrands[material.name] || []).map((brand, idx) => (
+                          <option key={idx} value={brand.brand}>
+                            {brand.brand}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     
                     <input
                       type="text"
