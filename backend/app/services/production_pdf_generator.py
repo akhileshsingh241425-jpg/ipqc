@@ -326,7 +326,8 @@ class ProductionPDFGenerator:
                    mat.get('specification') or 
                    mat.get('spec') or '')
             
-            lot = mat.get('lotNumber', mat.get('lot_number', ''))
+            # Use lot_batch_no instead of lot_number (which contains COC invoice number)
+            lot = mat.get('lotBatchNo', mat.get('lot_batch_no', ''))
             
             # Image link handling
             image_path = mat.get('imagePath', mat.get('image_path', ''))
