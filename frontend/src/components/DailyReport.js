@@ -4076,53 +4076,57 @@ function DailyReport() {
         const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === selectedPdiForDetails);
         const totalProduction = pdiRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
         
-        // Consolidate BOM materials from all records of this PDI
-        const consolidatedBomMap = {};
+        // COC Materials - Independent of production BOM uploads
+        // These are the ONLY materials that require COC documentation
+        const COC_MATERIALS = [
+          { name: 'Solar Cell', unit: 'PCS' },
+          { name: 'FRONT GLASS', unit: 'PCS' },
+          { name: 'BACK GLASS', unit: 'PCS' },
+          { name: 'RIBBON', unit: 'KG', spec: '0.26mm' },
+          { name: 'Ribbon(BUSBAR)', unit: 'KG', spec: '4.0X0.4 mm' },
+          { name: 'Ribbon(BUSBAR)', unit: 'KG', spec: '6.0X0.4 mm' },
+          { name: 'EPE FRONT', unit: 'sqm' },
+          { name: 'Aluminium Frame LONG', unit: 'SETS' },
+          { name: 'Aluminium Frame SHORT', unit: 'SETS' },
+          { name: 'SEALENT', unit: 'KG' },
+          { name: 'JB Potting A', unit: 'KG' },
+          { name: 'JB Potting B', unit: 'KG' },
+          { name: 'JUNCTION BOX', unit: 'SETS', spec: '1200mm-' }
+        ];
+        
+        // Get assigned COCs from production records (if any)
+        const assignedCocsMap = {};
         pdiRecords.forEach(record => {
           if (record.bomMaterials && record.bomMaterials.length > 0) {
             record.bomMaterials.forEach(bm => {
-              const materialKey = bm.materialName;
-              const key = `${materialKey}_${bm.lotNumber || 'no_invoice'}`;
-              if (!consolidatedBomMap[key]) {
-                consolidatedBomMap[key] = { 
-                  ...bm, 
-                  materialName: materialKey,
-                  cocQty: parseFloat(bm.cocQty) || 0
-                };
-              } else {
-                // DON'T add COC quantities - COC Qty is the total available from invoice, not per-record usage
-                // Just keep the first value (they should all be same for same invoice)
-                // consolidatedBomMap[key].cocQty remains unchanged
+              if (bm.lotNumber) {
+                const key = `${bm.materialName}_${bm.lotNumber}`;
+                if (!assignedCocsMap[key]) {
+                  assignedCocsMap[key] = bm;
+                }
               }
             });
           }
         });
-        // Materials that require COC documents
-        const COC_REQUIRED_MATERIALS = [
-          'Solar Cell',
-          'FRONT GLASS',
-          'BACK GLASS',
-          'RIBBON',
-          'Ribbon(BUSBAR)',
-          'EPE FRONT',
-          'EPE',
-          'Aluminium Frame SHORT',
-          'Aluminium Frame LONG',
-          'SEALENT',
-          'JB Potting A',
-          'JB Potting B',
-          'JUNCTION BOX'
-        ];
         
-        const consolidatedBom = Object.values(consolidatedBomMap)
-          .filter(bm => {
-            const materialName = bm.materialName;
-            
-            // Only show materials that require COC
-            return COC_REQUIRED_MATERIALS.some(cocMaterial => 
-              materialName.includes(cocMaterial) || cocMaterial.includes(materialName)
-            );
-          });
+        // Build display list: All 11 materials with their assigned COCs (if any)
+        const consolidatedBom = COC_MATERIALS.map(material => {
+          // Find if this material has any COC assigned
+          const assigned = Object.values(assignedCocsMap).find(bm => 
+            bm.materialName === material.name || 
+            bm.materialName.includes(material.name) ||
+            material.name.includes(bm.materialName)
+          );
+          
+          return assigned || {
+            materialName: material.name,
+            unit: material.unit,
+            lotNumber: null,
+            cocQty: null,
+            invoiceQty: null,
+            imagePath: null
+          };
+        });
         
         return (
           <div className="modal-overlay" onClick={() => setShowPdiDetailsModal(false)}>
