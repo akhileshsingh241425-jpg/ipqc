@@ -4100,8 +4100,9 @@ function DailyReport() {
                   cocQty: parseFloat(bm.cocQty) || 0
                 };
               } else {
-                // Add quantities if same material with same invoice
-                consolidatedBomMap[key].cocQty = (parseFloat(consolidatedBomMap[key].cocQty) || 0) + (parseFloat(bm.cocQty) || 0);
+                // DON'T add COC quantities - COC Qty is the total available from invoice, not per-record usage
+                // Just keep the first value (they should all be same for same invoice)
+                // consolidatedBomMap[key].cocQty remains unchanged
               }
             });
           }
@@ -4248,12 +4249,13 @@ function DailyReport() {
                             materialGroups[displayName] = {
                               displayName,
                               items: [],
-                              totalCocQty: 0
+                              totalCocQty: parseFloat(bm.cocQty) || 0 // Take first COC qty, don't add
                             };
                           }
                           
                           materialGroups[displayName].items.push(bm);
-                          materialGroups[displayName].totalCocQty += parseFloat(bm.cocQty) || 0;
+                          // DON'T add COC qty here - it's already set to the first value above
+                          // COC Qty is total available from invoice, not cumulative usage
                         });
                         
                         // Render consolidated rows
