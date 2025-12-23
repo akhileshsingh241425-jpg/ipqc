@@ -345,26 +345,30 @@ def upload_bom_material(company_id, record_id):
         material_name = request.form.get('materialName')
         lot_number = request.form.get('lotNumber', '')
         company = request.form.get('company', '')
+        shift = request.form.get('shift', 'day')  # Default to 'day' if not provided
         
         if not material_name or material_name not in BOM_MATERIALS:
             return jsonify({'error': 'Invalid material name'}), 400
         
-        # Find or create BOM material record
+        # Find or create BOM material record (now includes shift)
         bom_material = BomMaterial.query.filter_by(
             production_record_id=record_id,
-            material_name=material_name
+            material_name=material_name,
+            shift=shift
         ).first()
         
         if not bom_material:
             bom_material = BomMaterial(
                 production_record_id=record_id,
-                material_name=material_name
+                material_name=material_name,
+                shift=shift
             )
             db.session.add(bom_material)
         
-        # Update lot number and company
+        # Update lot number, company, and shift
         bom_material.lot_number = lot_number
         bom_material.company = company
+        bom_material.shift = shift
         
         # Handle image upload if provided
         if 'image' in request.files:

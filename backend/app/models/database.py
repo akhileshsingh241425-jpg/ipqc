@@ -95,6 +95,7 @@ class BomMaterial(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     production_record_id = db.Column(db.Integer, db.ForeignKey('production_records.id'), nullable=False)
     material_name = db.Column(db.String(100), nullable=False)  # Cell, EVA Front, EVA Back, etc.
+    shift = db.Column(db.String(10), nullable=True)  # 'day' or 'night'
     company = db.Column(db.String(200), nullable=True)  # Company/Brand name
     image_path = db.Column(db.String(500), nullable=True)
     lot_number = db.Column(db.String(200), nullable=True)  # Invoice number from COC

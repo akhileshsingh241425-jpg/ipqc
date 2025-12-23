@@ -649,28 +649,10 @@ class ProductionPDFGenerator:
                 if bom_materials and len(bom_materials) > 0:
                     import os
                     
-                    # Filter to show only COC-required materials
-                    COC_REQUIRED_MATERIALS = [
-                        'Solar Cell', 'FRONT GLASS', 'BACK GLASS', 'RIBBON',
-                        'Ribbon(BUSBAR)', 'EPE FRONT', 'EPE',
-                        'Aluminium Frame SHORT', 'Aluminium Frame LONG',
-                        'SEALENT', 'JB Potting A', 'JB Potting B', 'JUNCTION BOX'
-                    ]
-                    
-                    # Process only COC-required BOM materials
+                    # Process all BOM materials
                     processed_materials = []
                     for bom in bom_materials:
                         material_name = bom.get('materialName', bom.get('material_name', 'N/A'))
-                        
-                        # Check if this material is in COC-required list
-                        is_coc_required = any(
-                            material_name.upper().find(req.upper()) >= 0 or req.upper().find(material_name.upper()) >= 0
-                            for req in COC_REQUIRED_MATERIALS
-                        )
-                        
-                        if not is_coc_required:
-                            continue  # Skip non-COC materials
-                        
                         material_company = bom.get('company', '-')
                         material_lot = bom.get('lotNumber', bom.get('lot_number', '-'))
                         image_path = bom.get('imagePath', bom.get('image_path'))
