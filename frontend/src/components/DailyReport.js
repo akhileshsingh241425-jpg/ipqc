@@ -4097,17 +4097,31 @@ function DailyReport() {
             });
           }
         });
+        // Materials that require COC documents
+        const COC_REQUIRED_MATERIALS = [
+          'Solar Cell',
+          'FRONT GLASS',
+          'BACK GLASS',
+          'RIBBON',
+          'Ribbon(BUSBAR)',
+          'EPE FRONT',
+          'EPE',
+          'Aluminium Frame SHORT',
+          'Aluminium Frame LONG',
+          'SEALENT',
+          'JB Potting A',
+          'JB Potting B',
+          'JUNCTION BOX'
+        ];
+        
         const consolidatedBom = Object.values(consolidatedBomMap)
           .filter(bm => {
-            // Hide EVA Front and EVA Back materials
             const materialName = bm.materialName;
-            if (materialName === 'EVA Front' || materialName === 'EVA Back' || materialName === 'EVA') {
-              return false;
-            }
             
-            // Show all materials (don't filter by upload status)
-            // This ensures materials are visible even if not fully uploaded
-            return true;
+            // Only show materials that require COC
+            return COC_REQUIRED_MATERIALS.some(cocMaterial => 
+              materialName.includes(cocMaterial) || cocMaterial.includes(materialName)
+            );
           });
         
         return (
