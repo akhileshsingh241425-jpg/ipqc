@@ -303,11 +303,21 @@ class ProductionPDFGenerator:
             'Specification/ Model\nno', 'Lot / Batch\nNo.', 'Remarks, if any'
         ]]
         
+        # Debug: Print all materials received for this date-shift
+        print(f"\n=== BOM Materials for {date} - {shift} ===")
+        print(f"Total materials received: {len(materials_data)}")
+        for mat in materials_data:
+            mat_name = mat.get('materialName', mat.get('material_name', 'N/A'))
+            print(f"  - Material: {mat_name}")
+        
         # Filter materials to only show allowed BOM items
         filtered_materials = [
             mat for mat in materials_data 
             if mat.get('materialName', mat.get('material_name', '')) in self.ALLOWED_BOM_ITEMS
         ]
+        
+        print(f"Filtered materials (matching ALLOWED_BOM_ITEMS): {len(filtered_materials)}")
+        print(f"=== End Debug ===\n")
         
         # Display filtered materials for this date and shift
         for idx, mat in enumerate(filtered_materials, 1):
