@@ -323,27 +323,31 @@ class ProductionPDFGenerator:
             # Use lot_batch_no instead of lot_number (which contains COC invoice number)
             lot = mat.get('lotBatchNo', mat.get('lot_batch_no', ''))
             
-            # Image link handling
+            # Image link handling - Create web URL for server access
             image_path = mat.get('imagePath', mat.get('image_path', ''))
             if image_path:
-                # Create proper absolute file path
-                backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                # Convert local path to web URL
+                # Example: uploads/bom_materials/file.jpg -> https://your-domain.com/uploads/bom_materials/file.jpg
                 
-                # Handle both relative and absolute paths
-                if not os.path.isabs(image_path):
-                    full_path = os.path.join(backend_dir, image_path)
+                # Remove 'uploads/' prefix if present
+                if image_path.startswith('uploads/'):
+                    web_path = image_path
+                elif image_path.startswith('/'):
+                    web_path = image_path.lstrip('/')
                 else:
-                    full_path = image_path
+                    web_path = image_path
                 
-                # Convert to proper file URL format for Windows
-                # Replace backslashes with forward slashes and encode spaces
-                full_path = full_path.replace('\\', '/')
+                # Create web URL (adjust domain as needed)
+                # For local testing: http://localhost:5000/uploads/...
+                # For production: https://your-domain.com/uploads/...
+                base_url = "http://103.108.220.227"  # Your server IP
+                image_url = f"{base_url}/{web_path}"
                 
                 # Create clickable hyperlink
-                remarks = f'<link href="file:///{full_path}" color="blue"><u>View Image</u></link>'
+                remarks = f'<link href="{image_url}" color="blue"><u>View Image</u></link>'
                 
-                # Debug: Print the path to console
-                print(f"Image link created: file:///{full_path}")
+                # Debug: Print the URL to console
+                print(f"Image URL created: {image_url}")
             else:
                 remarks = ''
             
@@ -352,15 +356,21 @@ class ProductionPDFGenerator:
                 material_name,
                 supplier,
                 spec,
-                lot,
+                Paragraph(lot, self.styles['Normal']) if lot else '',
                 Paragraph(remarks, self.styles['Normal']) if remarks else ''
             ])
+        
+        # Add empty rows to make total 14 rows (for all allowed materials)
+        # Even if data is not uploaded for some materials
+        current_row_count = len(filtered_materials)
+        for i in range(current_row_count, 14):
+            bom_table_data.append(['', '', '', '', '', ''])
         
         # Add footer row
         bom_table_data.append(['', 'Checked by:', '', '', 'Reviewed by:', ''])
         
-        # Create table with proper column widths
-        bom_table = Table(bom_table_data, colWidths=[15*mm, 50*mm, 35*mm, 35*mm, 28*mm, 27*mm])
+        # Create table with proper column widths (increased lot/batch column)
+        bom_table = Table(bom_table_data, colWidths=[12*mm, 48*mm, 32*mm, 30*mm, 38*mm, 30*mm])
         bom_table.setStyle(TableStyle([
             # Header row - NO background color, just border
             ('BACKGROUND', (0, 0), (-1, 0), colors.white),
