@@ -14,24 +14,6 @@ class ProductionPDFGenerator:
     Format: BOM Verification Check Sheet (IPQC)
     """
     
-    # 14 BOM Items as per Gautam Solar format
-    BOM_ITEMS = [
-        "Solar Cell",
-        "Flux",
-        "Ribbon",
-        "Interconnector / Bus-bar",
-        "Glass-Front",
-        "Encapsulant Front (EVA/EPE)",
-        "Encapsulant Back (EVA/EPE)",
-        "Glass-Back",
-        "Frame",
-        "Junction Box",
-        "Potting JB Sealant (A-B)",
-        "Frame & JB Sealant",
-        "RFID",
-        "Nameplate (Back Label)"
-    ]
-    
     def __init__(self):
         self.styles = getSampleStyleSheet()
         self._create_custom_styles()
@@ -90,7 +72,71 @@ class ProductionPDFGenerator:
         start_date = report_data.get('start_date', '')
         end_date = report_data.get('end_date', '')
         
-        # ========== REJECTION ANALYSIS (First Page) ==========
+        # ========== PRODUCTION SUMMARY TABLE ==========
+        story.append(Paragraph("PRODUCTION SUMMARY", self.styles['HeaderTitle']))
+        story.append(Paragraph(f"Period: {start_date} to {end_date}", self.styles['Normal']))
+        story.append(Spacer(1, 10))
+        
+        if production_records and len(production_records) > 0:
+            # Production table
+            prod_data = [['Date', 'PDI', 'Day Production', 'Night Production', 'Total', 'Wattage']]
+            
+            total_day = 0
+            total_night = 0
+            
+            for record in production_records:
+                date = record.get('date', 'N/A')
+                pdi = record.get('pdi', '-')
+                day_prod = record.get('day_production', 0)
+                night_prod = record.get('night_production', 0)
+                total = day_prod + night_prod
+                wattage = record.get('wattage', report_data.get('module_wattage', '625'))
+                
+                total_day += day_prod
+                total_night += night_prod
+                
+                prod_data.append([
+                    date,
+                    pdi,
+                    str(int(day_prod)),
+                    str(int(night_prod)),
+                    str(int(total)),
+                    f"{wattage}W"
+                ])
+            
+            # Add total row
+            prod_data.append([
+                'TOTAL',
+                '',
+                str(int(total_day)),
+                str(int(total_night)),
+                str(int(total_day + total_night)),
+                ''
+            ])
+            
+            prod_table = Table(prod_data, colWidths=[35*mm, 35*mm, 30*mm, 30*mm, 25*mm, 25*mm])
+            prod_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1976d2')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+                ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#e3f2fd')]),
+                ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#90caf9')),
+                ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+                ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                ('TOPPADDING', (0, 0), (-1, -1), 6),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ]))
+            story.append(prod_table)
+        else:
+            story.append(Paragraph("<i>No production data available</i>", self.styles['Normal']))
+        
+        story.append(Spacer(1, 15))
+        story.append(PageBreak())
+        
+        # ========== REJECTION ANALYSIS (Second Page) ==========
         story.append(Paragraph("REJECTION ANALYSIS REPORT", self.styles['HeaderTitle']))
         story.append(Paragraph(f"Period: {start_date} to {end_date}", self.styles['Normal']))
         story.append(Spacer(1, 10))
@@ -127,32 +173,33 @@ class ProductionPDFGenerator:
             story.append(Paragraph("<i>No rejections in this period</i>", self.styles['Normal']))
         
         # ========== BOM VERIFICATION SHEETS (Shift-wise, Date-wise) ==========
-        # Group production records by date
-        records_by_date = {}
+        # Collect all unique date-shift combinations from BOM materials
+        date_shift_combinations = set()
+        
         for record in production_records:
-            date = record.get('date', 'N/A')
-            if date not in records_by_date:
-                records_by_date[date] = record
-        
-        sorted_dates = sorted(records_by_date.keys())
-        
-        for date in sorted_dates:
-            record = records_by_date[date]
             bom_materials = record.get('bom_materials', [])
+            for mat in bom_materials:
+                date = record.get('date', 'N/A')
+                shift = mat.get('shift', 'day')
+                date_shift_combinations.add((date, shift))
+        
+        # Sort by date and shift
+        sorted_combinations = sorted(date_shift_combinations, key=lambda x: (x[0], x[1]))
+        
+        # Create BOM page for each date-shift combination
+        for date, shift in sorted_combinations:
+            # Find record for this date
+            record = next((r for r in production_records if r.get('date') == date), None)
+            if not record:
+                continue
             
-            # Separate by shift
-            day_materials = [m for m in bom_materials if m.get('shift', 'day') == 'day']
-            night_materials = [m for m in bom_materials if m.get('shift', 'day') == 'night']
+            # Get materials for this specific date and shift
+            bom_materials = record.get('bom_materials', [])
+            shift_materials = [m for m in bom_materials if m.get('shift', 'day') == shift]
             
-            # DAY SHIFT BOM PAGE
-            if day_materials and len(day_materials) > 0:
+            if shift_materials and len(shift_materials) > 0:
                 story.append(PageBreak())
-                story.extend(self._create_bom_page(date, 'DAY', day_materials, report_data))
-            
-            # NIGHT SHIFT BOM PAGE
-            if night_materials and len(night_materials) > 0:
-                story.append(PageBreak())
-                story.extend(self._create_bom_page(date, 'NIGHT', night_materials, report_data))
+                story.extend(self._create_bom_page(date, shift.upper(), shift_materials, report_data))
         
         # Build PDF
         doc.build(story)
@@ -163,35 +210,59 @@ class ProductionPDFGenerator:
         """Create single BOM verification page (Gautam Solar format)"""
         elements = []
         
-        # ========== HEADER SECTION ==========
-        # Company name and document info header
+        # ========== HEADER SECTION (3x3 Grid as per image) ==========
+        # Row 1: Logo | Company Name | Document No
+        # Row 2: (merge) | BOM Verification Check sheet | Issue Date  
+        # Row 3: (merge) | Type of Document: IPQC | Rev. No / Rev. Date
+        
+        # Try to load logo if exists
+        logo_path = os.path.join(os.path.dirname(__file__), '../../static/gautam_logo.png')
+        if os.path.exists(logo_path):
+            logo_img = Image(logo_path, width=40*mm, height=20*mm)
+        else:
+            logo_img = Paragraph("<b>GAUTAM<br/>SOLAR</b>", self.styles['Normal'])
+        
         header_data = [
             [
-                Paragraph("<b>Gautam Solar PVT LTD</b>", self.styles['HeaderTitle']),
-                Paragraph(f"<b>Document No:</b> GSPL/IPQC/{date.replace('-', '')}", self.styles['Normal'])
+                logo_img,
+                Paragraph("<b><font size=16>Gautam Solar PVT LTD</font></b>", self.styles['HeaderTitle']),
+                Paragraph(f"<b>Document No</b><br/><font size=9>GSPL/IPQC/005</font>", self.styles['Normal'])
             ],
             [
-                Paragraph("<b>BOM Verification Check sheet</b>", self.styles['DocType']),
-                Paragraph(f"<b>Issue Date:</b> {datetime.now().strftime('%d-%m-%Y')}", self.styles['Normal'])
+                '',
+                Paragraph("<b><font size=12>BOM Verification Check sheet</font></b>", self.styles['DocType']),
+                Paragraph(f"<b>Issue Date:</b><br/><font size=9>{date}</font>", self.styles['Normal'])
             ],
             [
+                '',
                 Paragraph("<b>Type of Document: IPQC</b>", self.styles['Normal']),
-                Paragraph(f"<b>Rev. No / Rev. Date:</b> 00", self.styles['Normal'])
+                Paragraph(f"<b>Rev. No / Rev.<br/>Date</b><br/><font size=9>00</font>", self.styles['Normal'])
             ]
         ]
         
-        header_table = Table(header_data, colWidths=[120*mm, 70*mm])
+        header_table = Table(header_data, colWidths=[40*mm, 90*mm, 60*mm])
         header_table.setStyle(TableStyle([
-            ('ALIGN', (0, 0), (0, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            # Merge logo cells vertically
+            ('SPAN', (0, 0), (0, 2)),
+            
+            # Alignment
+            ('ALIGN', (0, 0), (0, 2), 'CENTER'),
+            ('ALIGN', (1, 0), (1, -1), 'CENTER'),
+            ('ALIGN', (2, 0), (2, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
+            
+            # Borders
+            ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
             ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            
+            # Padding
             ('TOPPADDING', (0, 0), (-1, -1), 4),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ]))
         elements.append(header_table)
-        elements.append(Spacer(1, 5))
+        elements.append(Spacer(1, 3))
         
         # ========== DATE/SHIFT INFO ROW ==========
         info_data = [[
@@ -214,88 +285,95 @@ class ProductionPDFGenerator:
         elements.append(Spacer(1, 5))
         
         # ========== BOM ITEMS TABLE ==========
-        # Create material lookup dictionary
-        materials_dict = {}
-        for mat in materials_data:
-            mat_name = mat.get('materialName', mat.get('material_name', ''))
-            materials_dict[mat_name] = mat
-        
-        # Build table data with all 14 BOM items
+        # Use ACTUAL uploaded materials from database (no hardcoded list)
         bom_table_data = [[
             'Sr. No.', 'BOM Item', 'Supplier', 
-            'Specification/ Model no', 'Lot / Batch No.', 'Remarks, if any'
+            'Specification/ Model\nno', 'Lot / Batch\nNo.', 'Remarks, if any'
         ]]
         
-        for idx, bom_item in enumerate(self.BOM_ITEMS, 1):
-            # Check if this material was uploaded
-            mat = materials_dict.get(bom_item, None)
+        # Display all uploaded materials for this date and shift
+        for idx, mat in enumerate(materials_data, 1):
+            material_name = mat.get('materialName', mat.get('material_name', 'N/A'))
+            supplier = mat.get('company', '')
             
-            if mat:
-                supplier = mat.get('company', '')
-                spec = mat.get('productType', mat.get('product_type', ''))
-                lot = mat.get('lotNumber', mat.get('lot_number', ''))
+            # Try different keys for product type
+            spec = (mat.get('productType') or 
+                   mat.get('product_type') or 
+                   mat.get('specification') or 
+                   mat.get('spec') or '')
+            
+            lot = mat.get('lotNumber', mat.get('lot_number', ''))
+            
+            # Image link handling
+            image_path = mat.get('imagePath', mat.get('image_path', ''))
+            if image_path:
+                # Create proper absolute file path
+                backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
                 
-                # Image link handling
-                image_path = mat.get('imagePath', mat.get('image_path', ''))
-                if image_path:
-                    # Create clickable link
-                    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-                    full_path = os.path.join(backend_dir, image_path) if not os.path.isabs(image_path) else image_path
-                    remarks = f'<link href="file:///{full_path}" color="blue"><u>View Image</u></link>'
+                # Handle both relative and absolute paths
+                if not os.path.isabs(image_path):
+                    full_path = os.path.join(backend_dir, image_path)
                 else:
-                    remarks = ''
+                    full_path = image_path
+                
+                # Convert to proper file URL format for Windows
+                # Replace backslashes with forward slashes and encode spaces
+                full_path = full_path.replace('\\', '/')
+                
+                # Create clickable hyperlink
+                remarks = f'<link href="file:///{full_path}" color="blue"><u>View Image</u></link>'
+                
+                # Debug: Print the path to console
+                print(f"Image link created: file:///{full_path}")
             else:
-                supplier = ''
-                spec = ''
-                lot = ''
                 remarks = ''
             
             bom_table_data.append([
                 str(idx),
-                bom_item,
+                material_name,
                 supplier,
                 spec,
                 lot,
                 Paragraph(remarks, self.styles['Normal']) if remarks else ''
             ])
         
-        # Add footer rows
+        # Add footer row
         bom_table_data.append(['', 'Checked by:', '', '', 'Reviewed by:', ''])
         
-        # Create table
-        bom_table = Table(bom_table_data, colWidths=[12*mm, 45*mm, 35*mm, 35*mm, 30*mm, 33*mm])
+        # Create table with proper column widths
+        bom_table = Table(bom_table_data, colWidths=[15*mm, 50*mm, 35*mm, 35*mm, 28*mm, 27*mm])
         bom_table.setStyle(TableStyle([
-            # Header row
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            # Header row - NO background color, just border
+            ('BACKGROUND', (0, 0), (-1, 0), colors.white),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
             ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('FONTSIZE', (0, 0), (-1, 0), 9),
             
             # Data rows
-            ('ALIGN', (0, 1), (0, -1), 'CENTER'),
-            ('ALIGN', (1, 1), (-1, -1), 'LEFT'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('ALIGN', (0, 1), (0, -2), 'CENTER'),
+            ('ALIGN', (1, 1), (-1, -2), 'LEFT'),
+            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -2), 8),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             
-            # Grid
-            ('BOX', (0, 0), (-1, -1), 1, colors.black),
-            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            # Grid - stronger borders
+            ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
+            ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.black),
             
-            # Row backgrounds
-            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f0f0f0')]),
+            # NO row backgrounds - keep white
             
             # Footer row
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e0e0e0')),
             ('SPAN', (1, -1), (3, -1)),
             ('SPAN', (4, -1), (5, -1)),
+            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, -1), (-1, -1), 9),
             
             # Padding
-            ('TOPPADDING', (0, 0), (-1, -1), 5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-            ('LEFTPADDING', (0, 0), (-1, -1), 3),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
         ]))
         
         elements.append(bom_table)
