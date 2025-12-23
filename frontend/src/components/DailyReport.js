@@ -115,6 +115,7 @@ function DailyReport() {
   const [newDayRunningOrder, setNewDayRunningOrder] = useState('');
   const [showBomModal, setShowBomModal] = useState(false);
   const [selectedWattage, setSelectedWattage] = useState('625wp'); // Default wattage
+  const [selectedShift, setSelectedShift] = useState('day'); // 'day' or 'night'
   const [cocBrands, setCocBrands] = useState({}); // Available brands by material name from COC API
   const [loadingCocBrands, setLoadingCocBrands] = useState(false);
   const [showCOCModal, setShowCOCModal] = useState(false);
@@ -3470,37 +3471,85 @@ function DailyReport() {
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto'}}>
             <h3>📦 Upload BOM Materials & Documents - {selectedRecordForBom?.date}</h3>
             
-            {/* Wattage Selection */}
+            {/* Wattage and Shift Selection */}
             <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f0f0f0', borderRadius: '8px'}}>
-              <label style={{fontWeight: 'bold', marginRight: '10px', fontSize: '16px'}}>
-                ⚡ Select Module Wattage:
-              </label>
-              <select
-                value={selectedWattage}
-                onChange={(e) => {
-                  setSelectedWattage(e.target.value);
-                  // Reset BOM materials when wattage changes
-                  const newMaterials = BOM_MATERIALS_BY_WATTAGE[e.target.value] || [];
-                  const materialsData = {};
-                  newMaterials.forEach(material => {
-                    materialsData[material.name] = {
-                      lotNumber: '',
-                      company: '',
-                      image: null,
-                      existingImage: null
-                    };
-                  });
-                  setBomMaterials(materialsData);
-                }}
-                style={{padding: '8px 15px', fontSize: '15px', fontWeight: 'bold', borderRadius: '5px', border: '2px solid #1976d2'}}
-              >
-                <option value="625wp">625 Wp</option>
-                <option value="630wp">630 Wp</option>
-              </select>
+              <div style={{display: 'flex', gap: '30px', alignItems: 'center', flexWrap: 'wrap'}}>
+                {/* Wattage Selection */}
+                <div>
+                  <label style={{fontWeight: 'bold', marginRight: '10px', fontSize: '16px'}}>
+                    ⚡ Module Wattage:
+                  </label>
+                  <select
+                    value={selectedWattage}
+                    onChange={(e) => {
+                      setSelectedWattage(e.target.value);
+                      // Reset BOM materials when wattage changes
+                      const newMaterials = BOM_MATERIALS_BY_WATTAGE[e.target.value] || [];
+                      const materialsData = {};
+                      newMaterials.forEach(material => {
+                        materialsData[material.name] = {
+                          lotNumber: '',
+                          company: '',
+                          image: null,
+                          existingImage: null
+                        };
+                      });
+                      setBomMaterials(materialsData);
+                    }}
+                    style={{padding: '8px 15px', fontSize: '15px', fontWeight: 'bold', borderRadius: '5px', border: '2px solid #1976d2'}}
+                  >
+                    <option value="625wp">625 Wp</option>
+                    <option value="630wp">630 Wp</option>
+                  </select>
+                </div>
+
+                {/* Day/Night Shift Selection */}
+                <div>
+                  <label style={{fontWeight: 'bold', marginRight: '10px', fontSize: '16px'}}>
+                    🌞/🌙 Production Shift:
+                  </label>
+                  <div style={{display: 'inline-flex', gap: '10px'}}>
+                    <button
+                      onClick={() => setSelectedShift('day')}
+                      style={{
+                        padding: '8px 20px',
+                        fontSize: '15px',
+                        fontWeight: 'bold',
+                        borderRadius: '5px',
+                        border: selectedShift === 'day' ? '3px solid #FF9800' : '2px solid #ccc',
+                        backgroundColor: selectedShift === 'day' ? '#FFF3E0' : 'white',
+                        color: selectedShift === 'day' ? '#E65100' : '#666',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s'
+                      }}
+                    >
+                      🌞 Day
+                    </button>
+                    <button
+                      onClick={() => setSelectedShift('night')}
+                      style={{
+                        padding: '8px 20px',
+                        fontSize: '15px',
+                        fontWeight: 'bold',
+                        borderRadius: '5px',
+                        border: selectedShift === 'night' ? '3px solid #2196F3' : '2px solid #ccc',
+                        backgroundColor: selectedShift === 'night' ? '#E3F2FD' : 'white',
+                        color: selectedShift === 'night' ? '#0D47A1' : '#666',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s'
+                      }}
+                    >
+                      🌙 Night
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
             
             <div style={{marginBottom: '20px'}}>
-              <h4 style={{color: '#1976d2', marginBottom: '10px'}}>📋 BOM Materials</h4>
+              <h4 style={{color: '#1976d2', marginBottom: '10px'}}>
+                📋 BOM Materials for {selectedShift === 'day' ? '🌞 Day' : '🌙 Night'} Production
+              </h4>
               {loadingCocBrands && (
                 <div style={{padding: '10px', backgroundColor: '#fff3cd', borderRadius: '5px', marginBottom: '10px'}}>
                   Loading COC brands...
