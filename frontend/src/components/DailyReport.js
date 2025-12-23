@@ -4141,23 +4141,50 @@ function DailyReport() {
           }
         });
         
-        // Build display list: All 11 materials with their assigned COCs (if any)
-        const consolidatedBom = COC_MATERIALS.map(material => {
-          // Find if this material has any COC assigned
-          const assigned = Object.values(assignedCocsMap).find(bm => 
+        // Build display list: Show ALL COCs separately (multiple rows for same material)
+        const consolidatedBom = [];
+        
+        // First, collect all unique material-invoice combinations
+        const materialCocPairs = [];
+        pdiRecords.forEach(record => {
+          if (record.bomMaterials && record.bomMaterials.length > 0) {
+            record.bomMaterials.forEach(bm => {
+              if (bm.lotNumber) {
+                const key = `${bm.materialName}_${bm.lotNumber}`;
+                const exists = materialCocPairs.find(p => p.key === key);
+                if (!exists) {
+                  materialCocPairs.push({ key, ...bm });
+                }
+              }
+            });
+          }
+        });
+        
+        // Now create consolidated list showing each COC as separate row
+        COC_MATERIALS.forEach(material => {
+          // Find all COCs for this material
+          const assignedCocs = materialCocPairs.filter(bm => 
             bm.materialName === material.name || 
             bm.materialName.includes(material.name) ||
             material.name.includes(bm.materialName)
           );
           
-          return assigned || {
-            materialName: material.name,
-            unit: material.unit,
-            lotNumber: null,
-            cocQty: null,
-            invoiceQty: null,
-            imagePath: null
-          };
+          if (assignedCocs.length > 0) {
+            // Add each COC as separate row
+            assignedCocs.forEach(coc => {
+              consolidatedBom.push(coc);
+            });
+          } else {
+            // No COC assigned - show empty row
+            consolidatedBom.push({
+              materialName: material.name,
+              unit: material.unit,
+              lotNumber: null,
+              cocQty: null,
+              invoiceQty: null,
+              imagePath: null
+            });
+          }
         });
         
         return (
@@ -4346,89 +4373,54 @@ function DailyReport() {
                       </tr>
                     </thead>
                     <tbody>
-                      {(() => {
-                        // Consolidate similar materials (EVA Front+Back, Glass Front+Back, etc.)
-                        const materialGroups = {};
+                      {consolidatedBom.map((bm, idx) => {
+                        const materialLower = bm.materialName.toLowerCase();
                         
-                        consolidatedBom.forEach(bm => {
-                          const displayName = getDisplayMaterialName(bm.materialName);
-                          
-                          if (!materialGroups[displayName]) {
-                            materialGroups[displayName] = {
-                              displayName,
-                              items: [],
-                              totalCocQty: parseFloat(bm.cocQty) || 0 // Take first COC qty, don't add
-                            };
-                          }
-                          
-                          materialGroups[displayName].items.push(bm);
-                          // DON'T add COC qty here - it's already set to the first value above
-                          // COC Qty is total available from invoice, not cumulative usage
-                        });
+                        // Use edited production quantity if available
+                        const actualProduction = pdiProductionOverrides[selectedPdiForDetails] || totalProduction;
                         
-                        // Render consolidated rows
-                        return Object.values(materialGroups).map((group, idx) => {
-                          const bm = group.items[0]; // Use first item for reference
-                          const materialLower = bm.materialName.toLowerCase();
-                        
-                        console.log('Material:', bm.materialName, '| Lower:', materialLower);
-                        
+                        // Calculate used quantity based on production
                         let usedQty = 0;
                         if (materialLower.includes('cell')) {
-                          usedQty = totalProduction * 66; // 66 cells per module
-                          console.log('  → Matched: CELL');
+                          usedQty = actualProduction * 66;
                         } else if (materialLower.includes('glass')) {
-                          usedQty = totalProduction * 1; // 1 glass per module
-                          console.log('  → Matched: GLASS');
+                          usedQty = actualProduction * 1;
                         } else if (materialLower.includes('ribbon') && !materialLower.includes('bus')) {
-                          usedQty = totalProduction * 0.212; // 0.212 kg ribbon per module
-                          console.log('  → Matched: RIBBON');
+                          usedQty = actualProduction * 0.212;
                         } else if (materialLower.includes('flux')) {
-                          usedQty = totalProduction * 0.02; // 0.02 ltr per module
-                          console.log('  → Matched: FLUX');
-                        } else if (materialLower.includes('bus bar 4mm') || materialLower.includes('busbar 4mm')) {
-                          usedQty = totalProduction * 0.038; // 0.038 kg per module
-                          console.log('  → Matched: BUS BAR 4MM');
-                        } else if (materialLower.includes('bus bar 6mm') || materialLower.includes('busbar 6mm')) {
-                          usedQty = totalProduction * 0.018; // 0.018 kg per module
-                          console.log('  → Matched: BUS BAR 6MM');
+                          usedQty = actualProduction * 0.02;
+                        } else if (materialLower.includes('bus bar 4mm') || materialLower.includes('busbar 4mm') || (materialLower.includes('busbar') && materialLower.includes('4.0'))) {
+                          usedQty = actualProduction * 0.038;
+                        } else if (materialLower.includes('bus bar 6mm') || materialLower.includes('busbar 6mm') || (materialLower.includes('busbar') && materialLower.includes('6.0'))) {
+                          usedQty = actualProduction * 0.018;
                         } else if (materialLower.includes('epe')) {
-                          usedQty = totalProduction * 5.2; // 5.2 sqm per module
-                          console.log('  → Matched: EPE');
+                          usedQty = actualProduction * 5.2;
                         } else if (materialLower.includes('frame')) {
-                          usedQty = totalProduction * 1; // 1 set per module
-                          console.log('  → Matched: FRAME');
+                          usedQty = actualProduction * 1;
                         } else if (materialLower.includes('sealent') || materialLower.includes('sealant') || materialLower.includes('silicone')) {
-                          usedQty = totalProduction * 0.35; // 0.35 kg per module
-                          console.log('  → Matched: SEALENT/SILICONE');
+                          usedQty = actualProduction * 0.35;
                         } else if (materialLower.includes('potting')) {
-                          usedQty = totalProduction * 0.021; // 0.021 kg per module
-                          console.log('  → Matched: POTTING');
+                          usedQty = actualProduction * 0.021;
                         } else if (materialLower.includes('jb') || materialLower.includes('junction')) {
-                          usedQty = totalProduction * 1; // 1 junction box per module
-                          console.log('  → Matched: JUNCTION BOX');
+                          usedQty = actualProduction * 1;
                         } else {
-                          usedQty = totalProduction * 1; // Default 1 per module
-                          console.log('  → Matched: DEFAULT (1 per module)');
+                          usedQty = actualProduction * 1;
                         }
                         
-                        // Round to 2 decimal places
                         usedQty = Math.round(usedQty * 100) / 100;
                         
-                        // Check if manual override exists (use first item's key for reference)
-                        const key = `${bm.materialName}_${bm.lotNumber || 'no_invoice'}`;
-                        const finalUsedQty = manualUsedQty[key] !== undefined ? manualUsedQty[key] : usedQty;
+                        // Get total COC Qty for this material (sum of all COCs)
+                        const allCocsForMaterial = consolidatedBom.filter(item => 
+                          item.materialName === bm.materialName && item.lotNumber
+                        );
+                        const totalCocQty = allCocsForMaterial.reduce((sum, item) => 
+                          sum + (parseFloat(item.cocQty) || 0), 0
+                        );
                         
-                        const cocQty = group.totalCocQty; // Use consolidated COC quantity
-                        const gap = Math.round((cocQty - finalUsedQty) * 100) / 100;
+                        // Calculate gap: Total COCs - Used Qty
+                        const gap = Math.round((totalCocQty - usedQty) * 100) / 100;
                         
-                        // Combine invoice numbers from all items
-                        const invoiceNos = group.items
-                          .map(item => item.lotNumber)
-                          .filter(inv => inv)
-                          .join(', ');
-                        
-                        // Get specification from BOM_MATERIALS_BY_WATTAGE
+                        // Get specification
                         const getMaterialSpec = (materialName) => {
                           const wattage = selectedCompany?.wattage || '625wp';
                           const materials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
@@ -4439,117 +4431,45 @@ function DailyReport() {
                         const specification = getMaterialSpec(bm.materialName);
                         
                         return (
-                          <tr key={idx}>
+                          <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
                             <td style={{padding: '8px', border: '1px solid #dee2e6'}}>
-                              <span
-                                onClick={() => handleMaterialClick(bm.materialName)}
-                                style={{
-                                  color: '#007bff',
-                                  textDecoration: 'underline',
-                                  cursor: 'pointer',
-                                  fontWeight: '500',
-                                  fontSize: '11px'
-                                }}
-                                title="Click to select COC for this material"
-                              >
-                                {group.displayName}
-                              </span>
-                            </td>
-                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px', color: '#666'}}>
-                              {specification}
-                            </td>
-                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>{invoiceNos || '-'}</td>
-                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>{cocQty || '-'}</td>
-                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                              {editingUsedQty && editingUsedQty.materialName === bm.materialName && editingUsedQty.lotNumber === bm.lotNumber ? (
-                                <div style={{display: 'flex', gap: '4px', justifyContent: 'center', alignItems: 'center'}}>
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    value={editUsedQtyValue}
-                                    onChange={(e) => setEditUsedQtyValue(e.target.value)}
-                                    style={{
-                                      width: '80px',
-                                      padding: '4px',
-                                      border: '2px solid #007bff',
-                                      borderRadius: '3px',
-                                      fontSize: '11px'
-                                    }}
-                                    autoFocus
-                                  />
+                              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px'}}>
+                                <span style={{fontWeight: '500', fontSize: '11px'}}>
+                                  {bm.materialName}
+                                </span>
+                                {/* Show Add COC button only if gap is negative */}
+                                {gap < 0 && (
                                   <button
-                                    onClick={() => {
-                                      const key = `${bm.materialName}_${bm.lotNumber || 'no_invoice'}`;
-                                      setManualUsedQty({...manualUsedQty, [key]: parseFloat(editUsedQtyValue)});
-                                      setEditingUsedQty(null);
-                                      setEditUsedQtyValue('');
-                                    }}
+                                    onClick={() => handleMaterialClick(bm.materialName)}
                                     style={{
-                                      padding: '3px 6px',
+                                      padding: '3px 8px',
                                       background: '#28a745',
                                       color: 'white',
                                       border: 'none',
                                       borderRadius: '3px',
                                       cursor: 'pointer',
-                                      fontSize: '10px',
-                                      fontWeight: 'bold'
+                                      fontSize: '9px',
+                                      fontWeight: 'bold',
+                                      whiteSpace: 'nowrap'
                                     }}
-                                    title="Save"
+                                    title="Add COC for this material"
                                   >
-                                    ✓
+                                    + Add COC
                                   </button>
-                                  <button
-                                    onClick={() => {
-                                      setEditingUsedQty(null);
-                                      setEditUsedQtyValue('');
-                                    }}
-                                    style={{
-                                      padding: '3px 6px',
-                                      background: '#dc3545',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '3px',
-                                      cursor: 'pointer',
-                                      fontSize: '10px',
-                                      fontWeight: 'bold'
-                                    }}
-                                    title="Cancel"
-                                  >
-                                    ✕
-                                  </button>
-                                </div>
-                              ) : (
-                                <div style={{display: 'flex', gap: '5px', justifyContent: 'center', alignItems: 'center'}}>
-                                  <span>
-                                    {(() => {
-                                      const key = `${bm.materialName}_${bm.lotNumber || 'no_invoice'}`;
-                                      if (manualUsedQty[key] !== undefined) {
-                                        return manualUsedQty[key];
-                                      }
-                                      return usedQty || '-';
-                                    })()}
-                                  </span>
-                                  <button
-                                    onClick={() => {
-                                      setEditingUsedQty({materialName: bm.materialName, lotNumber: bm.lotNumber});
-                                      const key = `${bm.materialName}_${bm.lotNumber || 'no_invoice'}`;
-                                      setEditUsedQtyValue(manualUsedQty[key] !== undefined ? manualUsedQty[key] : usedQty);
-                                    }}
-                                    style={{
-                                      padding: '2px 5px',
-                                      background: '#007bff',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '3px',
-                                      cursor: 'pointer',
-                                      fontSize: '9px'
-                                    }}
-                                    title="Edit used quantity"
-                                  >
-                                    ✏️
-                                  </button>
-                                </div>
-                              )}
+                                )}
+                              </div>
+                            </td>
+                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px', color: '#666'}}>
+                              {specification}
+                            </td>
+                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
+                              {bm.lotNumber || '-'}
+                            </td>
+                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>
+                              {bm.cocQty || '-'}
+                            </td>
+                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
+                              {usedQty || '-'}
                             </td>
                             <td style={{
                               padding: '8px', 
@@ -4563,13 +4483,11 @@ function DailyReport() {
                             <td style={{
                               padding: '8px', 
                               border: '1px solid #dee2e6',
-                              fontSize: '10px',
-                              backgroundColor: bm.usedInPdis && bm.usedInPdis.length > 1 ? '#fff3cd' : 'transparent'
+                              fontSize: '10px'
                             }}>
                               {bm.usedInPdis && bm.usedInPdis.length > 0 ? (
                                 <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
                                   {bm.usedInPdis.map((pdiWithCompany, pdiIdx) => {
-                                    // Extract PDI number from "PDI-1 (Company Name)" format
                                     const pdiMatch = pdiWithCompany.match(/^([^\(]+)/);
                                     const pdi = pdiMatch ? pdiMatch[1].trim() : pdiWithCompany;
                                     const isCurrentPdi = pdi === selectedPdiForDetails;
@@ -4585,10 +4503,8 @@ function DailyReport() {
                                           fontSize: '9px',
                                           fontWeight: '500',
                                           whiteSpace: 'nowrap',
-                                          display: 'inline-block',
-                                          textAlign: 'left'
+                                          display: 'inline-block'
                                         }}
-                                        title={isCurrentPdi ? 'Current PDI' : 'Also used in this PDI'}
                                       >
                                         {pdiWithCompany}
                                       </span>
@@ -4600,25 +4516,47 @@ function DailyReport() {
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
                               {bm.imagePath ? (
                                 <button
-                                  onClick={() => window.open(window.location.hostname === 'localhost' ? `http://localhost:5003${bm.imagePath}` : bm.imagePath, '_blank')}
-                                  style={{padding: '3px 6px', background: '#007bff', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '10px'}}
+                                  onClick={() => {
+                                    const API_BASE_URL = getAPIBaseURL();
+                                    window.open(`${API_BASE_URL}/${bm.imagePath}`, '_blank');
+                                  }}
+                                  style={{
+                                    padding: '3px 8px',
+                                    background: '#17a2b8',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    fontSize: '10px'
+                                  }}
                                 >
-                                  📷 View
+                                  📄 View
                                 </button>
                               ) : '-'}
                             </td>
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                              <button
-                                onClick={() => handleDeleteBomMaterial({...group, lotNumber: bm.lotNumber})}
-                                style={{padding: '3px 6px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '10px', fontWeight: 'bold'}}
-                                title="Unassign this COC from PDI"
-                              >
-                                ✖️ Unassign
-                              </button>
+                              {bm.lotNumber && (
+                                <button
+                                  onClick={() => handleDeleteBomMaterial(bm)}
+                                  style={{
+                                    padding: '3px 8px',
+                                    background: '#dc3545',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '3px',
+                                    cursor: 'pointer',
+                                    fontSize: '10px',
+                                    fontWeight: 'bold'
+                                  }}
+                                  title="Unassign this COC from PDI"
+                                >
+                                  ✖️
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
-                      })})()}
+                      })}
                     </tbody>
                   </table>
                 </div>
