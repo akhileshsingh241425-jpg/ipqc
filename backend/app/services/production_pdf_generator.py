@@ -77,10 +77,10 @@ class ProductionPDFGenerator:
         doc = SimpleDocTemplate(
             buffer,
             pagesize=landscape(A4),  # Landscape for better spacing
-            rightMargin=10*mm,
-            leftMargin=10*mm,
-            topMargin=10*mm,
-            bottomMargin=10*mm
+            rightMargin=5*mm,  # Reduced for full page usage
+            leftMargin=5*mm,
+            topMargin=5*mm,
+            bottomMargin=5*mm
         )
         
         story = []
@@ -132,20 +132,20 @@ class ProductionPDFGenerator:
                 ''
             ])
             
-            prod_table = Table(prod_data, colWidths=[35*mm, 35*mm, 30*mm, 30*mm, 25*mm, 25*mm])
+            prod_table = Table(prod_data, colWidths=[45*mm, 45*mm, 40*mm, 40*mm, 35*mm, 35*mm])
             prod_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1976d2')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),  # Increased for readability
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#e3f2fd')]),
                 ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#90caf9')),
                 ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ]))
             story.append(prod_table)
         else:
@@ -171,18 +171,18 @@ class ProductionPDFGenerator:
                     rej.get('stage', 'N/A')
                 ])
             
-            rejection_table = Table(rejection_data, colWidths=[30*mm, 50*mm, 70*mm, 40*mm])
+            rejection_table = Table(rejection_data, colWidths=[40*mm, 70*mm, 100*mm, 50*mm])
             rejection_table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#d32f2f')),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
                 ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
                 ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#ffebee')]),
                 ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                ('TOPPADDING', (0, 0), (-1, -1), 6),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                ('TOPPADDING', (0, 0), (-1, -1), 5),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
             ]))
             story.append(rejection_table)
             story.append(Spacer(1, 10))
@@ -252,7 +252,7 @@ class ProductionPDFGenerator:
             ]
         ]
         
-        header_table = Table(header_data, colWidths=[40*mm, 90*mm, 60*mm])
+        header_table = Table(header_data, colWidths=[50*mm, 130*mm, 70*mm])
         header_table.setStyle(TableStyle([
             # Merge logo cells vertically
             ('SPAN', (0, 0), (0, 2)),
@@ -284,7 +284,7 @@ class ProductionPDFGenerator:
             Paragraph(f"<b>PO No.:</b>", self.styles['Normal'])
         ]]
         
-        info_table = Table(info_data, colWidths=[47.5*mm, 47.5*mm, 47.5*mm, 47.5*mm])
+        info_table = Table(info_data, colWidths=[62.5*mm, 62.5*mm, 62.5*mm, 62.5*mm])
         info_table.setStyle(TableStyle([
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
@@ -379,8 +379,8 @@ class ProductionPDFGenerator:
         # Add footer row
         bom_table_data.append(['', 'Checked by:', '', '', 'Reviewed by:', ''])
         
-        # Create table with proper column widths (increased lot/batch column)
-        bom_table = Table(bom_table_data, colWidths=[12*mm, 48*mm, 32*mm, 30*mm, 38*mm, 30*mm])
+        # Create table with proper column widths (increased for full page)
+        bom_table = Table(bom_table_data, colWidths=[15*mm, 60*mm, 42*mm, 38*mm, 50*mm, 45*mm])
         bom_table.setStyle(TableStyle([
             # Header row - NO background color, just border
             ('BACKGROUND', (0, 0), (-1, 0), colors.white),
@@ -408,11 +408,11 @@ class ProductionPDFGenerator:
             ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, -1), (-1, -1), 9),
             
-            # Padding
-            ('TOPPADDING', (0, 0), (-1, -1), 6),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-            ('LEFTPADDING', (0, 0), (-1, -1), 4),
-            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            # Padding - reduced for compact layout
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
         ]))
         
         elements.append(bom_table)
