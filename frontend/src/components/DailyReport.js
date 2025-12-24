@@ -979,24 +979,23 @@ function DailyReport() {
   };
 
   // Fetch unique supplier names for dropdown
-  const fetchBomSuppliers = async () => {
+  const fetchBomSuppliers = async (materialName = '') => {
     try {
       setLoadingSuppliers(true);
       const API_BASE = getAPIBase();
-      const response = await axios.get(`${API_BASE.replace('/api', '')}/api/bom-suppliers`);
-      setBomSuppliers(response.data.suppliers || []);
+      const params = materialName ? `?material=${encodeURIComponent(materialName)}` : '';
+      const response = await axios.get(`${API_BASE.replace('/api', '')}/api/bom-suppliers${params}`);
+      return response.data.suppliers || [];
     } catch (error) {
       console.error('Failed to fetch suppliers:', error);
+      return [];
     } finally {
       setLoadingSuppliers(false);
     }
   };
 
-  const handleOpenBomModal = (record) => {
+  const handleOpenBomModal = async (record) => {
     setSelectedRecordForBom(record);
-    
-    // Fetch suppliers list
-    fetchBomSuppliers();
     
     // Get wattage from company data or default
     const wattage = selectedCompany?.wattage || '625wp';
@@ -1008,6 +1007,28 @@ function DailyReport() {
     
     currentMaterials.forEach(material => {
       materialsData[material.name] = {
+        lotBatchNo: '',
+        company: '',
+        images: [],
+        suppliers: [] // Material-specific suppliers
+      };
+    });
+    
+    setBomMaterials(materialsData);
+    setShowBomModal(true);
+    
+    // Fetch suppliers for each material in background
+    currentMaterials.forEach(async (material) => {
+      const suppliers = await fetchBomSuppliers(material.name);
+      setBomMaterials(prev => ({
+        ...prev,
+        [material.name]: {
+          ...prev[material.name],
+          suppliers: suppliers
+        }
+      }));
+    });
+  };
         lotBatchNo: '',
         company: '',
         images: []
@@ -3674,7 +3695,7 @@ function DailyReport() {
                         style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #1976d2'}}
                       >
                         <option value="">Select Supplier/Company</option>
-                        {bomSuppliers.map((supplier, idx) => (
+                        {(bomMaterials[material.name]?.suppliers || []).map((supplier, idx) => (
                           <option key={idx} value={supplier}>{supplier}</option>
                         ))}
                         <option value="__ADD_NEW__" style={{fontWeight: 'bold', color: '#1976d2'}}>+ Add New Supplier</option>

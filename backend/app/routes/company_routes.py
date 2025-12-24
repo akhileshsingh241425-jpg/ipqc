@@ -37,6 +37,9 @@ def get_bom_suppliers():
         import requests
         from datetime import datetime, timedelta
         
+        # Get material name filter from query params
+        material_filter = request.args.get('material', '').lower()
+        
         # Fetch COC data from API to get company names
         COC_API_URL = 'https://umanmrp.in/api/coc_api.php'
         
@@ -67,10 +70,34 @@ def get_bom_suppliers():
             else:
                 coc_documents = []
             
-            # Collect company names
+            # Collect company names filtered by material specification
             for doc in coc_documents:
                 if isinstance(doc, dict) and doc.get('company_name'):
-                    company_names.add(doc['company_name'])
+                    spec = doc.get('specification', '').lower()
+                    
+                    # Filter by material type if provided
+                    if material_filter:
+                        # Check if specification matches material
+                        if material_filter in spec or spec in material_filter:
+                            company_names.add(doc['company_name'])
+                        # Special cases for common materials
+                        elif 'cell' in material_filter and 'cell' in spec:
+                            company_names.add(doc['company_name'])
+                        elif 'glass' in material_filter and 'glass' in spec:
+                            company_names.add(doc['company_name'])
+                        elif 'ribbon' in material_filter and 'ribbon' in spec:
+                            company_names.add(doc['company_name'])
+                        elif 'eva' in material_filter and 'eva' in spec:
+                            company_names.add(doc['company_name'])
+                        elif 'flux' in material_filter and 'flux' in spec:
+                            company_names.add(doc['company_name'])
+                        elif 'bus' in material_filter and 'bus' in spec:
+                            company_names.add(doc['company_name'])
+                        elif 'frame' in material_filter and 'frame' in spec:
+                            company_names.add(doc['company_name'])
+                    else:
+                        # No filter - add all
+                        company_names.add(doc['company_name'])
             
             # Sort alphabetically
             suppliers = sorted(list(company_names))
