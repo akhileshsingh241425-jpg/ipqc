@@ -382,8 +382,8 @@ class ProductionPDFGenerator:
         
         # Create table with optimized column widths for full landscape page
         # Total width: ~280mm (A4 landscape usable width)
-        # Sr.No: 12mm, BOM Item: 45mm, Supplier: 62mm, Spec: 32mm, Lot/Batch: 65mm, Remarks: 64mm
-        bom_table = Table(bom_table_data, colWidths=[12*mm, 45*mm, 62*mm, 32*mm, 65*mm, 64*mm])
+        # Sr.No: 12mm, BOM Item: 50mm, Supplier: 70mm, Spec: 35mm, Lot/Batch: 75mm, Remarks: 38mm
+        bom_table = Table(bom_table_data, colWidths=[12*mm, 50*mm, 70*mm, 35*mm, 75*mm, 38*mm])
         bom_table.setStyle(TableStyle([
             # Header row - NO background color, just border
             ('BACKGROUND', (0, 0), (-1, 0), colors.white),
