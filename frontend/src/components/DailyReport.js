@@ -1074,35 +1074,54 @@ function DailyReport() {
 
   // Handle deleting BOM material from PDI
   const handleDeleteBomMaterial = async (materialGroup) => {
-    // If it's a group with multiple items (e.g., EVA Front+Back), show all
-    const itemsList = materialGroup.items || [materialGroup];
-    const materialNames = itemsList.map(item => item.materialName).join(' + ');
+    // This handles COC unlinking (not BOM material deletion)
+    const materialName = materialGroup.materialName;
+    const invoiceNo = materialGroup.lotNumber; // lotNumber is actually invoiceNo in COC context
     
-    if (!window.confirm(`Are you sure you want to unassign COC from ${materialNames} (${materialGroup.lotNumber || 'no invoice'})?`)) {
+    if (!window.confirm(`Are you sure you want to unlink COC?\n\nMaterial: ${materialName}\nInvoice: ${invoiceNo}`)) {
       return;
     }
 
     try {
       const API_BASE_URL = getAPIBaseURL();
       
-      // Unassign COC from all items in the group
-      for (const item of itemsList) {
-        await axios.post(`${API_BASE_URL}/api/pdi/delete-bom-material`, {
-          pdi: selectedPdiForDetails,
-          companyName: selectedCompany.companyName,
-          materialName: item.materialName,
-          lotNumber: item.lotNumber || ''
-        });
+      // Get all production records for this PDI
+      const pdiRecords = selectedCompany.productionRecords.filter(
+        r => r.pdi === selectedPdiForDetails
+      );
+
+      let removedCount = 0;
+
+      // Remove COC from each production record's cocMaterials
+      for (const record of pdiRecords) {
+        const existingCocMaterials = record.cocMaterials || [];
+        
+        // Filter out the COC we want to remove
+        const updatedCocMaterials = existingCocMaterials.filter(
+          cm => !(cm.materialName === materialName && cm.invoiceNo === invoiceNo)
+        );
+
+        // Only update if something was removed
+        if (updatedCocMaterials.length < existingCocMaterials.length) {
+          await companyService.updateProductionRecord(selectedCompany.id, record.id, {
+            cocMaterials: updatedCocMaterials
+          });
+          removedCount++;
+        }
       }
 
-      alert('✅ COC unassigned successfully!');
-      // Refresh data and update modal with fresh company data
+      if (removedCount > 0) {
+        alert(`✅ COC unlinked successfully from ${removedCount} production record(s)!`);
+      } else {
+        alert('⚠️ COC was not found in any production records.');
+      }
+
+      // Refresh data
       await loadCompanies();
       await refreshSelectedCompany();
-      // Don't close modal - let user see the updated list
     } catch (error) {
-      console.error('Error deleting BOM material:', error);
-      alert('❌ Error deleting BOM material: ' + (error.response?.data?.error || error.message));
+      console.error('Error unlinking COC:', error);
+      alert('❌ Error unlinking COC: ' + (error.response?.data?.error || error.message));
     }
   };
 
