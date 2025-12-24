@@ -1138,68 +1138,66 @@ function DailyReport() {
         }
       }
       
-      // Step 2: Find all BOM materials for this PDI across all dates
+      // Step 2: Find all production records for this PDI
       const pdiRecords = selectedCompany.productionRecords.filter(
         r => r.pdi === selectedPdiForDetails
       );
 
-      // Step 3: Add COC to material (support multiple COCs per material)
-      for (const record of pdiRecords) {
-        let bomMaterialFound = false;
-        
-        // Check if material already exists with this invoice
-        const existingWithSameInvoice = record.bomMaterials.find(
-          bm => bm.materialName === selectedMaterial && bm.lotNumber === cocItem.invoice_no
-        );
-        
-        if (existingWithSameInvoice) {
-          alert('⚠️ This COC is already assigned to this material!');
-          setLoading(false);
-          return;
-        }
-        
-        // Check if material exists (to add another COC)
-        const materialExists = record.bomMaterials.some(bm => bm.materialName === selectedMaterial);
-        
-        let updatedBomMaterials;
-        
-        if (materialExists) {
-          // Add another COC for the same material
-          const newCocEntry = {
-            materialName: selectedMaterial,
-            lotNumber: cocItem.invoice_no,
-            cocQty: cocItem.coc_qty,
-            invoiceQty: cocItem.invoice_qty,
-            lotBatchNo: cocItem.lot_batch_no,
-            imagePath: imagePath,
-            company: '', // Will be filled from first entry
-            uploadedAt: new Date().toISOString()
-          };
-          updatedBomMaterials = [...record.bomMaterials, newCocEntry];
-          console.log('✅ Added additional COC for material:', selectedMaterial);
-        } else {
-          // First COC for this material
-          updatedBomMaterials = [...record.bomMaterials, {
-            materialName: selectedMaterial,
-            lotNumber: cocItem.invoice_no,
-            cocQty: cocItem.coc_qty,
-            invoiceQty: cocItem.invoice_qty,
-            lotBatchNo: cocItem.lot_batch_no,
-            imagePath: imagePath,
-            company: '',
-            uploadedAt: new Date().toISOString()
-          }];
-          console.log('✅ Added first COC for material:', selectedMaterial);
-        }
-        
-        console.log('Updated BOM Materials Array:', JSON.stringify(updatedBomMaterials, null, 2));
-        
-        await companyService.updateProductionRecord(selectedCompany.id, record.id, {
-          bomMaterials: updatedBomMaterials
-        });
+      if (pdiRecords.length === 0) {
+        alert('❌ No production records found for this PDI!');
+        setLoading(false);
+        return;
       }
 
-      alert(`✅ COC assigned to ${selectedMaterial}: Invoice ${cocItem.invoice_no}${imagePath ? ' (PDF saved)' : ''}`);
+      // Step 3: Assign COC to each production record (both Day and Night shifts)
+      let assignedCount = 0;
+      
+      for (const record of pdiRecords) {
+        // Create COC entries for both Day and Night shifts
+        const shifts = ['day', 'night'];
+        
+        for (const shift of shifts) {
+          // Check if this COC is already assigned to this material+shift
+          const existing = record.bomMaterials?.find(
+            bm => bm.materialName === selectedMaterial && 
+                  bm.shift === shift &&
+                  bm.lotBatchNo === (cocItem.lot_batch_no || cocItem.invoice_no)
+          );
+          
+          if (existing) {
+            console.log(`⚠️ COC already assigned to ${selectedMaterial} (${shift} shift)`);
+            continue; // Skip this shift
+          }
+
+          // Create new BOM material entry with COC data
+          const formData = new FormData();
+          formData.append('materialName', selectedMaterial);  // Match backend field name
+          formData.append('shift', shift);
+          formData.append('company', cocItem.company_name || '');
+          formData.append('lotBatchNo', cocItem.lot_batch_no || cocItem.invoice_no);  // Match backend field name
+
+          // Upload to backend
+          await axios.post(
+            `${API_BASE_URL}/api/companies/${selectedCompany.id}/production/${record.id}/bom-material`,
+            formData,
+            {
+              headers: {
+                'Content-Type': 'multipart/form-data'
+              }
+            }
+          );
+          
+          assignedCount++;
+          console.log(`✅ COC assigned to ${selectedMaterial} (${shift} shift) on ${record.date}`);
+        }
+      }
+
+      if (assignedCount === 0) {
+        alert('⚠️ This COC is already assigned to all shifts!');
+      } else {
+        alert(`✅ COC assigned successfully!\n\nMaterial: ${selectedMaterial}\nInvoice: ${cocItem.invoice_no}\nLot/Batch: ${cocItem.lot_batch_no || 'N/A'}\nAssigned to: ${assignedCount} shift(s) across ${pdiRecords.length} date(s)`);
+      }
+      
       setShowMaterialCocModal(false);
       
       // Refresh company data
