@@ -124,6 +124,8 @@ function DailyReport() {
   const [bomMaterials, setBomMaterials] = useState({});
   const [ipqcPdf, setIpqcPdf] = useState(null);
   const [ftrDocument, setFtrDocument] = useState(null);
+  const [bomSuppliers, setBomSuppliers] = useState([]); // List of unique supplier names
+  const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [pdiFilter, setPdiFilter] = useState('all'); // 'all', 'done', 'pending'
   const [showCocUploadModal, setShowCocUploadModal] = useState(false);
   const [selectedPdiRecords, setSelectedPdiRecords] = useState([]);
@@ -976,8 +978,25 @@ function DailyReport() {
     }
   };
 
+  // Fetch unique supplier names for dropdown
+  const fetchBomSuppliers = async () => {
+    try {
+      setLoadingSuppliers(true);
+      const API_BASE = getAPIBase();
+      const response = await axios.get(`${API_BASE.replace('/api', '')}/api/bom-suppliers`);
+      setBomSuppliers(response.data.suppliers || []);
+    } catch (error) {
+      console.error('Failed to fetch suppliers:', error);
+    } finally {
+      setLoadingSuppliers(false);
+    }
+  };
+
   const handleOpenBomModal = (record) => {
     setSelectedRecordForBom(record);
+    
+    // Fetch suppliers list
+    fetchBomSuppliers();
     
     // Get wattage from company data or default
     const wattage = selectedCompany?.wattage || '625wp';
@@ -3601,14 +3620,20 @@ function DailyReport() {
                       <span style={{fontSize: '11px', color: '#1976d2', display: 'block'}}>Qty: {material.qty}</span>
                     </label>
                     
-                    {/* Company/Supplier Name - Text Input */}
+                    {/* Company/Supplier Name - Dropdown with text input option */}
                     <input
+                      list={`suppliers-${material.name}`}
                       type="text"
                       placeholder="Supplier/Company Name"
                       value={bomMaterials[material.name]?.company || ''}
                       onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
-                      style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #ccc'}}
+                      style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #1976d2'}}
                     />
+                    <datalist id={`suppliers-${material.name}`}>
+                      {bomSuppliers.map((supplier, idx) => (
+                        <option key={idx} value={supplier} />
+                      ))}
+                    </datalist>
                     
                     {/* Lot/Batch Number */}
                     <input

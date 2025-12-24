@@ -30,6 +30,23 @@ def get_companies():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# Get unique supplier/company names from BOM materials
+@company_bp.route('/api/bom-suppliers', methods=['GET'])
+def get_bom_suppliers():
+    try:
+        # Get unique company names from bom_materials table
+        result = db.session.query(BomMaterial.company).filter(
+            BomMaterial.company.isnot(None),
+            BomMaterial.company != ''
+        ).distinct().all()
+        
+        # Convert to list of strings
+        suppliers = sorted([r[0] for r in result if r[0]])
+        
+        return jsonify({'suppliers': suppliers}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 # Get single company
 @company_bp.route('/api/companies/<int:company_id>', methods=['GET'])
 def get_company(company_id):
