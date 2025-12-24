@@ -1015,6 +1015,8 @@ function DailyReport() {
     });
     
     setBomMaterials(materialsData);
+    setIpqcPdf(null);
+    setFtrDocument(null);
     setShowBomModal(true);
     
     // Fetch suppliers for each material in background
@@ -1029,15 +1031,6 @@ function DailyReport() {
       }));
     });
   };
-        lotBatchNo: '',
-        company: '',
-        images: []
-      };
-    });
-    
-    setBomMaterials(materialsData);
-    setIpqcPdf(null);
-    setFtrDocument(null);
     setShowBomModal(true);
   };
 
