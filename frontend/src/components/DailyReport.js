@@ -979,24 +979,19 @@ function DailyReport() {
   const handleOpenBomModal = (record) => {
     setSelectedRecordForBom(record);
     
-    // Fetch COC brands when opening modal
-    fetchCOCBrands();
-    
     // Get wattage from company data or default
     const wattage = selectedCompany?.wattage || '625wp';
     setSelectedWattage(wattage);
     
-    // Initialize bomMaterials state with existing data
+    // Initialize FRESH empty bomMaterials state - NO pre-filling
     const currentMaterials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
     const materialsData = {};
     
     currentMaterials.forEach(material => {
-      const existing = record.bomMaterials?.find(bm => bm.materialName === material.name);
       materialsData[material.name] = {
-        lotNumber: existing?.lotNumber || '',
-        company: existing?.company || '',
-        image: null,
-        existingImage: existing?.imagePath || null
+        lotBatchNo: '',
+        company: '',
+        images: []
       };
     });
     
