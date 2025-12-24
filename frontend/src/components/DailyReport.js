@@ -3620,20 +3620,47 @@ function DailyReport() {
                       <span style={{fontSize: '11px', color: '#1976d2', display: 'block'}}>Qty: {material.qty}</span>
                     </label>
                     
-                    {/* Company/Supplier Name - Dropdown with text input option */}
-                    <input
-                      list={`suppliers-${material.name}`}
-                      type="text"
-                      placeholder="Supplier/Company Name"
-                      value={bomMaterials[material.name]?.company || ''}
-                      onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
-                      style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #1976d2'}}
-                    />
-                    <datalist id={`suppliers-${material.name}`}>
-                      {bomSuppliers.map((supplier, idx) => (
-                        <option key={idx} value={supplier} />
-                      ))}
-                    </datalist>
+                    {/* Company/Supplier Name - Proper Dropdown */}
+                    {bomMaterials[material.name]?.showCustomCompany ? (
+                      <div style={{display: 'flex', gap: '5px'}}>
+                        <input
+                          type="text"
+                          placeholder="Enter new supplier name"
+                          value={bomMaterials[material.name]?.company || ''}
+                          onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
+                          style={{flex: 1, padding: '5px', border: '1px solid #1976d2'}}
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => {
+                            const current = bomMaterials[material.name] || {};
+                            handleBomMaterialChange(material.name, 'showCustomCompany', false);
+                          }}
+                          style={{padding: '5px 10px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <select
+                        value={bomMaterials[material.name]?.company || ''}
+                        onChange={(e) => {
+                          if (e.target.value === '__ADD_NEW__') {
+                            handleBomMaterialChange(material.name, 'showCustomCompany', true);
+                            handleBomMaterialChange(material.name, 'company', '');
+                          } else {
+                            handleBomMaterialChange(material.name, 'company', e.target.value);
+                          }
+                        }}
+                        style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #1976d2'}}
+                      >
+                        <option value="">Select Supplier/Company</option>
+                        {bomSuppliers.map((supplier, idx) => (
+                          <option key={idx} value={supplier}>{supplier}</option>
+                        ))}
+                        <option value="__ADD_NEW__" style={{fontWeight: 'bold', color: '#1976d2'}}>+ Add New Supplier</option>
+                      </select>
+                    )}
                     
                     {/* Lot/Batch Number */}
                     <input
