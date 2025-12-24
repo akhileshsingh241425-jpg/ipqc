@@ -1031,8 +1031,6 @@ function DailyReport() {
       }));
     });
   };
-    setShowBomModal(true);
-  };
 
   const handleBomMaterialChange = (materialName, field, value) => {
     setBomMaterials(prev => {
