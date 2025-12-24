@@ -1149,53 +1149,55 @@ function DailyReport() {
         return;
       }
 
-      // Step 3: Assign COC to each production record (both Day and Night shifts)
+      // Step 3: Assign COC to each production record
+      // COC linking is SEPARATE from BOM materials
+      // Saves in coc_materials JSON field, not in bom_materials table
       let assignedCount = 0;
       
       for (const record of pdiRecords) {
-        // Create COC entries for both Day and Night shifts
-        const shifts = ['day', 'night'];
+        // Get existing COC materials for this record
+        const existingCocMaterials = record.cocMaterials || [];
         
-        for (const shift of shifts) {
-          // Check if this COC is already assigned to this material+shift
-          const existing = record.bomMaterials?.find(
-            bm => bm.materialName === selectedMaterial && 
-                  bm.shift === shift &&
-                  bm.lotBatchNo === (cocItem.lot_batch_no || cocItem.invoice_no)
-          );
-          
-          if (existing) {
-            console.log(`⚠️ COC already assigned to ${selectedMaterial} (${shift} shift)`);
-            continue; // Skip this shift
-          }
-
-          // Create new BOM material entry with COC data
-          const formData = new FormData();
-          formData.append('materialName', selectedMaterial);  // Match backend field name
-          formData.append('shift', shift);
-          formData.append('company', cocItem.company_name || '');
-          formData.append('lotBatchNo', cocItem.lot_batch_no || cocItem.invoice_no);  // Match backend field name
-
-          // Upload to backend
-          await axios.post(
-            `${API_BASE_URL}/api/companies/${selectedCompany.id}/production/${record.id}/bom-material`,
-            formData,
-            {
-              headers: {
-                'Content-Type': 'multipart/form-data'
-              }
-            }
-          );
-          
-          assignedCount++;
-          console.log(`✅ COC assigned to ${selectedMaterial} (${shift} shift) on ${record.date}`);
+        // Check if this COC is already assigned to this material
+        const existing = existingCocMaterials.find(
+          cm => cm.materialName === selectedMaterial && 
+                cm.invoiceNo === cocItem.invoice_no
+        );
+        
+        if (existing) {
+          console.log(`⚠️ COC already assigned to ${selectedMaterial} on ${record.date}`);
+          continue; // Skip this record
         }
+
+        // Create new COC entry
+        const newCocEntry = {
+          materialName: selectedMaterial,
+          invoiceNo: cocItem.invoice_no,
+          lotBatchNo: cocItem.lot_batch_no || '',
+          companyName: cocItem.company_name || '',
+          cocQty: cocItem.coc_qty || 0,
+          invoiceQty: cocItem.invoice_qty || 0,
+          cocDocumentUrl: cocItem.coc_document_url || '',
+          imagePath: imagePath || '',
+          assignedAt: new Date().toISOString()
+        };
+
+        // Add to existing COC materials
+        const updatedCocMaterials = [...existingCocMaterials, newCocEntry];
+
+        // Update production record with COC materials
+        await companyService.updateProductionRecord(selectedCompany.id, record.id, {
+          cocMaterials: updatedCocMaterials
+        });
+        
+        assignedCount++;
+        console.log(`✅ COC linked to ${selectedMaterial} on ${record.date}`);
       }
 
       if (assignedCount === 0) {
-        alert('⚠️ This COC is already assigned to all shifts!');
+        alert('⚠️ This COC is already linked to all production records!');
       } else {
-        alert(`✅ COC assigned successfully!\n\nMaterial: ${selectedMaterial}\nInvoice: ${cocItem.invoice_no}\nLot/Batch: ${cocItem.lot_batch_no || 'N/A'}\nAssigned to: ${assignedCount} shift(s) across ${pdiRecords.length} date(s)`);
+        alert(`✅ COC linked successfully!\n\nMaterial: ${selectedMaterial}\nInvoice: ${cocItem.invoice_no}\nLot/Batch: ${cocItem.lot_batch_no || 'N/A'}\nLinked to: ${assignedCount} production date(s)\n\n(Saved separately for customer documentation)`);
       }
       
       setShowMaterialCocModal(false);
@@ -4181,15 +4183,24 @@ function DailyReport() {
           { name: 'JUNCTION BOX', unit: 'SETS', spec: '1200mm-' }
         ];
         
-        // Get assigned COCs from production records (if any)
+        // Get assigned COCs from production records (COC linking - separate from BOM)
         const assignedCocsMap = {};
         pdiRecords.forEach(record => {
-          if (record.bomMaterials && record.bomMaterials.length > 0) {
-            record.bomMaterials.forEach(bm => {
-              if (bm.lotNumber) {
-                const key = `${bm.materialName}_${bm.lotNumber}`;
+          // Read from cocMaterials (COC linking) not bomMaterials (daily production)
+          if (record.cocMaterials && record.cocMaterials.length > 0) {
+            record.cocMaterials.forEach(cm => {
+              if (cm.invoiceNo) {
+                const key = `${cm.materialName}_${cm.invoiceNo}`;
                 if (!assignedCocsMap[key]) {
-                  assignedCocsMap[key] = bm;
+                  assignedCocsMap[key] = {
+                    materialName: cm.materialName,
+                    lotNumber: cm.invoiceNo,
+                    lotBatchNo: cm.lotBatchNo,
+                    cocQty: cm.cocQty,
+                    invoiceQty: cm.invoiceQty,
+                    company: cm.companyName,
+                    imagePath: cm.imagePath
+                  };
                 }
               }
             });
@@ -4199,16 +4210,25 @@ function DailyReport() {
         // Build display list: Show ALL COCs separately (multiple rows for same material)
         const consolidatedBom = [];
         
-        // First, collect all unique material-invoice combinations
+        // First, collect all unique material-invoice combinations from COC linking
         const materialCocPairs = [];
         pdiRecords.forEach(record => {
-          if (record.bomMaterials && record.bomMaterials.length > 0) {
-            record.bomMaterials.forEach(bm => {
-              if (bm.lotNumber) {
-                const key = `${bm.materialName}_${bm.lotNumber}`;
+          if (record.cocMaterials && record.cocMaterials.length > 0) {
+            record.cocMaterials.forEach(cm => {
+              if (cm.invoiceNo) {
+                const key = `${cm.materialName}_${cm.invoiceNo}`;
                 const exists = materialCocPairs.find(p => p.key === key);
                 if (!exists) {
-                  materialCocPairs.push({ key, ...bm });
+                  materialCocPairs.push({ 
+                    key, 
+                    materialName: cm.materialName,
+                    lotNumber: cm.invoiceNo,
+                    lotBatchNo: cm.lotBatchNo,
+                    cocQty: cm.cocQty,
+                    invoiceQty: cm.invoiceQty,
+                    company: cm.companyName,
+                    imagePath: cm.imagePath
+                  });
                 }
               }
             });
