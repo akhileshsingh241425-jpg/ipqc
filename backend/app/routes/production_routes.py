@@ -61,7 +61,10 @@ def generate_production_report():
         output_dir = os.path.join(os.path.dirname(__file__), '../../generated_pdfs')
         os.makedirs(output_dir, exist_ok=True)
         
-        filename = f"Production_Report_{data.get('start_date')}_{data.get('end_date')}.pdf"
+        # Generate unique filename with company name and timestamp to prevent overwrite
+        company_name = data.get('company_name', 'Unknown').replace(' ', '_').replace('/', '_')
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{company_name}_Production_Report_{data.get('start_date')}_{data.get('end_date')}_{timestamp}.pdf"
         filepath = os.path.join(output_dir, filename)
         
         with open(filepath, 'wb') as f:

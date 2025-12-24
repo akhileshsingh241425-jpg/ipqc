@@ -1,5 +1,5 @@
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import A4
+from reportlab.lib.pagesizes import A4, landscape
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import mm
@@ -76,7 +76,7 @@ class ProductionPDFGenerator:
         buffer = BytesIO()
         doc = SimpleDocTemplate(
             buffer,
-            pagesize=A4,
+            pagesize=landscape(A4),  # Landscape for better spacing
             rightMargin=10*mm,
             leftMargin=10*mm,
             topMargin=10*mm,
