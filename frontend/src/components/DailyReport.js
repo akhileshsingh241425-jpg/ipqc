@@ -1007,13 +1007,30 @@ function DailyReport() {
   };
 
   const handleBomMaterialChange = (materialName, field, value) => {
-    setBomMaterials(prev => ({
-      ...prev,
-      [materialName]: {
-        ...prev[materialName],
-        [field]: value
+    setBomMaterials(prev => {
+      const currentMaterial = prev[materialName] || {};
+      
+      // Handle multiple images
+      if (field === 'images') {
+        const existingImages = currentMaterial.images || [];
+        return {
+          ...prev,
+          [materialName]: {
+            ...currentMaterial,
+            images: [...existingImages, ...Array.from(value)]
+          }
+        };
       }
-    }));
+      
+      // Handle other fields
+      return {
+        ...prev,
+        [materialName]: {
+          ...currentMaterial,
+          [field]: value
+        }
+      };
+    });
   };
 
   // Handle clicking on material name to load COC data
@@ -1599,22 +1616,24 @@ function DailyReport() {
       const recordId = selectedRecordForBom.id;
       const API_BASE = getAPIBase();
       
-      // Get current wattage materials
+      // Get current wattage materials (14 fixed materials)
       const currentMaterials = BOM_MATERIALS_BY_WATTAGE[selectedWattage] || [];
 
       // Upload each BOM material
       for (const material of currentMaterials) {
         const materialData = bomMaterials[material.name];
-        if (materialData && (materialData.lotNumber || materialData.image || materialData.company)) {
+        if (materialData && (materialData.lotBatchNo || materialData.images || materialData.company)) {
           const formData = new FormData();
           formData.append('materialName', material.name);
-          formData.append('lotNumber', materialData.lotNumber || '');
+          formData.append('lotBatchNo', materialData.lotBatchNo || '');
           formData.append('company', materialData.company || '');
-          formData.append('shift', selectedShift);  // Send current shift (day/night)
-          formData.append('qty', material.qty);
-          formData.append('product_type', material.product_type);
-          if (materialData.image) {
-            formData.append('image', materialData.image);
+          formData.append('shift', selectedShift);  // day or night
+          
+          // Append multiple images
+          if (materialData.images && materialData.images.length > 0) {
+            for (const image of materialData.images) {
+              formData.append('images', image);
+            }
           }
 
           await axios.post(
@@ -3578,57 +3597,46 @@ function DailyReport() {
               <h4 style={{color: '#1976d2', marginBottom: '10px'}}>
                 📋 BOM Materials for {selectedShift === 'day' ? '🌞 Day' : '🌙 Night'} Production
               </h4>
-              {loadingCocBrands && (
-                <div style={{padding: '10px', backgroundColor: '#fff3cd', borderRadius: '5px', marginBottom: '10px'}}>
-                  Loading COC brands...
-                </div>
-              )}
               <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px'}}>
                 {(BOM_MATERIALS_BY_WATTAGE[selectedWattage] || []).map(material => (
-                  <div key={material.name} style={{border: '1px solid #ddd', padding: '10px', borderRadius: '5px', backgroundColor: material.needsCompany ? '#e3f2fd' : 'white'}}>
+                  <div key={material.name} style={{border: '1px solid #ddd', padding: '10px', borderRadius: '5px', backgroundColor: '#f9f9f9'}}>
                     <label style={{fontWeight: 'bold', marginBottom: '5px', display: 'block'}}>
                       {material.name}
                       {material.product_type && <span style={{fontSize: '11px', color: '#666', display: 'block'}}>({material.product_type})</span>}
                       <span style={{fontSize: '11px', color: '#1976d2', display: 'block'}}>Qty: {material.qty}</span>
                     </label>
                     
-                    {/* Company dropdown - filtered by material name */}
-                    {material.needsCompany && (
-                      <select
-                        value={bomMaterials[material.name]?.company || ''}
-                        onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
-                        style={{width: '100%', marginBottom: '5px', padding: '5px', border: '2px solid #1976d2'}}
-                      >
-                        <option value="">Select Company/Brand</option>
-                        {(cocBrands[material.name] || []).map((brand, idx) => (
-                          <option key={idx} value={brand.brand}>
-                            {brand.brand}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    
+                    {/* Company/Supplier Name - Text Input */}
                     <input
                       type="text"
-                      placeholder="Lot Number"
-                      value={bomMaterials[material.name]?.lotNumber || ''}
-                      onChange={(e) => handleBomMaterialChange(material.name, 'lotNumber', e.target.value)}
-                      style={{width: '100%', marginBottom: '5px', padding: '5px'}}
+                      placeholder="Supplier/Company Name"
+                      value={bomMaterials[material.name]?.company || ''}
+                      onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
+                      style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #ccc'}}
                     />
+                    
+                    {/* Lot/Batch Number */}
+                    <input
+                      type="text"
+                      placeholder="Lot/Batch Number"
+                      value={bomMaterials[material.name]?.lotBatchNo || ''}
+                      onChange={(e) => handleBomMaterialChange(material.name, 'lotBatchNo', e.target.value)}
+                      style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #ccc'}}
+                    />
+                    
+                    {/* Multiple Images Upload */}
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={(e) => handleBomMaterialChange(material.name, 'image', e.target.files[0])}
-                      style={{width: '100%', fontSize: '11px'}}
+                      multiple
+                      onChange={(e) => handleBomMaterialChange(material.name, 'images', e.target.files)}
+                      style={{width: '100%', fontSize: '11px', marginBottom: '3px'}}
                     />
-                    {bomMaterials[material.name]?.image && (
-                      <small style={{color: '#4CAF50', display: 'block', marginTop: '3px'}}>
-                        ✓ {bomMaterials[material.name].image.name}
-                      </small>
-                    )}
-                    {bomMaterials[material.name]?.existingImage && !bomMaterials[material.name]?.image && (
-                      <small style={{color: '#2196F3', display: 'block', marginTop: '3px'}}>
-                        📄 Already uploaded
+                    
+                    {/* Show selected images count */}
+                    {bomMaterials[material.name]?.images && bomMaterials[material.name].images.length > 0 && (
+                      <small style={{color: '#4CAF50', display: 'block'}}>
+                        ✓ {bomMaterials[material.name].images.length} image(s) selected
                       </small>
                     )}
                   </div>

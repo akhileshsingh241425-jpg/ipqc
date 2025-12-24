@@ -344,6 +344,7 @@ def upload_bom_material(company_id, record_id):
         from flask import current_app
         from werkzeug.utils import secure_filename
         import os
+        import json
         
         record = ProductionRecord.query.filter_by(id=record_id, company_id=company_id).first_or_404()
         
@@ -352,14 +353,14 @@ def upload_bom_material(company_id, record_id):
             return jsonify({'error': 'This production record is closed'}), 403
         
         material_name = request.form.get('materialName')
-        lot_number = request.form.get('lotNumber', '')
+        lot_batch_no = request.form.get('lotBatchNo', '')
         company = request.form.get('company', '')
-        shift = request.form.get('shift', 'day')  # Default to 'day' if not provided
+        shift = request.form.get('shift', 'day')  # day or night
         
         if not material_name or material_name not in BOM_MATERIALS:
             return jsonify({'error': 'Invalid material name'}), 400
         
-        # Find or create BOM material record (now includes shift)
+        # Find or create BOM material record
         bom_material = BomMaterial.query.filter_by(
             production_record_id=record_id,
             material_name=material_name,
@@ -374,35 +375,50 @@ def upload_bom_material(company_id, record_id):
             )
             db.session.add(bom_material)
         
-        # Update lot number, company, and shift
-        bom_material.lot_number = lot_number
+        # Update fields
+        bom_material.lot_batch_no = lot_batch_no
         bom_material.company = company
-        bom_material.shift = shift
         
-        # Handle image upload if provided
-        if 'image' in request.files:
-            file = request.files['image']
+        # Handle multiple image uploads
+        uploaded_images = []
+        if 'images' in request.files:
+            files = request.files.getlist('images')
             
-            if file.filename != '':
-                # Allowed extensions
-                ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
-                if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
-                    # Create uploads/bom_materials directory
-                    upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'bom_materials')
-                    os.makedirs(upload_folder, exist_ok=True)
-                    
-                    # Generate unique filename
-                    safe_material_name = material_name.replace(' ', '_').lower()
-                    filename = secure_filename(
-                        f"{company_id}_{record_id}_{safe_material_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{file.filename.rsplit('.', 1)[1].lower()}"
-                    )
-                    filepath = os.path.join(upload_folder, filename)
-                    
-                    # Save file
-                    file.save(filepath)
-                    
-                    # Update record - store relative path from backend directory
-                    bom_material.image_path = f"uploads/bom_materials/{filename}"
+            # Create uploads/bom_materials directory
+            upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'bom_materials')
+            os.makedirs(upload_folder, exist_ok=True)
+            
+            ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'pdf'}
+            
+            for file in files:
+                if file.filename != '':
+                    if '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS:
+                        # Generate unique filename
+                        safe_material_name = material_name.replace(' ', '_').replace('(', '').replace(')', '').lower()
+                        filename = secure_filename(
+                            f"{company_id}_{record_id}_{safe_material_name}_{shift}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.{file.filename.rsplit('.', 1)[1].lower()}"
+                        )
+                        filepath = os.path.join(upload_folder, filename)
+                        
+                        # Save file
+                        file.save(filepath)
+                        
+                        # Store relative path
+                        uploaded_images.append(f"uploads/bom_materials/{filename}")
+        
+        # Update image_paths JSON array
+        if uploaded_images:
+            # Load existing paths if any
+            existing_paths = []
+            if bom_material.image_paths:
+                try:
+                    existing_paths = json.loads(bom_material.image_paths)
+                except:
+                    existing_paths = []
+            
+            # Append new images
+            existing_paths.extend(uploaded_images)
+            bom_material.image_paths = json.dumps(existing_paths)
         
         db.session.commit()
         
@@ -413,6 +429,9 @@ def upload_bom_material(company_id, record_id):
         
     except Exception as e:
         db.session.rollback()
+        print(f"Error uploading BOM material: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 # Upload IPQC PDF for production record
