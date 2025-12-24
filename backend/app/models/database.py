@@ -52,7 +52,8 @@ class ProductionRecord(db.Model):
     serial_number_end = db.Column(db.String(100), nullable=True)
     serial_count = db.Column(db.Integer, default=0)
     pdi_batch_id = db.Column(db.Integer, nullable=True)
-    coc_invoice_numbers = db.Column(db.Text, nullable=True)
+    coc_invoice_numbers = db.Column(db.Text, nullable=True)  # Deprecated - use coc_materials
+    coc_materials = db.Column(db.Text, nullable=True)  # JSON array for COC linking (customer docs)
     cell_rejection_percent = db.Column(db.Float, default=0.0)
     module_rejection_percent = db.Column(db.Float, default=0.0)
     ipqc_pdf = db.Column(db.String(500), nullable=True)
@@ -65,6 +66,16 @@ class ProductionRecord(db.Model):
     bom_materials = db.relationship('BomMaterial', backref='production_record', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
+        import json
+        
+        # Parse COC materials JSON if exists
+        coc_materials_list = []
+        if self.coc_materials:
+            try:
+                coc_materials_list = json.loads(self.coc_materials)
+            except:
+                coc_materials_list = []
+        
         return {
             'id': self.id,
             'runningOrder': self.running_order,
@@ -79,13 +90,14 @@ class ProductionRecord(db.Model):
             'serialCount': self.serial_count,
             'pdiBatchId': self.pdi_batch_id,
             'cocInvoiceNumbers': self.coc_invoice_numbers,
+            'cocMaterials': coc_materials_list,  # COC linking data (separate from BOM)
             'cellRejectionPercent': self.cell_rejection_percent,
             'moduleRejectionPercent': self.module_rejection_percent,
             'ipqcPdf': self.ipqc_pdf,
             'ftrDocument': self.ftr_document,
             'ftrUploaded': self.ftr_uploaded,
             'isClosed': self.is_closed,
-            'bomMaterials': [bm.to_dict() for bm in self.bom_materials]
+            'bomMaterials': [bm.to_dict() for bm in self.bom_materials]  # BOM data (separate from COC)
         }
 
 

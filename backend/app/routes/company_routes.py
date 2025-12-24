@@ -238,6 +238,14 @@ def update_production_record(company_id, record_id):
             record.lot_number = data.get('lotNumber')
         if 'bomImage' in data:
             record.bom_image = data.get('bomImage')
+        
+        # Update COC materials (separate from BOM materials - for customer documentation)
+        if 'cocMaterials' in data:
+            import json
+            coc_materials_data = data.get('cocMaterials', [])
+            record.coc_materials = json.dumps(coc_materials_data)
+        
+        # Update BOM materials (daily production usage tracking)
         if 'bomMaterials' in data:
             # Update BomMaterial records (new simplified structure)
             import json
