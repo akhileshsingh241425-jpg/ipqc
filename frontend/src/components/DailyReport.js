@@ -984,10 +984,18 @@ function DailyReport() {
       setLoadingSuppliers(true);
       const API_BASE = getAPIBase();
       const params = materialName ? `?material=${encodeURIComponent(materialName)}` : '';
+      console.log('🔍 Fetching suppliers for:', materialName);
+      console.log('🌐 API URL:', `${API_BASE.replace('/api', '')}/api/bom-suppliers${params}`);
+      
       const response = await axios.get(`${API_BASE.replace('/api', '')}/api/bom-suppliers${params}`);
+      
+      console.log('✅ API Response:', response.data);
+      console.log('📋 Suppliers:', response.data.suppliers);
+      
       return response.data.suppliers || [];
     } catch (error) {
-      console.error('Failed to fetch suppliers:', error);
+      console.error('❌ Failed to fetch suppliers:', error);
+      console.error('Error details:', error.response?.data);
       return [];
     } finally {
       setLoadingSuppliers(false);
