@@ -34,18 +34,52 @@ def get_companies():
 @company_bp.route('/api/bom-suppliers', methods=['GET'])
 def get_bom_suppliers():
     try:
-        # Get unique company names from bom_materials table
-        result = db.session.query(BomMaterial.company).filter(
-            BomMaterial.company.isnot(None),
-            BomMaterial.company != ''
-        ).distinct().all()
+        import requests
+        from datetime import datetime, timedelta
         
-        # Convert to list of strings
-        suppliers = sorted([r[0] for r in result if r[0]])
+        # Fetch COC data from API to get company names
+        COC_API_URL = 'https://umanmrp.in/api/coc_api.php'
+        
+        # Get last 6 months data
+        to_date = datetime.now().strftime('%Y-%m-%d')
+        from_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
+        
+        post_data = {
+            'from': from_date,
+            'to': to_date
+        }
+        
+        # Fetch from COC API
+        response = requests.post(COC_API_URL, json=post_data, timeout=10)
+        
+        suppliers = []
+        
+        if response.status_code == 200:
+            coc_data = response.json()
+            
+            # Extract unique company names
+            company_names = set()
+            
+            if isinstance(coc_data, dict) and 'data' in coc_data:
+                coc_documents = coc_data['data']
+            elif isinstance(coc_data, list):
+                coc_documents = coc_data
+            else:
+                coc_documents = []
+            
+            # Collect company names
+            for doc in coc_documents:
+                if isinstance(doc, dict) and doc.get('company_name'):
+                    company_names.add(doc['company_name'])
+            
+            # Sort alphabetically
+            suppliers = sorted(list(company_names))
         
         return jsonify({'suppliers': suppliers}), 200
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        print(f"Error fetching COC suppliers: {str(e)}")
+        # Fallback to empty list if API fails
+        return jsonify({'suppliers': []}), 200
 
 # Get single company
 @company_bp.route('/api/companies/<int:company_id>', methods=['GET'])
