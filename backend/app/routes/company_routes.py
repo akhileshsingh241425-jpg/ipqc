@@ -71,8 +71,8 @@ def get_bom_suppliers():
             print(f"📦 COC API Response Type: {type(coc_data)}")
             print(f"📋 COC API Keys: {coc_data.keys() if isinstance(coc_data, dict) else 'Not a dict'}")
             
-            # Extract unique company names
-            company_names = set()
+            # Extract COC documents with date info for FIFO
+            coc_documents_list = []
             
             if isinstance(coc_data, dict) and 'data' in coc_data:
                 coc_documents = coc_data['data']
@@ -84,52 +84,67 @@ def get_bom_suppliers():
                 coc_documents = []
                 print("❌ COC data format not recognized")
             
-            # Collect company names filtered by material specification
+            # Collect COC documents with brand and date for FIFO sorting
             matched_count = 0
             for doc in coc_documents:
                 if isinstance(doc, dict) and doc.get('brand'):
                     # COC API uses 'material_name' not 'specification'
                     material_name = doc.get('material_name', '').lower()
                     brand = doc.get('brand')
+                    invoice_date = doc.get('invoice_date', '')
                     
                     # Filter by material type if provided
+                    should_include = False
                     if material_filter:
                         # Check if material_name matches filter
                         if material_filter in material_name or material_name in material_filter:
-                            company_names.add(brand)
-                            matched_count += 1
+                            should_include = True
                         # Special cases for common materials
                         elif 'cell' in material_filter and 'cell' in material_name:
-                            company_names.add(brand)
-                            matched_count += 1
+                            should_include = True
                         elif 'glass' in material_filter and 'glass' in material_name:
-                            company_names.add(brand)
-                            matched_count += 1
+                            should_include = True
                         elif 'ribbon' in material_filter and 'ribbon' in material_name:
-                            company_names.add(brand)
-                            matched_count += 1
+                            should_include = True
                         elif 'eva' in material_filter and 'eva' in material_name:
-                            company_names.add(brand)
-                            matched_count += 1
+                            should_include = True
                         elif 'flux' in material_filter and 'flux' in material_name:
-                            company_names.add(brand)
-                            matched_count += 1
+                            should_include = True
                         elif 'bus' in material_filter and 'bus' in material_name:
-                            company_names.add(brand)
-                            matched_count += 1
+                            should_include = True
                         elif 'frame' in material_filter and 'frame' in material_name:
-                            company_names.add(brand)
-                            matched_count += 1
+                            should_include = True
                     else:
                         # No filter - add all
-                        company_names.add(brand)
+                        should_include = True
+                    
+                    if should_include:
+                        coc_documents_list.append({
+                            'brand': brand,
+                            'invoice_date': invoice_date
+                        })
                         matched_count += 1
             
             print(f"🎯 Matched {matched_count} companies for filter '{material_filter}'")
             
-            # Sort alphabetically
-            suppliers = sorted(list(company_names))
-            print(f"✅ Returning {len(suppliers)} suppliers: {suppliers[:5]}...")
+            # FIFO sorting - oldest invoice first
+            try:
+                from datetime import datetime
+                coc_documents_list.sort(key=lambda x: datetime.strptime(x['invoice_date'], '%Y-%m-%d') if x['invoice_date'] else datetime.min)
+                print(f"📅 FIFO Sorted by invoice date (oldest first)")
+            except Exception as e:
+                print(f"⚠️ Could not sort by date: {e}")
+            
+            # Extract unique brands while maintaining FIFO order
+            seen_brands = set()
+            suppliers = []
+            for doc in coc_documents_list:
+                brand = doc['brand']
+                if brand not in seen_brands:
+                    seen_brands.add(brand)
+                    suppliers.append(brand)
+            
+            print(f"✅ Returning {len(suppliers)} suppliers (FIFO ordered): {suppliers[:5]}...")
         else:
             print(f"❌ COC API failed with status: {response.status_code}")
         
