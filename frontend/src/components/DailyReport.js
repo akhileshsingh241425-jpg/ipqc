@@ -1494,7 +1494,7 @@ function DailyReport() {
       
       // Sheet 2: Smart COC Suggestions (Which COC to use for fulfillment)
       const summaryData = [];
-      summaryData.push(['Material Name', 'Product Type', 'Required Qty', 'Available', 'Shortage', 'Status', '🎯 USE THIS COC', 'Company', 'Invoice No', 'COC Qty', 'Lot/Batch', 'Date']);
+      summaryData.push(['Material Name', 'Product Type', 'Required Qty', 'Available', 'Shortage', 'Status', '🎯 USE THIS COC', 'Company', 'Invoice No', 'COC Qty', 'Lot/Batch', 'Date', 'Production BOM']);
       
       // Add summary data from required COCs
       requiredCocsReport.forEach(req => {
@@ -1516,24 +1516,38 @@ function DailyReport() {
         const shortage = req.requiredQty - totalAvailable;
         const shortageText = shortage > 0 ? Math.round(shortage * 100) / 100 : 0;
         
-        // Find suggested COC (OLDEST date - FIFO principle)
+        // Find suggested COC - PRIORITIZE production BOM companies
         let suggestedCoc = null;
         let suggestionText = '-';
         
         if (allCocs.length > 0) {
-          // Sort by date - OLDEST first (FIFO principle)
-          const sortedCocs = allCocs.sort((a, b) => {
+          // First: Try production BOM companies (oldest first)
+          const productionCocs = allCocs.filter(coc => 
+            req.productionCompanies && req.productionCompanies.includes(coc.company)
+          ).sort((a, b) => {
             const dateA = new Date(a.invoiceDate || '2099-01-01');
             const dateB = new Date(b.invoiceDate || '2099-01-01');
             return dateA - dateB;
           });
           
+          // Then: Other companies (oldest first)
+          const otherCocs = allCocs.filter(coc => 
+            !req.productionCompanies || !req.productionCompanies.includes(coc.company)
+          ).sort((a, b) => {
+            const dateA = new Date(a.invoiceDate || '2099-01-01');
+            const dateB = new Date(b.invoiceDate || '2099-01-01');
+            return dateA - dateB;
+          });
+          
+          // Combine: Production companies first
+          const sortedCocs = [...productionCocs, ...otherCocs];
+          
           if (shortage > 0) {
-            // Find COC that can fulfill shortage
+            // Find COC that can fulfill shortage - prioritize production BOM
             suggestedCoc = sortedCocs.find(coc => coc.cocQty >= shortage) || sortedCocs[0];
             suggestionText = '✅ ADD THIS';
           } else {
-            // Show oldest COC for FIFO
+            // Show oldest COC for FIFO - prioritize production BOM
             suggestedCoc = sortedCocs[0];
             suggestionText = '✅ USE FIRST';
           }
@@ -1549,6 +1563,10 @@ function DailyReport() {
           status = '⚠️ SHORT';
         }
         
+        // Check if suggested COC is from production BOM
+        const isProductionBom = suggestedCoc && req.productionCompanies && 
+                               req.productionCompanies.includes(suggestedCoc.company) ? '✅ USED IN PRODUCTION' : '';
+        
         summaryData.push([
           req.materialName,
           req.productType || '-',
@@ -1561,7 +1579,8 @@ function DailyReport() {
           suggestedCoc ? suggestedCoc.invoiceNo : '-',
           suggestedCoc ? suggestedCoc.cocQty : '-',
           suggestedCoc ? suggestedCoc.lotBatchNo : '-',
-          suggestedCoc ? (suggestedCoc.invoiceDate || '-') : '-'
+          suggestedCoc ? (suggestedCoc.invoiceDate || '-') : '-',
+          isProductionBom
         ]);
       });
       
@@ -1639,11 +1658,12 @@ function DailyReport() {
         { wch: 12 }, // Shortage
         { wch: 12 }, // Status
         { wch: 16 }, // USE THIS COC
-        { wch: 28 }, // Company
-        { wch: 20 }, // Invoice No
+        { wch: 30 }, // Company
+        { wch: 22 }, // Invoice No
         { wch: 12 }, // COC Qty
         { wch: 20 }, // Lot/Batch
-        { wch: 15 }  // Date
+        { wch: 15 }, // Date
+        { wch: 25 }  // Production BOM
       ];
       
       ws2['!rows'] = [{ hpt: 30 }]; // Header row height
@@ -1776,12 +1796,42 @@ function DailyReport() {
       const response = await axios.get(`${API_BASE}/coc/list?from_date=${fromDate}&to_date=${toDate}`);
       
       if (response.data.success) {
+        // Get actual BOM materials used in production (priority: production BOM > COC API)
+        const actualBomMaterials = {};
+        pdiRecords.forEach(record => {
+          if (record.bomMaterials && Array.isArray(record.bomMaterials)) {
+            record.bomMaterials.forEach(bom => {
+              if (bom.company && bom.materialName) {
+                const key = bom.materialName.toLowerCase();
+                if (!actualBomMaterials[key]) {
+                  actualBomMaterials[key] = new Set();
+                }
+                actualBomMaterials[key].add(bom.company);
+              }
+            });
+          }
+        });
+        
         // Group COCs by material and company
         const requiredCocsData = requiredMaterials.map(req => {
+          const reqMaterial = req.materialName.toLowerCase();
+          
+          // PRIORITY 1: Use companies from actual production BOM
+          let companiesUsedInProduction = actualBomMaterials[reqMaterial];
+          if (!companiesUsedInProduction) {
+            // Try fuzzy matching for production BOM
+            const bomKeys = Object.keys(actualBomMaterials);
+            for (const bomKey of bomKeys) {
+              if (reqMaterial.includes(bomKey) || bomKey.includes(reqMaterial)) {
+                companiesUsedInProduction = actualBomMaterials[bomKey];
+                break;
+              }
+            }
+          }
+          
           // Find matching COCs for this material
           const matchingCocs = response.data.coc_data.filter(coc => {
             const cocMaterial = (coc.material_name || '').toLowerCase();
-            const reqMaterial = req.materialName.toLowerCase();
             
             // Simple matching logic
             if (reqMaterial.includes('cell') && cocMaterial.includes('cell')) return true;
@@ -1799,7 +1849,7 @@ function DailyReport() {
             return false;
           });
           
-          // Group by company/brand
+          // Group by company/brand - PRIORITIZE production BOM companies
           const cocsByCompany = {};
           matchingCocs.forEach(coc => {
             const company = coc.brand || 'Unknown';
@@ -1813,13 +1863,32 @@ function DailyReport() {
               lotBatchNo: coc.lot_batch_no,
               invoiceDate: coc.invoice_date,
               cocDocUrl: coc.coc_document_url,
-              iqcDocUrl: coc.iqc_document_url
+              iqcDocUrl: coc.iqc_document_url,
+              usedInProduction: companiesUsedInProduction && companiesUsedInProduction.has(company) ? '✅ USED' : ''
             });
+          });
+          
+          // Sort companies: Production BOM companies first
+          const sortedCocsByCompany = {};
+          const productionCompanies = [];
+          const otherCompanies = [];
+          
+          Object.keys(cocsByCompany).forEach(company => {
+            if (companiesUsedInProduction && companiesUsedInProduction.has(company)) {
+              productionCompanies.push(company);
+            } else {
+              otherCompanies.push(company);
+            }
+          });
+          
+          [...productionCompanies, ...otherCompanies].forEach(company => {
+            sortedCocsByCompany[company] = cocsByCompany[company];
           });
           
           return {
             ...req,
-            availableCocs: cocsByCompany
+            availableCocs: sortedCocsByCompany,
+            productionCompanies: Array.from(companiesUsedInProduction || [])
           };
         });
         
