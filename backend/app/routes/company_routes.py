@@ -13,15 +13,14 @@ BOM_MATERIALS = [
     "RIBBON (0.26 mm)",
     "RIBBON (4.0X0.4)",
     "RIBBON (6.0X0.4)",
-    "Ribbon(BUSBAR)",
+    "Ribbon(BUSBAR) 4mm",
+    "Ribbon(BUSBAR) 6mm",
     "FLUX",
     "EPE FRONT",
     "EPE",
-    "Aluminium Frame SHORT",
-    "Aluminium Frame LONG",
+    "Aluminium Frame",
     "SEALENT",
-    "JB Potting A",
-    "JB Potting B",
+    "JB Potting (A and B)",
     "JUNCTION BOX"
 ]
 
@@ -507,9 +506,11 @@ def upload_bom_material(company_id, record_id):
             )
             db.session.add(bom_material)
         
-        # Update fields
-        bom_material.lot_batch_no = lot_batch_no
-        bom_material.company = company
+        # Update fields ONLY if new value is provided (don't overwrite with empty)
+        if lot_batch_no and lot_batch_no.strip():
+            bom_material.lot_batch_no = lot_batch_no
+        if company and company.strip():
+            bom_material.company = company
         
         # Handle multiple image uploads
         uploaded_images = []

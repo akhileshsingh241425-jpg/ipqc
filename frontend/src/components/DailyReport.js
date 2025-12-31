@@ -1009,15 +1009,24 @@ function DailyReport() {
     const wattage = selectedCompany?.wattage || '625wp';
     setSelectedWattage(wattage);
     
-    // Initialize FRESH empty bomMaterials state - NO pre-filling
+    // Initialize bomMaterials state with EXISTING saved data
     const currentMaterials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
     const materialsData = {};
     
+    // Get existing BOM materials from record (if any saved previously)
+    const existingBomMaterials = record.bomMaterials || [];
+    
     currentMaterials.forEach(material => {
+      // Find existing saved data for this material
+      const existingMaterial = existingBomMaterials.find(bm => 
+        bm.materialName === material.name || bm.material_name === material.name
+      );
+      
       materialsData[material.name] = {
-        lotBatchNo: '',
-        company: '',
-        images: [],
+        lotBatchNo: existingMaterial?.lotBatchNo || existingMaterial?.lot_batch_no || '',
+        company: existingMaterial?.company || '',
+        images: [], // New images to upload (existing are already saved)
+        existingImages: existingMaterial?.imagePaths || existingMaterial?.image_paths || [], // Show existing images
         suppliers: [] // Material-specific suppliers
       };
     });
@@ -1286,13 +1295,20 @@ function DailyReport() {
         };
         
         // Helper function to match material name
-        const matchMaterial = (cocMaterialName, bomMaterialName) => {
+        const matchMaterial = (cocMaterialName, bomMaterialName, cocSpec = '', bomSpec = '') => {
           const cocName = cocMaterialName.toLowerCase().trim();
           const bomName = bomMaterialName.toLowerCase().trim();
-          
-          // Exact match
-          if (cocName === bomName) return true;
-          
+          const cocSpecNorm = (cocSpec || '').toLowerCase().replace(/\s+/g, '');
+          const bomSpecNorm = (bomSpec || '').toLowerCase().replace(/\s+/g, '');
+          // Exact match with spec
+          if (cocName === bomName && cocSpecNorm === bomSpecNorm) return true;
+          // For ribbon/busbar, require spec match too
+          if ((bomName.includes('ribbon') || bomName.includes('busbar')) && cocName.includes('ribbon')) {
+            if (cocSpecNorm && bomSpecNorm && cocSpecNorm === bomSpecNorm) return true;
+            // fallback: if no spec, fallback to name only
+            if (!cocSpecNorm && !bomSpecNorm && cocName === bomName) return true;
+            return false;
+          }
           // Check mapping
           const keywords = materialMapping[bomMaterialName] || [bomName];
           return keywords.some(keyword => 
@@ -1316,14 +1332,14 @@ function DailyReport() {
               // Get the material group (for RIBBON variants)
               const materialGroup = BOM_MATERIALS_BY_WATTAGE['625wp']?.find(m => m.name === bomMaterial)?.materialGroup || 
                                    BOM_MATERIALS_BY_WATTAGE['630wp']?.find(m => m.name === bomMaterial)?.materialGroup;
-              
+              const bomSpec = BOM_MATERIALS_BY_WATTAGE['625wp']?.find(m => m.name === bomMaterial)?.product_type ||
+                              BOM_MATERIALS_BY_WATTAGE['630wp']?.find(m => m.name === bomMaterial)?.product_type || '';
               const matchKey = materialGroup || bomMaterial.split('(')[0].trim(); // Use group or base name
-              
-              if (matchMaterial(item.material_name, matchKey)) {
+              // Use spec for matching
+              if (matchMaterial(item.material_name, matchKey, item.spec, bomSpec)) {
                 if (!brandsByMaterial[bomMaterial]) {
                   brandsByMaterial[bomMaterial] = [];
                 }
-                
                 // Add brand if not already exists for this material
                 const brandExists = brandsByMaterial[bomMaterial].some(b => b.brand === item.brand);
                 if (!brandExists) {
@@ -1692,18 +1708,25 @@ function DailyReport() {
       // Get current wattage materials (14 fixed materials)
       const currentMaterials = BOM_MATERIALS_BY_WATTAGE[selectedWattage] || [];
 
-      // Upload each BOM material
+      // Upload each BOM material - ONLY if there's NEW data to save
       for (const material of currentMaterials) {
         const materialData = bomMaterials[material.name];
-        if (materialData && (materialData.lotBatchNo || materialData.images || materialData.company)) {
+        
+        // Check if there's any NEW data to save (not just existing data)
+        const hasNewLotBatchNo = materialData.lotBatchNo && materialData.lotBatchNo.trim() !== '';
+        const hasNewCompany = materialData.company && materialData.company.trim() !== '';
+        const hasNewImages = materialData.images && materialData.images.length > 0;
+        
+        // Only send request if there's actual new data to save
+        if (materialData && (hasNewLotBatchNo || hasNewCompany || hasNewImages)) {
           const formData = new FormData();
           formData.append('materialName', material.name);
           formData.append('lotBatchNo', materialData.lotBatchNo || '');
           formData.append('company', materialData.company || '');
           formData.append('shift', selectedShift);  // day or night
           
-          // Append multiple images
-          if (materialData.images && materialData.images.length > 0) {
+          // Append multiple images (only new ones)
+          if (hasNewImages) {
             for (const image of materialData.images) {
               formData.append('images', image);
             }
@@ -4275,19 +4298,17 @@ function DailyReport() {
         // COC Materials - Independent of production BOM uploads
         // These are the ONLY materials that require COC documentation
         const COC_MATERIALS = [
-          { name: 'Solar Cell', unit: 'PCS' },
-          { name: 'FRONT GLASS', unit: 'PCS' },
-          { name: 'BACK GLASS', unit: 'PCS' },
+          { name: 'Solar Cell', unit: 'PCS', spec: '' },
+          { name: 'FRONT GLASS', unit: 'PCS', spec: '2376x1128x2.0 mm' },
+          { name: 'BACK GLASS', unit: 'PCS', spec: '2376x1128x2.0 mm(3 hole)' },
           { name: 'RIBBON', unit: 'KG', spec: '0.26mm' },
-          { name: 'Ribbon(BUSBAR)', unit: 'KG', spec: '4.0X0.4 mm' },
-          { name: 'Ribbon(BUSBAR)', unit: 'KG', spec: '6.0X0.4 mm' },
-          { name: 'FLUX', unit: 'KG' },
-          { name: 'EPE FRONT', unit: 'sqm' },
-          { name: 'Aluminium Frame LONG', unit: 'SETS' },
-          { name: 'Aluminium Frame SHORT', unit: 'SETS' },
-          { name: 'SEALENT', unit: 'KG' },
-          { name: 'JB Potting A', unit: 'KG' },
-          { name: 'JB Potting B', unit: 'KG' },
+          { name: 'Ribbon(BUSBAR) 4mm', unit: 'KG', spec: '4.0X0.4 mm' },
+          { name: 'Ribbon(BUSBAR) 6mm', unit: 'KG', spec: '6.0X0.4 mm' },
+          { name: 'FLUX', unit: 'KG', spec: '' },
+          { name: 'EPE FRONT', unit: 'sqm', spec: '' },
+          { name: 'Aluminium Frame', unit: 'SETS', spec: '' },
+          { name: 'SEALENT', unit: 'KG', spec: '' },
+          { name: 'JB Potting (A and B)', unit: 'KG', spec: '' },
           { name: 'JUNCTION BOX', unit: 'SETS', spec: '1200mm-' }
         ];
         
@@ -4345,23 +4366,41 @@ function DailyReport() {
         
         // Now create consolidated list showing each COC as separate row
         COC_MATERIALS.forEach(material => {
-          // Find all COCs for this material
-          const assignedCocs = materialCocPairs.filter(bm => 
-            bm.materialName === material.name || 
-            bm.materialName.includes(material.name) ||
-            material.name.includes(bm.materialName)
-          );
+          // Find all COCs for this material - match by base name for busbar
+          const baseName = material.name.replace(' 4mm', '').replace(' 6mm', '');
+          const assignedCocs = materialCocPairs.filter(bm => {
+            const bmNameLower = bm.materialName.toLowerCase();
+            const materialNameLower = material.name.toLowerCase();
+            const baseNameLower = baseName.toLowerCase();
+            
+            // For Ribbon(BUSBAR) 4mm and 6mm, match by spec
+            if (materialNameLower.includes('busbar') && materialNameLower.includes('4mm')) {
+              return bmNameLower.includes('busbar') && (bmNameLower.includes('4.0') || bmNameLower.includes('4mm'));
+            }
+            if (materialNameLower.includes('busbar') && materialNameLower.includes('6mm')) {
+              return bmNameLower.includes('busbar') && (bmNameLower.includes('6.0') || bmNameLower.includes('6mm'));
+            }
+            
+            // Default matching
+            return bm.materialName === material.name || 
+                   bm.materialName.includes(baseName) ||
+                   baseName.includes(bm.materialName);
+          });
           
           if (assignedCocs.length > 0) {
-            // Add each COC as separate row
+            // Add each COC as separate row with spec from COC_MATERIALS
             assignedCocs.forEach(coc => {
-              consolidatedBom.push(coc);
+              consolidatedBom.push({
+                ...coc,
+                spec: material.spec || coc.spec || ''
+              });
             });
           } else {
-            // No COC assigned - show empty row
+            // No COC assigned - show empty row with spec
             consolidatedBom.push({
               materialName: material.name,
               unit: material.unit,
+              spec: material.spec || '',
               lotNumber: null,
               cocQty: null,
               invoiceQty: null,
@@ -4572,18 +4611,18 @@ function DailyReport() {
                           usedQty = actualProduction * 0.212;
                         } else if (materialLower.includes('flux')) {
                           usedQty = actualProduction * 0.02;
-                        } else if (materialLower.includes('bus bar 4mm') || materialLower.includes('busbar 4mm') || (materialLower.includes('busbar') && materialLower.includes('4.0'))) {
+                        } else if (materialLower.includes('busbar') && materialLower.includes('4mm')) {
                           usedQty = actualProduction * 0.038;
-                        } else if (materialLower.includes('bus bar 6mm') || materialLower.includes('busbar 6mm') || (materialLower.includes('busbar') && materialLower.includes('6.0'))) {
+                        } else if (materialLower.includes('busbar') && materialLower.includes('6mm')) {
                           usedQty = actualProduction * 0.018;
                         } else if (materialLower.includes('epe')) {
                           usedQty = actualProduction * 5.2;
                         } else if (materialLower.includes('frame')) {
-                          usedQty = actualProduction * 1;
+                          usedQty = actualProduction * 1; // 1 set = 2 LONG + 2 SHORT combined
                         } else if (materialLower.includes('sealent') || materialLower.includes('sealant') || materialLower.includes('silicone')) {
                           usedQty = actualProduction * 0.35;
                         } else if (materialLower.includes('potting')) {
-                          usedQty = actualProduction * 0.021;
+                          usedQty = actualProduction * 0.021; // A + B combined
                         } else if (materialLower.includes('jb') || materialLower.includes('junction')) {
                           usedQty = actualProduction * 1;
                         } else {
@@ -4592,26 +4631,61 @@ function DailyReport() {
                         
                         usedQty = Math.round(usedQty * 100) / 100;
                         
-                        // Get total COC Qty for this material (sum of all COCs)
+                        // Calculate individual gap for this specific COC/invoice
+                        // Get all COCs for this material in order they were added
                         const allCocsForMaterial = consolidatedBom.filter(item => 
                           item.materialName === bm.materialName && item.lotNumber
                         );
-                        const totalCocQty = allCocsForMaterial.reduce((sum, item) => 
-                          sum + (parseFloat(item.cocQty) || 0), 0
+                        
+                        // Find index of current COC in the list
+                        const currentCocIndex = allCocsForMaterial.findIndex(item => 
+                          item.lotNumber === bm.lotNumber
                         );
                         
-                        // Calculate gap: Total COCs - Used Qty
-                        const gap = Math.round((totalCocQty - usedQty) * 100) / 100;
+                        // Calculate how much was consumed by previous COCs
+                        let remainingToConsume = usedQty;
+                        let individualGap = 0;
                         
-                        // Get specification
-                        const getMaterialSpec = (materialName) => {
-                          const wattage = selectedCompany?.wattage || '625wp';
-                          const materials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
-                          const material = materials.find(m => m.name === materialName);
-                          return material?.product_type || '-';
+                        if (bm.cocQty && bm.lotNumber) {
+                          // Calculate consumption for each COC in order
+                          for (let i = 0; i <= currentCocIndex; i++) {
+                            const cocQty = parseFloat(allCocsForMaterial[i].cocQty) || 0;
+                            
+                            if (i < currentCocIndex) {
+                              // Previous COCs - subtract their full qty from remaining
+                              remainingToConsume = Math.max(0, remainingToConsume - cocQty);
+                            } else {
+                              // Current COC - calculate its individual gap
+                              const consumedFromThis = Math.min(cocQty, remainingToConsume);
+                              individualGap = Math.round((cocQty - consumedFromThis) * 100) / 100;
+                            }
+                          }
+                        }
+                        
+                        // For display: show individual gap for this COC
+                        const gap = individualGap;
+                        
+                        // Get specification from COC_MATERIALS directly
+                        const getSpecFromCOCMaterials = (materialName) => {
+                          const COC_SPEC_MAP = {
+                            'Solar Cell': '25.30%',
+                            'FRONT GLASS': '2376x1128x2.0 mm',
+                            'BACK GLASS': '2376x1128x2.0 mm (3 hole)',
+                            'RIBBON': '0.26mm',
+                            'Ribbon(BUSBAR) 4mm': '4.0X0.4 mm',
+                            'Ribbon(BUSBAR) 6mm': '6.0X0.4 mm',
+                            'FLUX': '-',
+                            'EPE FRONT': '-',
+                            'Aluminium Frame': '-',
+                            'SEALENT': '-',
+                            'JB Potting (A and B)': '-',
+                            'JUNCTION BOX': '1200mm'
+                          };
+                          return COC_SPEC_MAP[materialName] || '-';
                         };
                         
-                        const specification = getMaterialSpec(bm.materialName);
+                        // Use spec from bm first, then lookup from COC_SPEC_MAP
+                        const specification = bm.spec && bm.spec !== '' ? bm.spec : getSpecFromCOCMaterials(bm.materialName);
                         
                         return (
                           <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
@@ -4960,6 +5034,7 @@ function DailyReport() {
                       <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Specification</th>
                       <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Brand</th>
                       <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Invoice No</th>
+                      <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Lot Number</th>
                       <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>Invoice Date</th>
                       <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>COC Qty</th>
                       <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>Invoice Qty</th>
@@ -4970,20 +5045,42 @@ function DailyReport() {
                   </thead>
                   <tbody>
                     {filteredData.map((coc, idx) => {
-                      // Get specification for this material
-                      const getSpec = (materialName) => {
-                        const wattage = selectedCompany?.wattage || '625wp';
-                        const materials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
-                        const material = materials.find(m => m.name === materialName || m.name.toLowerCase().includes(materialName.toLowerCase()));
-                        return material?.product_type || '-';
+                      // Get specification - use from API data first, else determine from material name
+                      const getSpec = (coc) => {
+                        // First check if spec/specification/product_type exists in COC data from API
+                        if (coc.specification) return coc.specification;
+                        if (coc.spec) return coc.spec;
+                        if (coc.product_type) return coc.product_type;
+                        
+                        // Fallback: determine from material name
+                        const materialName = (coc.material_name || '').toLowerCase();
+                        if (materialName.includes('back') && materialName.includes('glass')) {
+                          return '2376x1128x2.0 mm (3 hole)';
+                        } else if (materialName.includes('front') && materialName.includes('glass')) {
+                          return '2376x1128x2.0 mm';
+                        } else if (materialName.includes('glass')) {
+                          return '2376x1128x2.0 mm';
+                        } else if (materialName.includes('ribbon') && materialName.includes('4')) {
+                          return '4.0X0.4 mm';
+                        } else if (materialName.includes('ribbon') && materialName.includes('6')) {
+                          return '6.0X0.4 mm';
+                        } else if (materialName.includes('ribbon') || materialName.includes('busbar')) {
+                          return '0.26mm';
+                        } else if (materialName.includes('cell')) {
+                          return '25.30%';
+                        } else if (materialName.includes('junction')) {
+                          return '1200mm';
+                        }
+                        return '-';
                       };
                       
                       return (
                         <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
                           <td style={{padding: '6px', border: '1px solid #dee2e6', fontWeight: '500'}}>{coc.material_name || '-'}</td>
-                          <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '9px', color: '#666'}}>{getSpec(coc.material_name)}</td>
+                          <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '9px', color: '#666'}}>{getSpec(coc)}</td>
                         <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '10px'}}>{coc.brand || '-'}</td>
                         <td style={{padding: '6px', border: '1px solid #dee2e6'}}>{coc.invoice_no || '-'}</td>
+                        <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '10px'}}>{coc.lot_batch_no || '-'}</td>
                         <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>{coc.invoice_date || '-'}</td>
                         <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>{coc.coc_qty || '-'}</td>
                         <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>{coc.invoice_qty || '-'}</td>
