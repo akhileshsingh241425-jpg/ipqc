@@ -48,6 +48,7 @@ def create_app():
     from app.routes.pdi_routes import pdi_bp
     from app.routes.coc_new_routes import coc_new_bp
     from app.routes.ftr_management_routes import ftr_management_bp
+    from app.routes.ai_assistant_routes import ai_assistant_bp
     
     app.register_blueprint(ipqc_bp, url_prefix='/api/ipqc')
     app.register_blueprint(production_bp)
@@ -61,6 +62,7 @@ def create_app():
     app.register_blueprint(pdi_bp)
     app.register_blueprint(coc_new_bp)
     app.register_blueprint(ftr_management_bp, url_prefix='/api')
+    app.register_blueprint(ai_assistant_bp, url_prefix='/api')
     
     # Serve uploaded files (IPQC PDFs, FTR documents, BOM images)
     @app.route('/uploads/<path:filename>')

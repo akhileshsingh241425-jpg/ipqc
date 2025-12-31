@@ -14,6 +14,11 @@ const FTRManagement = () => {
   const [showMasterFTRModal, setShowMasterFTRModal] = useState(false);
   const [selectedMasterFile, setSelectedMasterFile] = useState(null);
   
+  // Rejection upload (NEW)
+  const [showRejectionModal, setShowRejectionModal] = useState(false);
+  const [uploadingRejection, setUploadingRejection] = useState(false);
+  const [selectedRejectionFile, setSelectedRejectionFile] = useState(null);
+  
   // PDI serial assignment
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedPdiForAssign, setSelectedPdiForAssign] = useState(null);
@@ -83,16 +88,50 @@ const FTRManagement = () => {
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
           const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
           
-          // Extract serial numbers (assuming they are in first column)
+          // Get header row to find column indices
+          const headers = jsonData[0] || [];
+          const headerLower = headers.map(h => String(h || '').toLowerCase().trim());
+          
+          // Find column indices
+          const idCol = headerLower.findIndex(h => h === 'id' || h === 'serial' || h === 'serial_number' || h === 'barcode');
+          const pmaxCol = headerLower.findIndex(h => h === 'pmax' || h === 'power' || h === 'watt');
+          const binningCol = headerLower.findIndex(h => h === 'binning' || h === 'bin' || h === 'current_bin');
+          const classCol = headerLower.findIndex(h => h === 'class' || h === 'status' || h === 'class_status' || h === 'result');
+          
+          // Extract serial numbers with details
           const serialNumbers = [];
+          let okCount = 0;
+          let rejectedCount = 0;
+          
           for (let i = 1; i < jsonData.length; i++) {
-            if (jsonData[i][0]) {
-              serialNumbers.push(String(jsonData[i][0]).trim());
+            const row = jsonData[i];
+            const serialNum = idCol >= 0 ? row[idCol] : row[0];
+            
+            if (serialNum) {
+              const classStatus = classCol >= 0 ? String(row[classCol] || 'OK').toUpperCase().trim() : 'OK';
+              const isRejected = ['REJECTED', 'REJECT', 'REJ', 'NG', 'FAIL'].includes(classStatus);
+              
+              if (isRejected) rejectedCount++;
+              else okCount++;
+              
+              serialNumbers.push({
+                serial_number: String(serialNum).trim(),
+                pmax: pmaxCol >= 0 ? parseFloat(row[pmaxCol]) || null : null,
+                binning: binningCol >= 0 ? String(row[binningCol] || '').trim() : null,
+                class_status: isRejected ? 'REJECTED' : 'OK'
+              });
             }
           }
           
           if (serialNumbers.length === 0) {
             alert('❌ No serial numbers found in Excel file');
+            return;
+          }
+          
+          // Show confirmation with breakdown
+          const confirmMsg = `Upload Summary:\n\n✅ OK: ${okCount}\n❌ Rejected: ${rejectedCount}\n📊 Total: ${serialNumbers.length}\n\nProceed with upload?`;
+          if (!window.confirm(confirmMsg)) {
+            setUploadingMasterFTR(false);
             return;
           }
           
@@ -105,7 +144,7 @@ const FTRManagement = () => {
           });
           
           if (response.data.success) {
-            alert(`✅ Master FTR uploaded: ${serialNumbers.length} serial numbers`);
+            alert(`✅ Master FTR uploaded!\n\n📊 Total: ${response.data.count}\n✅ OK: ${response.data.ok_count}\n❌ Rejected: ${response.data.rejected_count}`);
             loadFTRData(selectedCompany.id);
             setShowMasterFTRModal(false);
             setSelectedMasterFile(null);
@@ -122,6 +161,87 @@ const FTRManagement = () => {
       alert('❌ Failed to upload Master FTR');
     } finally {
       setUploadingMasterFTR(false);
+    }
+  };
+
+  // Rejection Upload Handler
+  const handleRejectionFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedRejectionFile(file);
+    }
+  };
+
+  const handleRejectionUpload = async () => {
+    if (!selectedRejectionFile) return;
+
+    try {
+      setUploadingRejection(true);
+      const file = selectedRejectionFile;
+      const API_BASE_URL = getAPIBaseURL();
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+          
+          // Get header row to find column indices
+          const headers = jsonData[0] || [];
+          const headerLower = headers.map(h => String(h || '').toLowerCase().trim());
+          
+          // Find ID/Barcode column
+          const idCol = headerLower.findIndex(h => 
+            h === 'id' || h === 'serial' || h === 'serial_number' || h === 'barcode' || 
+            h === 'module_id' || h === 'sr' || h === 'sr.no' || h === 'sn'
+          );
+          
+          if (idCol === -1) {
+            alert('❌ No ID/Barcode column found!\n\nPlease ensure your Excel has one of these columns:\nID, Serial, Serial_Number, Barcode');
+            return;
+          }
+          
+          // Extract serial numbers
+          const serialNumbers = [];
+          for (let i = 1; i < jsonData.length; i++) {
+            const row = jsonData[i];
+            if (row && row[idCol]) {
+              serialNumbers.push(String(row[idCol]).trim());
+            }
+          }
+          
+          if (serialNumbers.length === 0) {
+            alert('❌ No barcodes found in the file!');
+            return;
+          }
+          
+          // Upload to rejection API
+          const response = await axios.post(`${API_BASE_URL}/api/ftr/rejection`, {
+            company_id: selectedCompany.id,
+            serial_numbers: serialNumbers,
+            file_name: file.name
+          });
+          
+          if (response.data.success) {
+            alert(`✅ Rejection Data Uploaded!\n\n❌ Marked as REJECTED: ${response.data.updated_count}\n⚠️ Already Rejected: ${response.data.already_rejected}\n🆕 New Entries: ${response.data.new_entries}`);
+            loadFTRData(selectedCompany.id);
+            setShowRejectionModal(false);
+            setSelectedRejectionFile(null);
+          }
+        } catch (error) {
+          console.error('Failed to process Rejection Excel:', error);
+          alert('❌ Failed to process Rejection Excel file');
+        }
+      };
+      
+      reader.readAsArrayBuffer(file);
+    } catch (error) {
+      console.error('Failed to upload Rejection data:', error);
+      alert('❌ Failed to upload Rejection data');
+    } finally {
+      setUploadingRejection(false);
     }
   };
 
@@ -413,6 +533,14 @@ const FTRManagement = () => {
             </button>
             
             <button 
+              className="btn-rejection"
+              onClick={() => setShowRejectionModal(true)}
+              style={{ background: 'linear-gradient(135deg, #dc3545, #c82333)' }}
+            >
+              ❌ Upload Rejection
+            </button>
+            
+            <button 
               className="btn-assign"
               onClick={() => setShowAssignModal(true)}
             >
@@ -546,6 +674,122 @@ const FTRManagement = () => {
                   border: 'none',
                   borderRadius: '8px',
                   cursor: uploadingMasterFTR ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  color: '#666'
+                }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Upload Modal */}
+      {showRejectionModal && (
+        <div className="modal-overlay" onClick={() => setShowRejectionModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h2 style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              color: '#dc3545',
+              marginBottom: '10px'
+            }}>
+              ❌ Upload Rejection Data
+            </h2>
+            <p style={{ color: '#999', marginBottom: '20px', fontSize: '14px' }}>
+              Company: <strong style={{color: '#dc3545'}}>{selectedCompany?.companyName}</strong>
+            </p>
+            
+            <div style={{
+              background: 'linear-gradient(135deg, #1a1a2e, #16213e)',
+              padding: '20px',
+              borderRadius: '12px',
+              marginBottom: '20px',
+              border: '1px solid rgba(220, 53, 69, 0.3)'
+            }}>
+              <p style={{color: '#ffcccc', marginBottom: '15px', fontSize: '14px', textAlign: 'center'}}>
+                📋 Upload Excel with REJECTED barcodes<br/>
+                <small style={{color: '#999'}}>Column: ID / Barcode / Serial_Number</small>
+              </p>
+              <input 
+                type="file" 
+                accept=".xlsx,.xls"
+                onChange={handleRejectionFileSelect}
+                disabled={uploadingRejection}
+                style={{
+                  display: 'block',
+                  margin: '0 auto',
+                  padding: '10px 20px',
+                  background: 'white',
+                  border: '2px solid #dc3545',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            {selectedRejectionFile && (
+              <div style={{
+                marginBottom: '20px',
+                padding: '10px 15px',
+                background: 'rgba(220, 53, 69, 0.1)',
+                borderRadius: '8px',
+                border: '1px solid rgba(220, 53, 69, 0.3)'
+              }}>
+                <p style={{color: '#dc3545', fontSize: '14px', margin: 0}}>
+                  📁 Selected: <strong>{selectedRejectionFile.name}</strong>
+                </p>
+              </div>
+            )}
+
+            {uploadingRejection && (
+              <div style={{
+                marginBottom: '20px',
+                padding: '15px',
+                background: '#fff5f5',
+                borderRadius: '8px'
+              }}>
+                <p style={{color: '#dc3545', fontWeight: '600', marginBottom: '10px', textAlign: 'center'}}>
+                  ⏳ Uploading Rejection Data...
+                </p>
+              </div>
+            )}
+
+            <div style={{display: 'flex', gap: '10px'}}>
+              <button 
+                onClick={handleRejectionUpload}
+                disabled={uploadingRejection || !selectedRejectionFile}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: !selectedRejectionFile ? '#ccc' : 'linear-gradient(135deg, #dc3545, #c82333)',
+                  border: 'none',
+                  borderRadius: '8px',
+                  color: 'white',
+                  cursor: !selectedRejectionFile ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: '600'
+                }}
+              >
+                {uploadingRejection ? '⏳ Uploading...' : '❌ Upload Rejection'}
+              </button>
+              <button 
+                onClick={() => {
+                  setShowRejectionModal(false);
+                  setSelectedRejectionFile(null);
+                }}
+                disabled={uploadingRejection}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#f5f5f5',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: uploadingRejection ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '600',
                   color: '#666'

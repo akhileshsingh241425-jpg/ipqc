@@ -11,6 +11,7 @@ import TestReport from './components/TestReport';
 import GraphManager from './components/GraphManager';
 import UserManagement from './components/UserManagement';
 import FTRManagement from './components/FTRManagement';
+import AIAssistant from './components/AIAssistant';
 import Login from './components/Login';
 import './styles/Navbar.css';
 import './App.css';
@@ -322,6 +323,8 @@ function App() {
         return <FTRReportManager />;
       case 'ftr-management':
         return <FTRManagement />;
+      case 'ai-assistant':
+        return <AIAssistant />;
       case 'test-report':
         return <TestReport moduleDatabase={moduleDatabase} />;
       case 'graph-manager':
@@ -428,6 +431,14 @@ function App() {
           >
             <span className="icon">🏭</span>
             {!sidebarCollapsed && <span className="label">FTR Management</span>}
+          </li>
+          <li 
+            className={activeSection === 'ai-assistant' ? 'active' : ''}
+            onClick={() => setActiveSection('ai-assistant')}
+            title="AI FTR Assistant"
+          >
+            <span className="icon">🤖</span>
+            {!sidebarCollapsed && <span className="label">AI Assistant</span>}
           </li>
           <li 
             className={activeSection === 'test-report' ? 'active' : ''}
