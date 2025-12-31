@@ -1475,7 +1475,7 @@ def parse_user_query(message):
     company_patterns = {
         'Larsen & Toubro': r'l&t|larsen|toubro|lnt|l \& t',
         'Rays Power': r'rays|rp|rays\s*power',
-        'Sterlin and Wilson': r'sterlin|wilson|sw|sterling'
+        'Sterlin and Wilson': r'sterlin|wilson|sw|s&w|s\&w|sterling'
     }
     for company, pattern in company_patterns.items():
         if re.search(pattern, message_lower):
@@ -2334,7 +2334,7 @@ def detect_excel_command(message):
     company_patterns = {
         'Rays Power': r'rays|rp|rays power',
         'Larsen & Toubro': r'l&t|larsen|toubro|lnt',
-        'Sterlin and Wilson': r'sterlin|wilson|sw|sterling'
+        'Sterlin and Wilson': r'sterlin|wilson|sw|s&w|s\&w|sterling'
     }
     detected_company = None
     for company, pattern in company_patterns.items():
@@ -2425,6 +2425,8 @@ def generate_smart_excel(params):
     
     # ===== QUALITY CHECK EXCEL =====
     if quality_check:
+        result = None
+        
         if quality_check == 'duplicate':
             result = check_duplicate_barcodes(company)
             ws.title = f"{company[:20]}_Duplicates"
@@ -2461,6 +2463,10 @@ def generate_smart_excel(params):
             headers = ["S.No", "Issue Type", "Count", "Details"]
         else:
             return None, "Unknown quality check type"
+        
+        # Safety check - if result is None or has error
+        if not result or not result.get('has_answer'):
+            return None, f"Quality check failed for {company}"
         
         # Write headers
         for col, header in enumerate(headers, 1):
@@ -2741,11 +2747,11 @@ def ai_chat():
         # STEP 3: Try to answer specifically without AI
         specific_answer = answer_specific_query(parsed)
         
-        if specific_answer.get('has_answer'):
+        if specific_answer and specific_answer.get('has_answer'):
             # Direct answer without Groq API
             return jsonify({
                 'success': True,
-                'response': specific_answer['answer'],
+                'response': specific_answer.get('answer', 'No answer generated'),
                 'source': 'direct_mrp',
                 'parsed_query': parsed
             })
