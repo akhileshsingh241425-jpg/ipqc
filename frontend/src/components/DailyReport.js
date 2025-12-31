@@ -4397,6 +4397,17 @@ function DailyReport() {
         // Build display list: Show ALL COCs separately (multiple rows for same material)
         const consolidatedBom = [];
         
+        // Get current company short name for matching with MRP data
+        const getCompanyShortName = (companyName) => {
+          if (!companyName) return '';
+          const name = companyName.toLowerCase();
+          if (name.includes('sterlin') || name.includes('wilson')) return 's&w';
+          if (name.includes('larsen') || name.includes('toubro') || name.includes('l&t')) return 'l&t';
+          if (name.includes('rays')) return 'rays power';
+          return name;
+        };
+        const currentCompanyShort = getCompanyShortName(selectedCompany?.companyName);
+        
         // Helper function to find assigned COC data from MRP API
         const getAssignedCocForMaterial = (materialName, pdiNumber) => {
           // Normalize material name for matching
@@ -4422,17 +4433,28 @@ function DailyReport() {
           
           const normalizedMaterial = normalizeMatName(materialName);
           
-          // Find matching records from assigned COC data
+          // Find matching records from assigned COC data - filter by company AND material AND PDI
           return assignedCocData.filter(rec => {
             const recMaterial = normalizeMatName(rec.material_name);
             const recPdi = rec.pdi_no?.toLowerCase() || '';
             const targetPdi = pdiNumber?.toLowerCase() || '';
+            const recCompany = (rec.company_short || rec.company || '').toLowerCase();
             
-            // Match material and PDI
+            // Match company
+            const companyMatch = currentCompanyShort && (
+              recCompany.includes(currentCompanyShort) || 
+              currentCompanyShort.includes(recCompany) ||
+              recCompany === currentCompanyShort
+            );
+            
+            // Match material
             const materialMatch = recMaterial === normalizedMaterial;
-            const pdiMatch = !targetPdi || recPdi.includes(targetPdi.replace('pdi-', '')) || targetPdi.includes(recPdi.replace('pdi-', ''));
             
-            return materialMatch && pdiMatch;
+            // Match PDI (Lot 1 = PDI-1, etc.)
+            const pdiNum = targetPdi.replace('pdi-', '');
+            const pdiMatch = recPdi.includes(pdiNum) || recPdi.includes(`lot ${pdiNum}`) || recPdi === `pdi-${pdiNum}`;
+            
+            return companyMatch && materialMatch && pdiMatch;
           });
         };
         
@@ -4505,22 +4527,43 @@ function DailyReport() {
               });
             });
           } else {
-            // No COC assigned - show empty row with spec and MRP data
-            // Check if MRP has any assigned COCs for this material
-            const mrpTotal = mrpAssignedCocs.reduce((sum, m) => sum + (m.remaining_qty || 0), 0);
-            
-            consolidatedBom.push({
-              materialName: material.name,
-              unit: material.unit,
-              spec: material.spec || '',
-              lotNumber: null,
-              cocQty: null,
-              invoiceQty: null,
-              imagePath: null,
-              mrpRemainingQty: mrpTotal > 0 ? mrpTotal : null,
-              mrpAssignedCount: mrpAssignedCocs.length,
-              mrpAssignedCocs: mrpAssignedCocs.slice(0, 3) // Show first 3 for reference
-            });
+            // No local COC assigned - show MRP assigned COCs as separate rows
+            // This shows what's assigned in MRP for this material/PDI
+            if (mrpAssignedCocs.length > 0) {
+              // Show each MRP assigned COC as a separate row
+              mrpAssignedCocs.forEach(mrpCoc => {
+                consolidatedBom.push({
+                  materialName: material.name,
+                  unit: material.unit,
+                  spec: material.spec || '',
+                  // Use MRP data for these columns
+                  lotNumber: mrpCoc.invoice_no || null,
+                  lotBatchNo: mrpCoc.lot_batch_no || null,
+                  cocQty: mrpCoc.remaining_qty || null, // Remaining qty as COC qty
+                  invoiceQty: null,
+                  imagePath: null,
+                  // MRP specific data
+                  mrpRemainingQty: mrpCoc.remaining_qty || 0,
+                  mrpPdiNo: mrpCoc.pdi_no || null,
+                  mrpIsExhausted: mrpCoc.is_exhausted || false,
+                  isFromMrp: true // Flag to show this is MRP data, not local
+                });
+              });
+            } else {
+              // No COC assigned anywhere - show empty row
+              consolidatedBom.push({
+                materialName: material.name,
+                unit: material.unit,
+                spec: material.spec || '',
+                lotNumber: null,
+                cocQty: null,
+                invoiceQty: null,
+                imagePath: null,
+                mrpRemainingQty: null,
+                mrpPdiNo: null,
+                isFromMrp: false
+              });
+            }
           }
         });
         
@@ -4851,9 +4894,16 @@ function DailyReport() {
                             </td>
                             <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
                               {bm.lotNumber || '-'}
+                              {bm.isFromMrp && bm.lotNumber && (
+                                <span style={{marginLeft: '5px', fontSize: '8px', color: '#28a745'}}>(MRP)</span>
+                              )}
                             </td>
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>
-                              {bm.cocQty || '-'}
+                              {bm.isFromMrp ? (
+                                <span style={{color: '#28a745'}}>{bm.mrpRemainingQty?.toLocaleString() || '-'}</span>
+                              ) : (
+                                bm.cocQty || '-'
+                              )}
                             </td>
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
                               {usedQty || '-'}
@@ -4863,82 +4913,48 @@ function DailyReport() {
                               textAlign: 'center', 
                               border: '1px solid #dee2e6',
                               fontWeight: '500',
-                              color: gap >= 0 ? '#28a745' : '#dc3545'
+                              color: bm.isFromMrp 
+                                ? (bm.mrpRemainingQty > usedQty ? '#28a745' : '#dc3545')
+                                : (gap >= 0 ? '#28a745' : '#dc3545')
                             }}>
-                              {bm.cocQty ? (gap >= 0 ? `+${gap}` : gap) : '-'}
+                              {bm.isFromMrp ? (
+                                // For MRP data: Gap = remaining - used
+                                (() => {
+                                  const mrpGap = Math.round((bm.mrpRemainingQty - usedQty) * 100) / 100;
+                                  return mrpGap >= 0 ? `+${mrpGap.toLocaleString()}` : mrpGap.toLocaleString();
+                                })()
+                              ) : (
+                                bm.cocQty ? (gap >= 0 ? `+${gap}` : gap) : '-'
+                              )}
                             </td>
                             <td style={{
                               padding: '8px', 
                               border: '1px solid #dee2e6',
                               fontSize: '10px'
                             }}>
-                              {/* Show MRP assigned data if available */}
-                              {bm.mrpRemainingQty !== null && bm.mrpRemainingQty !== undefined ? (
-                                <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
-                                  <span style={{
-                                    padding: '3px 8px',
-                                    backgroundColor: bm.mrpIsExhausted ? '#dc3545' : '#28a745',
-                                    color: 'white',
-                                    borderRadius: '4px',
-                                    fontSize: '9px',
-                                    fontWeight: '500',
-                                    whiteSpace: 'nowrap',
-                                    display: 'inline-block'
-                                  }}>
-                                    {bm.mrpPdiNo || selectedPdiForDetails}
-                                  </span>
-                                  <span style={{
-                                    fontSize: '10px',
-                                    color: bm.mrpIsExhausted ? '#dc3545' : '#28a745',
-                                    fontWeight: '500'
-                                  }}>
-                                    Remaining: {bm.mrpRemainingQty?.toLocaleString() || 0}
-                                  </span>
-                                </div>
-                              ) : bm.mrpAssignedCocs && bm.mrpAssignedCocs.length > 0 ? (
-                                <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
-                                  <span style={{fontSize: '9px', color: '#666'}}>
-                                    {bm.mrpAssignedCount} COC(s) assigned
-                                  </span>
-                                  {bm.mrpAssignedCocs.map((mrp, mIdx) => (
-                                    <span key={mIdx} style={{
-                                      padding: '2px 6px',
-                                      backgroundColor: mrp.is_exhausted ? '#dc3545' : '#28a745',
-                                      color: 'white',
-                                      borderRadius: '4px',
-                                      fontSize: '8px',
-                                      whiteSpace: 'nowrap'
-                                    }}>
-                                      {mrp.pdi_no}: {mrp.remaining_qty?.toLocaleString() || 0}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : bm.usedInPdis && bm.usedInPdis.length > 0 ? (
-                                <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
-                                  {bm.usedInPdis.map((pdiWithCompany, pdiIdx) => {
-                                    const pdiMatch = pdiWithCompany.match(/^([^\(]+)/);
-                                    const pdi = pdiMatch ? pdiMatch[1].trim() : pdiWithCompany;
-                                    const isCurrentPdi = pdi === selectedPdiForDetails;
-                                    
-                                    return (
-                                      <span 
-                                        key={pdiIdx}
-                                        style={{
-                                          padding: '3px 8px',
-                                          backgroundColor: isCurrentPdi ? '#007bff' : '#6c757d',
-                                          color: 'white',
-                                          borderRadius: '4px',
-                                          fontSize: '9px',
-                                          fontWeight: '500',
-                                          whiteSpace: 'nowrap',
-                                          display: 'inline-block'
-                                        }}
-                                      >
-                                        {pdiWithCompany}
-                                      </span>
-                                    );
-                                  })}
-                                </div>
+                              {/* Show MRP PDI assignment */}
+                              {bm.mrpPdiNo ? (
+                                <span style={{
+                                  padding: '3px 8px',
+                                  backgroundColor: bm.mrpIsExhausted ? '#dc3545' : '#28a745',
+                                  color: 'white',
+                                  borderRadius: '4px',
+                                  fontSize: '9px',
+                                  fontWeight: '500'
+                                }}>
+                                  {bm.mrpPdiNo}
+                                </span>
+                              ) : bm.isFromMrp ? (
+                                <span style={{
+                                  padding: '3px 8px',
+                                  backgroundColor: '#28a745',
+                                  color: 'white',
+                                  borderRadius: '4px',
+                                  fontSize: '9px',
+                                  fontWeight: '500'
+                                }}>
+                                  {selectedPdiForDetails}
+                                </span>
                               ) : '-'}
                             </td>
                             <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
