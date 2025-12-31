@@ -188,6 +188,26 @@
 }
 
 /* Export Buttons */
+.company-selector {
+  margin-bottom: 10px;
+}
+
+.company-dropdown {
+  width: 100%;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.company-dropdown option {
+  background: #1a1a2e;
+  color: white;
+}
+
 .export-buttons {
   display: flex;
   flex-direction: column;
@@ -208,9 +228,28 @@
   text-align: left;
 }
 
-.btn-export:hover {
+.btn-export:hover:not(:disabled) {
   background: rgba(0, 255, 136, 0.2);
   transform: translateX(5px);
+}
+
+.btn-export:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.export-loading {
+  text-align: center;
+  color: #00d4ff;
+  margin-top: 10px;
+  font-size: 12px;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 
 /* Chat Area */

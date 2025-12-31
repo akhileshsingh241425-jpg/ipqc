@@ -10,6 +10,8 @@ const AIAssistant = () => {
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [apiKey, setApiKey] = useState('');
   const [ftrData, setFtrData] = useState(null);
+  const [selectedCompany, setSelectedCompany] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
   const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
@@ -134,13 +136,15 @@ const AIAssistant = () => {
   ];
 
   // Excel download handler
-  const handleExcelDownload = async (exportType, companyId = null, companyName = 'All') => {
+  const handleExcelDownload = async (exportType, companyId = null, companyName = null) => {
+    const targetCompany = companyName || selectedCompany || 'All';
+    setExportLoading(true);
     try {
       const API_BASE_URL = getAPIBaseURL();
       const response = await axios.post(`${API_BASE_URL}/api/ai/export/excel`, {
         type: exportType,
         company_id: companyId,
-        company_name: companyName
+        company_name: targetCompany
       }, {
         responseType: 'blob'
       });
@@ -149,14 +153,26 @@ const AIAssistant = () => {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${exportType}_${companyName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+      link.setAttribute('download', `${exportType}_${targetCompany}_${new Date().toISOString().slice(0,10)}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
+      
+      // Add success message to chat
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `✅ Excel downloaded: ${exportType} data for ${targetCompany}`
+      }]);
     } catch (error) {
       console.error('Excel download error:', error);
-      alert('❌ Excel download failed: ' + (error.response?.data?.error || error.message));
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ Excel download failed: ${error.response?.data?.error || error.message}`,
+        isError: true
+      }]);
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -231,26 +247,68 @@ const AIAssistant = () => {
           
           {/* Excel Export Buttons */}
           <h4>📥 Export Excel</h4>
+          
+          {/* Company Selector for Export */}
+          <div className="company-selector">
+            <select 
+              value={selectedCompany} 
+              onChange={(e) => setSelectedCompany(e.target.value)}
+              className="company-dropdown"
+            >
+              <option value="">-- Select Company --</option>
+              {ftrData?.companies?.map((c, idx) => (
+                <option key={idx} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          
           <div className="export-buttons">
-            <button className="btn-export" onClick={() => handleExcelDownload('all')}>
+            <button 
+              className="btn-export" 
+              onClick={() => handleExcelDownload('all')}
+              disabled={exportLoading}
+            >
               📊 Summary Report
             </button>
-            <button className="btn-export" onClick={() => handleExcelDownload('packed', null, 'Rays Power')}>
-              📦 Rays Packed
+            <button 
+              className="btn-export" 
+              onClick={() => handleExcelDownload('packed')}
+              disabled={exportLoading || !selectedCompany}
+              title={!selectedCompany ? 'Select company first' : ''}
+            >
+              📦 Packed Modules
             </button>
-            <button className="btn-export" onClick={() => handleExcelDownload('dispatched', null, 'Rays Power')}>
-              🚚 Rays Dispatched
+            <button 
+              className="btn-export" 
+              onClick={() => handleExcelDownload('dispatched')}
+              disabled={exportLoading || !selectedCompany}
+              title={!selectedCompany ? 'Select company first' : ''}
+            >
+              🚚 Dispatched Modules
             </button>
-            <button className="btn-export" onClick={() => handleExcelDownload('pending')}>
-              ⏳ All Pending
+            <button 
+              className="btn-export" 
+              onClick={() => handleExcelDownload('pending')}
+              disabled={exportLoading}
+            >
+              ⏳ Pending Pack
             </button>
-            <button className="btn-export" onClick={() => handleExcelDownload('rejected')}>
-              ❌ All Rejected
+            <button 
+              className="btn-export" 
+              onClick={() => handleExcelDownload('rejected')}
+              disabled={exportLoading}
+            >
+              ❌ Rejected
             </button>
-            <button className="btn-export" onClick={() => handleExcelDownload('binning')}>
+            <button 
+              className="btn-export" 
+              onClick={() => handleExcelDownload('binning')}
+              disabled={exportLoading}
+            >
               🏷️ Binning Data
             </button>
           </div>
+          {exportLoading && <p className="export-loading">⏳ Downloading...</p>}
         </div>
 
         {/* Chat Area */}

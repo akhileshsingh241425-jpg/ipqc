@@ -759,7 +759,7 @@ def export_to_excel():
         elif export_type == 'packed':
             # Export packed modules from MRP API
             ws.title = "Packed Modules"
-            headers = ["S.No", "Barcode", "Status", "Pack Date"]
+            headers = ["S.No", "Barcode", "Running Order", "Binning", "Pallet No", "Pack Date", "Status"]
             
             # Get from external API
             mrp_party_name = get_mrp_party_name(company_name)
@@ -776,11 +776,22 @@ def export_to_excel():
                     cell.border = thin_border
                 
                 # Write data
+                import re
                 for idx, barcode in enumerate(barcodes, 1):
+                    running_order = barcode.get('running_order', '') or ''
+                    # Extract binning from running_order (e.g., "R-3 i-2" -> "I2")
+                    binning = ''
+                    bin_match = re.search(r'i-?(\d+)', running_order, re.IGNORECASE)
+                    if bin_match:
+                        binning = f"I{bin_match.group(1)}"
+                    
                     ws.cell(row=idx+1, column=1, value=idx).border = thin_border
                     ws.cell(row=idx+1, column=2, value=barcode.get('barcode', '')).border = thin_border
-                    ws.cell(row=idx+1, column=3, value='Packed').border = thin_border
-                    ws.cell(row=idx+1, column=4, value=barcode.get('pack_date', '')).border = thin_border
+                    ws.cell(row=idx+1, column=3, value=running_order).border = thin_border
+                    ws.cell(row=idx+1, column=4, value=binning).border = thin_border
+                    ws.cell(row=idx+1, column=5, value=barcode.get('pallet_no', '')).border = thin_border
+                    ws.cell(row=idx+1, column=6, value=barcode.get('date', '')).border = thin_border
+                    ws.cell(row=idx+1, column=7, value='Packed').border = thin_border
                 
                 # Auto-width columns
                 for col in ws.columns:
@@ -801,7 +812,7 @@ def export_to_excel():
         elif export_type == 'dispatched':
             # Export dispatched modules from MRP API
             ws.title = "Dispatched Modules"
-            headers = ["S.No", "Barcode", "Status", "Dispatch Date", "Dispatch Party"]
+            headers = ["S.No", "Barcode", "Running Order", "Binning", "Dispatch Party", "Dispatch Date", "Status"]
             
             mrp_party_name = get_mrp_party_name(company_name)
             response = requests.post(BARCODE_TRACKING_API, json={'party_name': mrp_party_name}, timeout=30)
@@ -817,12 +828,22 @@ def export_to_excel():
                     cell.border = thin_border
                 
                 # Write data
+                import re
                 for idx, barcode in enumerate(barcodes, 1):
+                    running_order = barcode.get('running_order', '') or ''
+                    # Extract binning from running_order
+                    binning = ''
+                    bin_match = re.search(r'i-?(\d+)', running_order, re.IGNORECASE)
+                    if bin_match:
+                        binning = f"I{bin_match.group(1)}"
+                    
                     ws.cell(row=idx+1, column=1, value=idx).border = thin_border
                     ws.cell(row=idx+1, column=2, value=barcode.get('barcode', '')).border = thin_border
-                    ws.cell(row=idx+1, column=3, value='Dispatched').border = thin_border
-                    ws.cell(row=idx+1, column=4, value=barcode.get('dispatch_date', '')).border = thin_border
+                    ws.cell(row=idx+1, column=3, value=running_order).border = thin_border
+                    ws.cell(row=idx+1, column=4, value=binning).border = thin_border
                     ws.cell(row=idx+1, column=5, value=barcode.get('dispatch_party', '')).border = thin_border
+                    ws.cell(row=idx+1, column=6, value=barcode.get('dispatch_date', barcode.get('date', ''))).border = thin_border
+                    ws.cell(row=idx+1, column=7, value='Dispatched').border = thin_border
                 
                 # Auto-width columns
                 for col in ws.columns:
