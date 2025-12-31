@@ -517,9 +517,211 @@ def query_groq(user_message, ftr_data):
             'error': str(e)
         }
 
+def detect_excel_command(message):
+    """
+    Detect if user wants Excel export from chat message
+    Returns: {'type': 'excel_command', 'action': '...', 'params': {...}} or None
+    """
+    import re
+    message_lower = message.lower()
+    
+    # Patterns for Excel commands
+    excel_keywords = ['excel', 'export', 'download', 'list', 'de do', 'do', 'chahiye', 'nikalo', 'bhejo']
+    has_excel_intent = any(kw in message_lower for kw in excel_keywords)
+    
+    # Company detection
+    company_patterns = {
+        'Rays Power': r'rays|rp|rays power',
+        'Larsen & Toubro': r'l&t|larsen|toubro|lnt',
+        'Sterlin and Wilson': r'sterlin|wilson|sw|sterling'
+    }
+    detected_company = None
+    for company, pattern in company_patterns.items():
+        if re.search(pattern, message_lower):
+            detected_company = company
+            break
+    
+    # Running Order detection (R-1, R-2, R-3, etc.)
+    ro_match = re.search(r'r-?(\d+)', message_lower)
+    running_order = f"R-{ro_match.group(1)}" if ro_match else None
+    
+    # Binning detection (I-1, I-2, I-3, i1, i2, i3)
+    bin_match = re.search(r'i-?(\d+)', message_lower)
+    binning = f"I{bin_match.group(1)}" if bin_match else None
+    
+    # PDI detection
+    pdi_match = re.search(r'pdi-?(\d+)', message_lower)
+    pdi_number = f"PDI-{pdi_match.group(1)}" if pdi_match else None
+    
+    # Count detection (for "18 barcode chahiye")
+    count_match = re.search(r'(\d+)\s*(barcode|module|serial|piece)', message_lower)
+    if not count_match:
+        count_match = re.search(r'(barcode|module|serial)\s*(\d+)', message_lower)
+    requested_count = int(count_match.group(1) if count_match and count_match.group(1).isdigit() else (count_match.group(2) if count_match else 0))
+    
+    # Status detection
+    packed = 'packed' in message_lower or 'pack' in message_lower
+    dispatched = 'dispatch' in message_lower or 'sent' in message_lower or 'bheja' in message_lower
+    pending = 'pending' in message_lower or 'baaki' in message_lower or 'remaining' in message_lower
+    
+    # If any specific filter detected with excel intent
+    if has_excel_intent or running_order or binning or (pdi_number and requested_count):
+        return {
+            'type': 'excel_command',
+            'company': detected_company,
+            'running_order': running_order,
+            'binning': binning,
+            'pdi_number': pdi_number,
+            'count': requested_count,
+            'packed': packed,
+            'dispatched': dispatched,
+            'pending': pending
+        }
+    
+    return None
+
+def generate_smart_excel(params):
+    """Generate Excel based on smart command parameters"""
+    import re
+    
+    company = params.get('company', 'Rays Power')
+    running_order_filter = params.get('running_order')
+    binning_filter = params.get('binning')
+    pdi_number = params.get('pdi_number')
+    count = params.get('count', 0)
+    get_packed = params.get('packed', False)
+    get_dispatched = params.get('dispatched', False)
+    get_pending = params.get('pending', False)
+    
+    # Default to packed if no status specified
+    if not get_packed and not get_dispatched and not get_pending:
+        get_packed = True
+    
+    # Get MRP data
+    mrp_party_name = get_mrp_party_name(company)
+    try:
+        response = requests.post(BARCODE_TRACKING_API, json={'party_name': mrp_party_name}, timeout=60)
+        mrp_data = response.json() if response.status_code == 200 else {'data': []}
+    except:
+        mrp_data = {'data': []}
+    
+    barcodes = mrp_data.get('data', [])
+    
+    # Filter by status
+    filtered = []
+    for b in barcodes:
+        status = b.get('status', '')
+        dispatch_party = b.get('dispatch_party')
+        
+        is_packed = status == 'packed'
+        is_dispatched = bool(dispatch_party) or status == 'dispatched'
+        
+        if get_dispatched and is_dispatched:
+            filtered.append(b)
+        elif get_packed and is_packed and not is_dispatched:
+            filtered.append(b)
+        elif get_pending and not is_packed and not is_dispatched:
+            filtered.append(b)
+    
+    # Filter by Running Order
+    if running_order_filter:
+        filtered = [b for b in filtered if running_order_filter.upper() in (b.get('running_order', '') or '').upper()]
+    
+    # Filter by Binning
+    if binning_filter:
+        result = []
+        for b in filtered:
+            ro = b.get('running_order', '') or ''
+            bin_match = re.search(r'i-?(\d+)', ro, re.IGNORECASE)
+            if bin_match:
+                barcode_binning = f"I{bin_match.group(1)}"
+                if barcode_binning.upper() == binning_filter.upper():
+                    result.append(b)
+        filtered = result
+    
+    # Limit by count if specified
+    if count > 0:
+        filtered = filtered[:count]
+    
+    # Generate Excel
+    if not EXCEL_AVAILABLE:
+        return None, "Excel not available"
+    
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    
+    # Determine title
+    title_parts = [company]
+    if running_order_filter:
+        title_parts.append(running_order_filter)
+    if binning_filter:
+        title_parts.append(binning_filter)
+    if pdi_number:
+        title_parts.append(pdi_number)
+    if get_packed:
+        title_parts.append("Packed")
+    if get_dispatched:
+        title_parts.append("Dispatched")
+    
+    ws.title = "_".join(title_parts)[:31]  # Excel sheet name limit
+    
+    # Styles
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    
+    headers = ["S.No", "Barcode", "Running Order", "Binning", "Pallet No", "Date", "Status"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.border = thin_border
+    
+    for idx, b in enumerate(filtered, 1):
+        ro = b.get('running_order', '') or ''
+        bin_match = re.search(r'i-?(\d+)', ro, re.IGNORECASE)
+        binning = f"I{bin_match.group(1)}" if bin_match else ''
+        
+        status = 'Dispatched' if b.get('dispatch_party') else 'Packed'
+        
+        ws.cell(row=idx+1, column=1, value=idx).border = thin_border
+        ws.cell(row=idx+1, column=2, value=b.get('barcode', '')).border = thin_border
+        ws.cell(row=idx+1, column=3, value=ro).border = thin_border
+        ws.cell(row=idx+1, column=4, value=binning).border = thin_border
+        ws.cell(row=idx+1, column=5, value=b.get('pallet_no', '')).border = thin_border
+        ws.cell(row=idx+1, column=6, value=b.get('date', '')).border = thin_border
+        ws.cell(row=idx+1, column=7, value=status).border = thin_border
+    
+    # Summary
+    summary_row = len(filtered) + 3
+    ws.cell(row=summary_row, column=1, value="SUMMARY:").font = Font(bold=True)
+    ws.cell(row=summary_row + 1, column=1, value=f"Company: {company}")
+    ws.cell(row=summary_row + 2, column=1, value=f"Total Records: {len(filtered)}")
+    if running_order_filter:
+        ws.cell(row=summary_row + 3, column=1, value=f"Running Order: {running_order_filter}")
+    if binning_filter:
+        ws.cell(row=summary_row + 4, column=1, value=f"Binning: {binning_filter}")
+    
+    # Auto-width
+    for col in ws.columns:
+        max_length = max(len(str(cell.value or '')) for cell in col)
+        ws.column_dimensions[col[0].column_letter].width = max_length + 2
+    
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    
+    import base64
+    excel_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    
+    return excel_base64, f"Found {len(filtered)} barcodes"
+
 @ai_assistant_bp.route('/ai/chat', methods=['POST'])
 def ai_chat():
-    """Main AI chat endpoint"""
+    """Main AI chat endpoint with smart Excel commands"""
     try:
         data = request.json
         user_message = data.get('message', '').strip()
@@ -527,7 +729,42 @@ def ai_chat():
         if not user_message:
             return jsonify({'success': False, 'error': 'Message is required'}), 400
         
-        # Get fresh FTR data
+        # Check if this is an Excel command
+        excel_cmd = detect_excel_command(user_message)
+        
+        if excel_cmd:
+            # Generate smart Excel
+            excel_base64, summary = generate_smart_excel(excel_cmd)
+            
+            if excel_base64:
+                # Build response message
+                msg_parts = [f"✅ Excel generated!"]
+                msg_parts.append(f"\n📊 {summary}")
+                if excel_cmd.get('company'):
+                    msg_parts.append(f"\n🏭 Company: {excel_cmd['company']}")
+                if excel_cmd.get('running_order'):
+                    msg_parts.append(f"\n🔢 Running Order: {excel_cmd['running_order']}")
+                if excel_cmd.get('binning'):
+                    msg_parts.append(f"\n🏷️ Binning: {excel_cmd['binning']}")
+                if excel_cmd.get('count'):
+                    msg_parts.append(f"\n📝 Requested: {excel_cmd['count']} barcodes")
+                
+                msg_parts.append("\n\n👇 Click button below to download Excel")
+                
+                return jsonify({
+                    'success': True,
+                    'response': "".join(msg_parts),
+                    'has_excel': True,
+                    'excel_base64': excel_base64,
+                    'excel_params': excel_cmd
+                })
+            else:
+                return jsonify({
+                    'success': True,
+                    'response': f"❌ Excel generation failed: {summary}"
+                })
+        
+        # Regular AI chat - Get fresh FTR data
         ftr_data = get_all_ftr_data()
         
         if not ftr_data:
@@ -983,4 +1220,235 @@ def export_to_excel():
         print(f"Excel export error: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@ai_assistant_bp.route('/ai/check-barcodes', methods=['POST'])
+def check_barcodes_status():
+    """
+    Check status of barcodes from uploaded Excel or list
+    Returns packed/dispatched/pending status for each barcode
+    """
+    try:
+        barcodes_to_check = []
+        company_name = request.form.get('company_name', 'Rays Power')
+        
+        # Check if file uploaded
+        if 'file' in request.files:
+            file = request.files['file']
+            if file.filename.endswith(('.xlsx', '.xls')):
+                try:
+                    import pandas as pd
+                    df = pd.read_excel(file)
+                    # Try to find barcode column
+                    barcode_col = None
+                    for col in df.columns:
+                        col_lower = str(col).lower()
+                        if any(x in col_lower for x in ['barcode', 'serial', 'id', 'module', 'sr']):
+                            barcode_col = col
+                            break
+                    if barcode_col is None:
+                        barcode_col = df.columns[0]  # Use first column
+                    
+                    barcodes_to_check = df[barcode_col].dropna().astype(str).tolist()
+                except Exception as e:
+                    return jsonify({'success': False, 'error': f'Excel parsing error: {str(e)}'}), 400
+            elif file.filename.endswith('.csv'):
+                import pandas as pd
+                df = pd.read_csv(file)
+                barcode_col = df.columns[0]
+                barcodes_to_check = df[barcode_col].dropna().astype(str).tolist()
+        else:
+            # Get from JSON body
+            data = request.get_json() if request.is_json else {}
+            barcodes_to_check = data.get('barcodes', [])
+            company_name = data.get('company_name', company_name)
+        
+        if not barcodes_to_check:
+            return jsonify({'success': False, 'error': 'No barcodes provided'}), 400
+        
+        # Clean barcodes
+        barcodes_to_check = [str(b).strip() for b in barcodes_to_check if str(b).strip()]
+        
+        # Fetch all data from MRP API for company
+        mrp_party_name = get_mrp_party_name(company_name)
+        
+        try:
+            response = requests.post(
+                BARCODE_TRACKING_API,
+                json={'party_name': mrp_party_name},
+                timeout=60
+            )
+            mrp_data = response.json() if response.status_code == 200 else {'data': []}
+        except:
+            mrp_data = {'data': []}
+        
+        # Create lookup dictionaries from MRP data
+        mrp_barcodes = {}
+        for item in mrp_data.get('data', []):
+            bc = item.get('barcode', '')
+            mrp_barcodes[bc] = {
+                'status': item.get('status', ''),
+                'running_order': item.get('running_order', ''),
+                'pallet_no': item.get('pallet_no', ''),
+                'packed_party': item.get('packed_party', ''),
+                'dispatch_party': item.get('dispatch_party', ''),
+                'date': item.get('date', '')
+            }
+        
+        # Check each barcode
+        results = []
+        packed_count = 0
+        dispatched_count = 0
+        not_found_count = 0
+        pending_count = 0
+        
+        for barcode in barcodes_to_check:
+            mrp_info = mrp_barcodes.get(barcode, {})
+            
+            is_packed = mrp_info.get('status') == 'packed' or mrp_info.get('packed_party')
+            is_dispatched = bool(mrp_info.get('dispatch_party')) or mrp_info.get('status') == 'dispatched'
+            
+            # Extract binning from running_order
+            import re
+            running_order = mrp_info.get('running_order', '') or ''
+            binning = ''
+            bin_match = re.search(r'i-?(\d+)', running_order, re.IGNORECASE)
+            if bin_match:
+                binning = f"I{bin_match.group(1)}"
+            
+            if is_dispatched:
+                status = '🚚 DISPATCHED'
+                dispatched_count += 1
+            elif is_packed:
+                status = '📦 PACKED'
+                packed_count += 1
+            elif barcode in mrp_barcodes:
+                status = '⏳ PENDING'
+                pending_count += 1
+            else:
+                status = '❓ NOT FOUND'
+                not_found_count += 1
+            
+            results.append({
+                'barcode': barcode,
+                'status': status,
+                'running_order': running_order,
+                'binning': binning,
+                'pallet_no': mrp_info.get('pallet_no', ''),
+                'dispatch_party': mrp_info.get('dispatch_party', ''),
+                'date': mrp_info.get('date', '')
+            })
+        
+        # Generate Excel report
+        if EXCEL_AVAILABLE:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Barcode Status"
+            
+            # Styles
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+            packed_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+            dispatched_fill = PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid")
+            not_found_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+            pending_fill = PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid")
+            thin_border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin')
+            )
+            
+            headers = ["S.No", "Barcode", "Status", "Running Order", "Binning", "Pallet No", "Dispatch Party", "Date"]
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = thin_border
+            
+            for idx, result in enumerate(results, 1):
+                row = idx + 1
+                ws.cell(row=row, column=1, value=idx).border = thin_border
+                ws.cell(row=row, column=2, value=result['barcode']).border = thin_border
+                
+                status_cell = ws.cell(row=row, column=3, value=result['status'])
+                status_cell.border = thin_border
+                if 'DISPATCHED' in result['status']:
+                    status_cell.fill = dispatched_fill
+                elif 'PACKED' in result['status']:
+                    status_cell.fill = packed_fill
+                elif 'NOT FOUND' in result['status']:
+                    status_cell.fill = not_found_fill
+                else:
+                    status_cell.fill = pending_fill
+                
+                ws.cell(row=row, column=4, value=result['running_order']).border = thin_border
+                ws.cell(row=row, column=5, value=result['binning']).border = thin_border
+                ws.cell(row=row, column=6, value=result['pallet_no']).border = thin_border
+                ws.cell(row=row, column=7, value=result['dispatch_party']).border = thin_border
+                ws.cell(row=row, column=8, value=result['date']).border = thin_border
+            
+            # Summary row
+            summary_row = len(results) + 3
+            ws.cell(row=summary_row, column=1, value="SUMMARY:").font = Font(bold=True)
+            ws.cell(row=summary_row + 1, column=1, value=f"Total Checked: {len(results)}")
+            ws.cell(row=summary_row + 2, column=1, value=f"📦 Packed: {packed_count}")
+            ws.cell(row=summary_row + 3, column=1, value=f"🚚 Dispatched: {dispatched_count}")
+            ws.cell(row=summary_row + 4, column=1, value=f"⏳ Pending: {pending_count}")
+            ws.cell(row=summary_row + 5, column=1, value=f"❓ Not Found: {not_found_count}")
+            
+            # Auto-width
+            for col in ws.columns:
+                max_length = max(len(str(cell.value or '')) for cell in col)
+                ws.column_dimensions[col[0].column_letter].width = max_length + 2
+            
+            buffer = io.BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            # Encode to base64 for JSON response
+            import base64
+            excel_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        else:
+            excel_base64 = None
+        
+        return jsonify({
+            'success': True,
+            'total_checked': len(results),
+            'summary': {
+                'packed': packed_count,
+                'dispatched': dispatched_count,
+                'pending': pending_count,
+                'not_found': not_found_count
+            },
+            'results': results[:100],  # Limit to first 100 for JSON response
+            'excel_base64': excel_base64,
+            'message': f"✅ Checked {len(results)} barcodes:\n📦 Packed: {packed_count}\n🚚 Dispatched: {dispatched_count}\n⏳ Pending: {pending_count}\n❓ Not Found: {not_found_count}"
+        })
+        
+    except Exception as e:
+        print(f"Check barcodes error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@ai_assistant_bp.route('/ai/download-check-result', methods=['POST'])
+def download_check_result():
+    """Download the barcode check result as Excel"""
+    try:
+        data = request.json
+        excel_base64 = data.get('excel_base64')
+        
+        if not excel_base64:
+            return jsonify({'success': False, 'error': 'No Excel data'}), 400
+        
+        import base64
+        buffer = io.BytesIO(base64.b64decode(excel_base64))
+        buffer.seek(0)
+        
+        filename = f"Barcode_Status_Check_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return send_file(buffer, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                       as_attachment=True, download_name=filename)
+        
+    except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

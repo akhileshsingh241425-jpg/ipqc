@@ -12,6 +12,9 @@ const AIAssistant = () => {
   const [ftrData, setFtrData] = useState(null);
   const [selectedCompany, setSelectedCompany] = useState('');
   const [exportLoading, setExportLoading] = useState(false);
+  const [checkResults, setCheckResults] = useState(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
@@ -22,7 +25,7 @@ const AIAssistant = () => {
     // Add welcome message
     setMessages([{
       role: 'assistant',
-      content: '👋 Namaste! Main aapka AI FTR Assistant hoon.\n\nMujhse pucho:\n• "KSPL ka status batao"\n• "Kitna production pending hai?"\n• "Total packed modules kitne hai?"\n• "Kis company ka sabse zyada FTR hai?"'
+      content: '👋 Namaste! Main aapka AI FTR Assistant hoon.\n\n📊 **Smart Excel Commands:**\n• "Rays ka R-3 excel do"\n• "L&T ke I-2 packed barcodes"\n• "Sterlin ka dispatched excel do"\n• "50 barcode list do"\n\n📁 **Upload & Check:**\n• Sidebar se Excel upload karke barcode status check karo\n\n❓ **Questions:**\n• "Total packed kitne hai?"\n• "Binning wise breakup batao"'
     }]);
   }, []);
 
@@ -74,9 +77,15 @@ const AIAssistant = () => {
       });
       
       if (response.data.success) {
+        // Check if response has Excel data
+        const hasExcel = response.data.has_excel && response.data.excel_base64;
+        
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: response.data.response
+          content: response.data.response,
+          hasExcel: hasExcel,
+          excelData: response.data.excel_base64,
+          excelParams: response.data.excel_params
         }]);
       } else {
         setMessages(prev => [...prev, {
@@ -128,11 +137,11 @@ const AIAssistant = () => {
   };
 
   const quickQuestions = [
-    "Total FTR status batao",
-    "Kitna production pending hai?",
-    "Kis company ka data show karo",
-    "Available serial numbers kitne hai?",
-    "Packed vs Assigned comparison"
+    "Rays ka R-3 excel do",
+    "Rays ke I-2 packed barcodes",
+    "L&T ka dispatched excel do",
+    "Sterlin ka binning data",
+    "50 barcode packed list do"
   ];
 
   // Excel download handler
@@ -173,6 +182,101 @@ const AIAssistant = () => {
       }]);
     } finally {
       setExportLoading(false);
+    }
+  };
+
+  // Barcode check - upload Excel and check status
+  const handleBarcodeCheck = async (file) => {
+    if (!file) return;
+    
+    const targetCompany = selectedCompany || 'Rays Power';
+    setUploadingFile(true);
+    
+    // Add user message
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: `📤 Uploading ${file.name} to check barcode status for ${targetCompany}...`
+    }]);
+    
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('company_name', targetCompany);
+      
+      const response = await axios.post(`${API_BASE_URL}/api/ai/check-barcodes`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (response.data.success) {
+        const { summary, results, excel_base64, message } = response.data;
+        setCheckResults({ summary, results, excel_base64 });
+        
+        // Create detailed message
+        let resultMessage = `📊 **Barcode Status Check Complete!**\n\n${message}\n\n`;
+        
+        // Show first 10 results
+        if (results && results.length > 0) {
+          resultMessage += `\n**Sample Results (first 10):**\n`;
+          results.slice(0, 10).forEach((r, i) => {
+            resultMessage += `${i+1}. ${r.barcode} - ${r.status}`;
+            if (r.running_order) resultMessage += ` | ${r.running_order}`;
+            if (r.binning) resultMessage += ` | ${r.binning}`;
+            resultMessage += '\n';
+          });
+          if (results.length > 10) {
+            resultMessage += `\n... and ${results.length - 10} more. Download Excel for full report.`;
+          }
+        }
+        
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: resultMessage,
+          hasExcel: !!excel_base64,
+          excelData: excel_base64
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `❌ Error: ${response.data.error}`,
+          isError: true
+        }]);
+      }
+    } catch (error) {
+      console.error('Barcode check error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ Barcode check failed: ${error.response?.data?.error || error.message}`,
+        isError: true
+      }]);
+    } finally {
+      setUploadingFile(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  // Download Excel from base64
+  const downloadExcelFromBase64 = (base64Data, filename = 'Barcode_Status.xlsx') => {
+    try {
+      const byteCharacters = atob(base64Data);
+      const byteNumbers = new Array(byteCharacters.length);
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+      }
+      const byteArray = new Uint8Array(byteNumbers);
+      const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      alert('Download failed');
     }
   };
 
@@ -309,6 +413,29 @@ const AIAssistant = () => {
             </button>
           </div>
           {exportLoading && <p className="export-loading">⏳ Downloading...</p>}
+          
+          {/* Barcode Check Upload */}
+          <h4>🔍 Check Barcode Status</h4>
+          <div className="barcode-check-section">
+            <p className="check-help">Upload Excel with serial numbers to check packed/dispatched status</p>
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => handleBarcodeCheck(e.target.files[0])}
+              style={{ display: 'none' }}
+              id="barcode-file-input"
+            />
+            <button 
+              className="btn-upload-check"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingFile || !selectedCompany}
+              title={!selectedCompany ? 'Select company first' : 'Upload Excel to check status'}
+            >
+              {uploadingFile ? '⏳ Checking...' : '📤 Upload & Check Barcodes'}
+            </button>
+            {!selectedCompany && <p className="check-warning">⚠️ Select company first</p>}
+          </div>
         </div>
 
         {/* Chat Area */}
@@ -335,6 +462,14 @@ const AIAssistant = () => {
                 </div>
                 <div className="message-content">
                   <pre>{msg.content}</pre>
+                  {msg.hasExcel && msg.excelData && (
+                    <button 
+                      className="btn-download-excel"
+                      onClick={() => downloadExcelFromBase64(msg.excelData, `Barcode_Status_${new Date().toISOString().slice(0,10)}.xlsx`)}
+                    >
+                      📥 Download Excel Report
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
