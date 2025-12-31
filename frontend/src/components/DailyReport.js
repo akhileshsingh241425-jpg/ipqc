@@ -149,7 +149,15 @@ function DailyReport() {
     startDate: '',
     endDate: ''
   });
-  const [pdiProductionOverrides, setPdiProductionOverrides] = useState({}); // {pdi: customProductionQty}
+  // Load pdiProductionOverrides from localStorage on init
+  const [pdiProductionOverrides, setPdiProductionOverrides] = useState(() => {
+    try {
+      const saved = localStorage.getItem('pdiProductionOverrides');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  }); // {pdi: customProductionQty}
   const [editingPdiProduction, setEditingPdiProduction] = useState(false);
   const [tempPdiProduction, setTempPdiProduction] = useState('');
   const [reportOptions, setReportOptions] = useState({
@@ -178,6 +186,15 @@ function DailyReport() {
   useEffect(() => {
     loadCompanies();
   }, []);
+
+  // Save pdiProductionOverrides to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('pdiProductionOverrides', JSON.stringify(pdiProductionOverrides));
+    } catch (e) {
+      console.error('Failed to save pdiProductionOverrides to localStorage:', e);
+    }
+  }, [pdiProductionOverrides]);
 
   const loadAvailableCocData = async () => {
     try {
@@ -4687,6 +4704,9 @@ function DailyReport() {
                         // Use spec from bm first, then lookup from COC_SPEC_MAP
                         const specification = bm.spec && bm.spec !== '' ? bm.spec : getSpecFromCOCMaterials(bm.materialName);
                         
+                        // Check if COC is assigned (has lotNumber/invoiceNo)
+                        const hasCocAssigned = bm.lotNumber && bm.lotNumber !== '-';
+                        
                         return (
                           <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
                             <td style={{padding: '8px', border: '1px solid #dee2e6'}}>
@@ -4694,8 +4714,8 @@ function DailyReport() {
                                 <span style={{fontWeight: '500', fontSize: '11px'}}>
                                   {bm.materialName}
                                 </span>
-                                {/* Show Add COC button only if gap is negative */}
-                                {gap < 0 && (
+                                {/* Show Add COC button if no COC assigned OR gap is negative */}
+                                {(!hasCocAssigned || gap < 0) && (
                                   <button
                                     onClick={() => handleMaterialClick(bm.materialName)}
                                     style={{
@@ -4832,14 +4852,34 @@ function DailyReport() {
                     try {
                       const API_BASE_URL = getAPIBaseURL();
                       
-                      // Collect all unique COC invoice numbers from BOM materials
+                      // Collect all unique COC invoice numbers from cocMaterials AND bomMaterials
                       const cocInvoices = new Set();
                       pdiRecords.forEach(record => {
+                        // Check cocMaterials (COC linking)
+                        record.cocMaterials?.forEach(cm => {
+                          if (cm.invoiceNo) {
+                            cocInvoices.add(cm.invoiceNo);
+                          }
+                          if (cm.lotNumber) {
+                            cocInvoices.add(cm.lotNumber);
+                          }
+                        });
+                        // Also check bomMaterials for backward compatibility
                         record.bomMaterials?.forEach(bm => {
                           if (bm.lotNumber) {
                             cocInvoices.add(bm.lotNumber);
                           }
+                          if (bm.invoiceNo) {
+                            cocInvoices.add(bm.invoiceNo);
+                          }
                         });
+                      });
+                      
+                      // Also check consolidatedBom from the table
+                      consolidatedBom.forEach(bm => {
+                        if (bm.lotNumber) {
+                          cocInvoices.add(bm.lotNumber);
+                        }
                       });
 
                       if (cocInvoices.size === 0) {
