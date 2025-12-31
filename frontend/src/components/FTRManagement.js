@@ -415,7 +415,8 @@ const FTRManagement = () => {
     const totalMaster = ftrData.master_count || 0;
     const totalAssigned = ftrData.total_assigned || 0;
     const totalPacked = ftrData.packed_count || 0;
-    const available = totalMaster - totalAssigned;
+    // Use backend's available_count if provided, else calculate
+    const available = ftrData.available_count !== undefined ? ftrData.available_count : (totalMaster - totalAssigned);
     const unpackedAssigned = totalAssigned - totalPacked;
 
     return (

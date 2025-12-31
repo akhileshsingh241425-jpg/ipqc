@@ -62,14 +62,23 @@ def get_company_ftr(company_id):
             """))
             conn.commit()
         
-        # Get master FTR count (available and OK)
+        # Get TOTAL master FTR count (ALL records for this company, excluding rejected)
+        result = db.session.execute(text("""
+            SELECT COUNT(*) as count 
+            FROM ftr_master_serials 
+            WHERE company_id = :company_id AND (class_status = 'OK' OR class_status IS NULL)
+        """), {'company_id': company_id})
+        master_result = result.fetchone()
+        master_count = master_result[0] if master_result else 0
+        
+        # Get available count (not assigned, OK only)
         result = db.session.execute(text("""
             SELECT COUNT(*) as count 
             FROM ftr_master_serials 
             WHERE company_id = :company_id AND status = 'available' AND (class_status = 'OK' OR class_status IS NULL)
         """), {'company_id': company_id})
-        master_result = result.fetchone()
-        master_count = master_result[0] if master_result else 0
+        available_result = result.fetchone()
+        available_count = available_result[0] if available_result else 0
         
         # Get rejected count
         result = db.session.execute(text("""
@@ -115,6 +124,7 @@ def get_company_ftr(company_id):
         return jsonify({
             'success': True,
             'master_count': master_count,
+            'available_count': available_count,
             'rejected_count': rejected_count,
             'binning_breakdown': binning_breakdown,
             'total_assigned': total_assigned,
