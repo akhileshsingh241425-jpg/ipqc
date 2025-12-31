@@ -346,3 +346,199 @@
     transform: scale(1.1);
   }
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 1024px) {
+  .ftr-management-container {
+    padding: 15px;
+  }
+  
+  .ftr-dashboard {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 15px;
+  }
+  
+  .ftr-stat-card {
+    padding: 20px;
+  }
+  
+  .stat-number {
+    font-size: 28px;
+  }
+}
+
+@media (max-width: 768px) {
+  .ftr-management-container {
+    padding: 10px;
+    background: #f5f5f5;
+  }
+  
+  .ftr-header {
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px 20px;
+    text-align: center;
+  }
+  
+  .ftr-header h1 {
+    font-size: 20px;
+    margin: 0;
+  }
+  
+  .btn-back {
+    width: 100%;
+    padding: 12px;
+  }
+  
+  .company-selection {
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .company-selection h2 {
+    font-size: 18px;
+    text-align: center;
+  }
+  
+  .company-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  
+  .company-card {
+    padding: 15px;
+  }
+  
+  .company-card h3 {
+    font-size: 16px;
+  }
+  
+  .ftr-actions {
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  
+  .ftr-actions button {
+    min-width: 100%;
+    padding: 14px 20px;
+    font-size: 14px;
+  }
+  
+  .ftr-dashboard {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  
+  .ftr-stat-card {
+    padding: 15px;
+    border-radius: 10px;
+  }
+  
+  .ftr-stat-card h3 {
+    font-size: 11px;
+    margin-bottom: 5px;
+  }
+  
+  .stat-number {
+    font-size: 24px;
+    margin: 5px 0;
+  }
+  
+  .ftr-stat-card p {
+    font-size: 11px;
+    margin: 5px 0 0 0;
+  }
+  
+  .pdi-table-container {
+    padding: 15px;
+    overflow-x: auto;
+  }
+  
+  .pdi-table-container h3 {
+    font-size: 16px;
+  }
+  
+  .pdi-table th, .pdi-table td {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+  
+  .btn-view {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .modal-content {
+    width: 95%;
+    padding: 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  .modal-content h2 {
+    font-size: 18px;
+  }
+  
+  .modal-content input[type="text"],
+  .modal-content input[type="number"] {
+    font-size: 16px;
+    padding: 14px;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+  
+  .modal-actions button {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ftr-management-container {
+    padding: 8px;
+  }
+  
+  .ftr-header {
+    padding: 12px 15px;
+    border-radius: 8px;
+  }
+  
+  .ftr-header h1 {
+    font-size: 18px;
+  }
+  
+  .company-selection {
+    padding: 12px;
+  }
+  
+  .ftr-dashboard {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  
+  .ftr-stat-card {
+    padding: 12px;
+  }
+  
+  .stat-number {
+    font-size: 20px;
+  }
+  
+  .ftr-stat-card h3 {
+    font-size: 10px;
+  }
+  
+  .pdi-table-container {
+    padding: 10px;
+    margin: 0 -8px;
+    border-radius: 0;
+  }
+  
+  .pdi-table th, .pdi-table td {
+    padding: 8px 5px;
+    font-size: 11px;
+  }
+}

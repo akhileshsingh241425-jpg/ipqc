@@ -1079,38 +1079,129 @@
 }
 
 /* Responsive Design */
+@media (max-width: 1024px) {
+  .daily-report-container {
+    padding: 20px;
+  }
+  
+  .report-card {
+    padding: 30px;
+  }
+}
+
 @media (max-width: 768px) {
   .daily-report-container {
-    padding: 15px;
+    padding: 10px;
   }
 
   .report-card {
-    padding: 25px;
+    padding: 15px;
+    border-radius: 10px;
+  }
+  
+  .header-section {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+    margin-bottom: 15px;
   }
 
   .report-card h2 {
-    font-size: 24px;
+    font-size: 20px;
+  }
+  
+  .subtitle {
+    font-size: 14px;
+  }
+  
+  .company-info-btn {
+    width: 100%;
+    padding: 12px;
+  }
+  
+  .company-info-form {
+    padding: 15px;
+    margin: 15px 0;
   }
 
   .form-row {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    font-size: 16px;
+    padding: 12px;
+  }
+  
+  .excel-upload-section {
+    margin: 20px 0;
+  }
+  
+  .upload-box {
+    padding: 25px 15px;
+  }
+  
+  .save-btn {
+    padding: 14px;
+    font-size: 15px;
   }
 
   .summary-cards {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .summary-card {
-    padding: 20px;
+    padding: 15px;
   }
 
   .summary-card .big-number {
-    font-size: 24px;
+    font-size: 22px;
+  }
+  
+  .summary-card .label {
+    font-size: 12px;
   }
 
   .rejection-list-table th,
   .rejection-list-table td {
-    font-size: 11px;
-    padding: 8px 5px;
+    font-size: 10px;
+    padding: 6px 4px;
+  }
+  
+  /* Make table scrollable */
+  .table-container {
+    overflow-x: auto;
+    margin: 0 -15px;
+    padding: 0 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .daily-report-container {
+    padding: 8px;
+  }
+  
+  .report-card {
+    padding: 12px;
+  }
+  
+  .report-card h2 {
+    font-size: 18px;
+  }
+  
+  .upload-box {
+    padding: 20px 12px;
+  }
+  
+  .summary-card {
+    padding: 12px;
+  }
+  
+  .summary-card .big-number {
+    font-size: 20px;
   }
 }

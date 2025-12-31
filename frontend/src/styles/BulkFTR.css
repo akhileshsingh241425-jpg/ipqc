@@ -240,7 +240,79 @@
 }
 
 @media (max-width: 768px) {
+  .bulk-ftr-container {
+    padding: 15px;
+    margin: 10px;
+  }
+  
+  .bulk-ftr-container h2 {
+    font-size: 22px;
+    margin-bottom: 20px;
+  }
+  
   .upload-section {
     grid-template-columns: 1fr;
+    gap: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .upload-box {
+    padding: 15px;
+  }
+  
+  .upload-box h3 {
+    font-size: 16px;
+  }
+  
+  .upload-box p {
+    font-size: 12px;
+  }
+  
+  .file-input {
+    font-size: 16px;
+  }
+  
+  .generate-section {
+    margin: 20px 0;
+  }
+  
+  .generate-btn {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+  }
+  
+  .data-table {
+    font-size: 12px;
+  }
+  
+  .data-table th, .data-table td {
+    padding: 8px 5px;
+  }
+  
+  .btn-edit, .btn-delete, .btn-save, .btn-cancel {
+    padding: 6px 8px;
+    font-size: 12px;
+    margin: 2px;
+  }
+}
+
+@media (max-width: 480px) {
+  .bulk-ftr-container {
+    padding: 12px;
+    margin: 8px;
+    border-radius: 6px;
+  }
+  
+  .bulk-ftr-container h2 {
+    font-size: 18px;
+  }
+  
+  .upload-box {
+    padding: 12px;
+  }
+  
+  .upload-box h3 {
+    font-size: 14px;
   }
 }

@@ -409,3 +409,126 @@
   padding: 2px 8px;
   border-radius: 4px;
 }
+
+/* Mobile Responsive Styles */
+@media (max-width: 1024px) {
+  .coc-dashboard {
+    padding: 15px;
+  }
+  
+  .dashboard-header {
+    padding: 15px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 768px) {
+  .coc-dashboard {
+    padding: 10px;
+  }
+  
+  .dashboard-header {
+    flex-direction: column;
+    padding: 15px;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 20px;
+    min-width: auto;
+    width: 100%;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .date-filters {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+  
+  .date-filters label {
+    width: 100%;
+  }
+  
+  .date-input {
+    width: 100%;
+    font-size: 16px;
+    padding: 10px 12px;
+  }
+  
+  .company-select {
+    width: 100%;
+    padding: 12px 15px;
+    font-size: 16px;
+  }
+  
+  .btn-sync, .btn-report {
+    width: 100%;
+    padding: 12px;
+  }
+  
+  .section {
+    padding: 15px;
+    margin-bottom: 20px;
+  }
+  
+  .section h2 {
+    font-size: 18px;
+  }
+  
+  .message {
+    padding: 12px;
+    font-size: 13px;
+  }
+  
+  .info-banner {
+    padding: 10px 15px;
+    font-size: 13px;
+  }
+  
+  .search-box {
+    min-width: 100%;
+  }
+  
+  .search-input {
+    padding: 12px 40px 12px 15px;
+    font-size: 16px;
+  }
+  
+  .results-info {
+    text-align: center;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .coc-dashboard {
+    padding: 8px;
+  }
+  
+  .dashboard-header {
+    padding: 12px;
+    border-radius: 8px;
+  }
+  
+  .dashboard-header h1 {
+    font-size: 18px;
+  }
+  
+  .section {
+    padding: 12px;
+    border-radius: 8px;
+  }
+  
+  .section h2 {
+    font-size: 16px;
+  }
+}

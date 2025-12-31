@@ -209,15 +209,85 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .login-container {
+    padding: 15px;
+    align-items: flex-start;
+    padding-top: 50px;
+  }
+  
   .login-box {
-    padding: 30px 25px;
+    padding: 25px 20px;
+    border-radius: 15px;
   }
 
   .login-header h1 {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .login-header h2 {
-    font-size: 18px;
+    font-size: 16px;
+  }
+  
+  .login-form input {
+    padding: 14px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  .btn-login {
+    padding: 14px;
+    font-size: 15px;
+  }
+  
+  .user-info-box {
+    padding: 15px;
+    margin-top: 25px;
+  }
+  
+  .credential-item {
+    padding: 10px;
+  }
+  
+  .credential-item strong {
+    font-size: 13px;
+  }
+  
+  .credential-item p {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 10px;
+    padding-top: 30px;
+  }
+  
+  .login-box {
+    padding: 20px 15px;
+  }
+
+  .login-header h1 {
+    font-size: 22px;
+  }
+
+  .login-header h2 {
+    font-size: 14px;
+  }
+  
+  .login-form label {
+    font-size: 13px;
+  }
+  
+  .login-form input {
+    padding: 12px;
+  }
+  
+  .error-message {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  
+  .user-info-box h3 {
+    font-size: 14px;
   }
 }

@@ -281,6 +281,8 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [activeSection, setActiveSection] = useState('ipqc');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
   useEffect(() => {
     // Check if user is already logged in
@@ -288,6 +290,18 @@ function App() {
     if (authStatus === 'true') {
       setIsAuthenticated(true);
     }
+    
+    // Handle window resize for mobile detection
+    const handleResize = () => {
+      const mobile = window.innerWidth <= 768;
+      setIsMobile(mobile);
+      if (!mobile) {
+        setMobileMenuOpen(false);
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleLogin = () => {
@@ -299,6 +313,13 @@ function App() {
     localStorage.removeItem('loginTime');
     setIsAuthenticated(false);
     setActiveSection('ipqc');
+  };
+
+  const handleMenuItemClick = (section) => {
+    setActiveSection(section);
+    if (isMobile) {
+      setMobileMenuOpen(false);
+    }
   };
 
   if (!isAuthenticated) {
@@ -340,15 +361,58 @@ function App() {
 
   return (
     <div className="App">
-      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''}`}>
+      {/* Mobile Menu Toggle Button */}
+      {isMobile && (
+        <button 
+          className="toggle-btn mobile-toggle"
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          style={{
+            position: 'fixed',
+            left: '10px',
+            top: '10px',
+            zIndex: 1001,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            padding: '12px 14px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)',
+            border: 'none',
+            color: 'white',
+            fontSize: '18px',
+            cursor: 'pointer'
+          }}
+        >
+          {mobileMenuOpen ? '✕' : '☰'}
+        </button>
+      )}
+      
+      {/* Mobile Overlay */}
+      {isMobile && mobileMenuOpen && (
+        <div 
+          className="sidebar-overlay active"
+          onClick={() => setMobileMenuOpen(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 999
+          }}
+        />
+      )}
+      
+      <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${isMobile && mobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
           <h2>{!sidebarCollapsed && 'PDI IPQC'}</h2>
-          <button 
-            className="toggle-btn" 
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          >
-            {sidebarCollapsed ? '☰' : '✕'}
-          </button>
+          {!isMobile && (
+            <button 
+              className="toggle-btn" 
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            >
+              {sidebarCollapsed ? '☰' : '✕'}
+            </button>
+          )}
         </div>
 
         {/* User Role Badge */}
@@ -370,7 +434,7 @@ function App() {
         <ul className="sidebar-menu">
           <li 
             className={activeSection === 'daily-report' ? 'active' : ''}
-            onClick={() => setActiveSection('daily-report')}
+            onClick={() => handleMenuItemClick('daily-report')}
             title="Daily Report"
           >
             <span className="icon">📊</span>
@@ -378,7 +442,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'pdi-batches' ? 'active' : ''}
-            onClick={() => setActiveSection('pdi-batches')}
+            onClick={() => handleMenuItemClick('pdi-batches')}
             title="PDI Batch Manager"
           >
             <span className="icon">🔢</span>
@@ -386,7 +450,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'ipqc' ? 'active' : ''}
-            onClick={() => setActiveSection('ipqc')}
+            onClick={() => handleMenuItemClick('ipqc')}
             title="IPQC Form"
           >
             <span className="icon">📝</span>
@@ -394,7 +458,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'peel-test' ? 'active' : ''}
-            onClick={() => setActiveSection('peel-test')}
+            onClick={() => handleMenuItemClick('peel-test')}
             title="Peel Test Report"
           >
             <span className="icon">🧪</span>
@@ -402,7 +466,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'ftr-download' ? 'active' : ''}
-            onClick={() => setActiveSection('ftr-download')}
+            onClick={() => handleMenuItemClick('ftr-download')}
             title="FTR Download"
           >
             <span className="icon">📥</span>
@@ -410,7 +474,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'ftr-delivered' ? 'active' : ''}
-            onClick={() => setActiveSection('ftr-delivered')}
+            onClick={() => handleMenuItemClick('ftr-delivered')}
             title="FTR Delivered"
           >
             <span className="icon">✅</span>
@@ -418,7 +482,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'ftr-report' ? 'active' : ''}
-            onClick={() => setActiveSection('ftr-report')}
+            onClick={() => handleMenuItemClick('ftr-report')}
             title="FTR & Flash Report"
           >
             <span className="icon">⚡</span>
@@ -426,7 +490,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'ftr-management' ? 'active' : ''}
-            onClick={() => setActiveSection('ftr-management')}
+            onClick={() => handleMenuItemClick('ftr-management')}
             title="FTR Management"
           >
             <span className="icon">🏭</span>
@@ -434,7 +498,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'ai-assistant' ? 'active' : ''}
-            onClick={() => setActiveSection('ai-assistant')}
+            onClick={() => handleMenuItemClick('ai-assistant')}
             title="AI FTR Assistant"
           >
             <span className="icon">🤖</span>
@@ -442,7 +506,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'test-report' ? 'active' : ''}
-            onClick={() => setActiveSection('test-report')}
+            onClick={() => handleMenuItemClick('test-report')}
             title="Production Test Report"
           >
             <span className="icon">🔬</span>
@@ -450,7 +514,7 @@ function App() {
           </li>
           <li 
             className={activeSection === 'graph-manager' ? 'active' : ''}
-            onClick={() => setActiveSection('graph-manager')}
+            onClick={() => handleMenuItemClick('graph-manager')}
             title="I-V Graph Manager"
           >
             <span className="icon">📊</span>
@@ -459,7 +523,7 @@ function App() {
           {localStorage.getItem('userRole') === 'super_admin' && (
             <li 
               className={activeSection === 'user-management' ? 'active' : ''}
-              onClick={() => setActiveSection('user-management')}
+              onClick={() => handleMenuItemClick('user-management')}
               title="User Management"
             >
               <span className="icon">👥</span>
@@ -468,7 +532,7 @@ function App() {
           )}
           <li 
             className={activeSection === 'coc-dashboard' ? 'active' : ''}
-            onClick={() => setActiveSection('coc-dashboard')}
+            onClick={() => handleMenuItemClick('coc-dashboard')}
             title="COC & Raw Material Dashboard"
           >
             <span className="icon">📋</span>

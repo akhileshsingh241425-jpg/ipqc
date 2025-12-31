@@ -638,50 +638,114 @@
 }
 
 /* Responsive */
+@media (max-width: 992px) {
+  .ai-sidebar {
+    width: 250px;
+  }
+}
+
 @media (max-width: 768px) {
+  .ai-assistant-container {
+    min-height: 100vh;
+  }
+  
   .ai-main-content {
     flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 60px);
   }
   
   .ai-sidebar {
     width: 100%;
     height: auto;
-    max-height: 200px;
+    max-height: none;
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    display: none; /* Hidden by default on mobile */
+  }
+  
+  .ai-sidebar.mobile-open {
+    display: block;
+    max-height: 300px;
+    overflow-y: auto;
   }
   
   .ai-header {
     flex-direction: column;
     gap: 10px;
+    padding: 12px 15px;
   }
   
-  .ai-header-left, .ai-header-right {
+  .ai-header-left {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .ai-header-left h1 {
+    font-size: 18px;
+  }
+  
+  .ai-header-right {
     width: 100%;
     justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .btn-back, .btn-config {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .api-status {
+    font-size: 10px;
+    padding: 4px 10px;
+  }
+  
+  .ai-chat-area {
+    flex: 1;
+    padding: 12px;
+    min-height: 400px;
   }
   
   .message-content {
     max-width: 85%;
+    padding: 10px 14px;
+  }
+  
+  .message-content pre {
+    font-size: 13px;
+  }
+  
+  .message-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
   }
   
   .quick-questions {
     overflow-x: auto;
     flex-wrap: nowrap;
     padding-bottom: 10px;
+    -webkit-overflow-scrolling: touch;
   }
   
   .quick-q-btn {
     white-space: nowrap;
+    font-size: 11px;
+    padding: 6px 12px;
   }
   
   .suggested-questions-section {
     padding: 10px;
+    margin-bottom: 10px;
   }
   
   .category-tabs {
     gap: 6px;
     padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
   }
   
   .category-tab {
@@ -691,5 +755,151 @@
   
   .category-questions {
     gap: 6px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .messages-container {
+    border-radius: 10px;
+    padding: 8px;
+    margin-bottom: 10px;
+    flex: 1;
+    min-height: 300px;
+  }
+  
+  .input-area {
+    padding: 8px;
+    border-radius: 12px;
+  }
+  
+  .input-area textarea {
+    padding: 8px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+  
+  .btn-send {
+    padding: 10px 18px;
+    font-size: 14px;
+  }
+  
+  /* Modal responsive */
+  .modal-content {
+    width: 95%;
+    padding: 20px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  
+  .modal-content h2 {
+    font-size: 18px;
+  }
+  
+  .api-key-input input {
+    font-size: 16px;
+  }
+  
+  .modal-actions {
+    flex-direction: column-reverse;
+    gap: 8px;
+  }
+  
+  .btn-cancel, .btn-save {
+    width: 100%;
+    padding: 12px;
+  }
+  
+  /* Sidebar summary responsive */
+  .sidebar-summary {
+    padding: 10px;
+  }
+  
+  .summary-item {
+    padding: 6px 0;
+  }
+  
+  .summary-item .label {
+    font-size: 12px;
+  }
+  
+  .company-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .company-item {
+    padding: 8px 10px;
+  }
+  
+  .export-buttons {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .btn-export {
+    flex: 1;
+    min-width: calc(50% - 4px);
+    padding: 8px 10px;
+    text-align: center;
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ai-header {
+    padding: 10px 12px;
+  }
+  
+  .ai-header-left h1 {
+    font-size: 16px;
+  }
+  
+  .ai-chat-area {
+    padding: 10px;
+  }
+  
+  .message {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  
+  .message-avatar {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+  }
+  
+  .message-content {
+    max-width: 90%;
+    padding: 8px 12px;
+    border-radius: 12px;
+  }
+  
+  .message-content pre {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+  
+  .category-tab {
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+  
+  .quick-q-btn {
+    font-size: 10px;
+    padding: 5px 10px;
+  }
+  
+  .btn-send {
+    padding: 8px 15px;
+    font-size: 13px;
+  }
+  
+  .btn-download-excel {
+    width: 100%;
+    padding: 10px 15px;
+    font-size: 13px;
   }
 }
