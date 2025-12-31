@@ -1541,7 +1541,8 @@ def parse_user_query(message):
         result['running_order'] = f"R-{ro_match.group(1)}"
     
     # Binning detection (I1, I2, I3 or MB, MC, MD, MF, MG - NOT 'me' as it's Hindi word)
-    bin_match = re.search(r'\bi[- ]?(\d+)\b', message_lower)
+    # Use negative lookbehind to NOT match PDI-1 as binning I1
+    bin_match = re.search(r'(?<!pd)\bi[- ]?(\d+)\b', message_lower)
     if bin_match:
         result['binning'] = f"I{bin_match.group(1)}"
     else:
@@ -2402,7 +2403,8 @@ def detect_excel_command(message):
     running_order = f"R-{ro_match.group(1)}" if ro_match else None
     
     # Binning detection (I-1, I-2, I-3, i1, i2, i3, MB, MC, MD)
-    bin_match = re.search(r'i-?(\d+)', message_lower)
+    # Use negative lookbehind to NOT match PDI-1 as binning I1
+    bin_match = re.search(r'(?<!pd)i-?(\d+)', message_lower)
     binning = f"I{bin_match.group(1)}" if bin_match else None
     if not binning:
         # Note: 'me' removed as it conflicts with Hindi word 'me/mein' (meaning 'in')
