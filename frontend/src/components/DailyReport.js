@@ -133,6 +133,8 @@ function DailyReport() {
   const [cocInvoiceSearch, setCocInvoiceSearch] = useState('');
   const [showPdiDetailsModal, setShowPdiDetailsModal] = useState(false);
   const [selectedPdiForDetails, setSelectedPdiForDetails] = useState(null);
+  const [assignedCocData, setAssignedCocData] = useState([]); // COC data from MRP assigned API
+  const [loadingAssignedCoc, setLoadingAssignedCoc] = useState(false);
   const [showMaterialCocModal, setShowMaterialCocModal] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
   const [materialCocData, setMaterialCocData] = useState([]);
@@ -210,6 +212,43 @@ function DailyReport() {
       alert('Failed to load COC data from API');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load assigned COC data from MRP API (shows which COC is assigned to which PDI)
+  const loadAssignedCocData = async (companyName = '') => {
+    try {
+      setLoadingAssignedCoc(true);
+      const API_BASE_URL = getAPIBaseURL();
+      
+      // Build query params
+      let url = `${API_BASE_URL}/api/coc/assigned`;
+      if (companyName) {
+        // Map company name for API filter
+        const companyMap = {
+          'Sterlin and Wilson': 's&w',
+          'Larsen & Toubro': 'l&t',
+          'Rays Power': 'rays'
+        };
+        const shortCompany = companyMap[companyName] || companyName.toLowerCase();
+        url += `?company=${shortCompany}`;
+      }
+      
+      console.log('📡 Fetching assigned COC data:', url);
+      const response = await axios.get(url);
+      
+      if (response.data && response.data.success) {
+        setAssignedCocData(response.data.data || []);
+        console.log('✅ Loaded assigned COC records:', response.data.count);
+      } else {
+        console.error('❌ Failed to load assigned COC data:', response.data?.error);
+        setAssignedCocData([]);
+      }
+    } catch (error) {
+      console.error('Failed to load assigned COC data:', error);
+      setAssignedCocData([]);
+    } finally {
+      setLoadingAssignedCoc(false);
     }
   };
 
@@ -2715,6 +2754,7 @@ function DailyReport() {
                             e.stopPropagation();
                             setSelectedPdiForDetails(pdiNumber);
                             setShowPdiDetailsModal(true);
+                            loadAssignedCocData(selectedCompany?.name);
                           }}
                           style={{
                             flex: '1 1 45%',
@@ -2819,6 +2859,7 @@ function DailyReport() {
                             e.stopPropagation();
                             setSelectedPdiForDetails(pdiNumber);
                             setShowPdiDetailsModal(true);
+                            loadAssignedCocData(selectedCompany?.name);
                           }}
                           style={{
                             flex: 1,
@@ -4356,6 +4397,45 @@ function DailyReport() {
         // Build display list: Show ALL COCs separately (multiple rows for same material)
         const consolidatedBom = [];
         
+        // Helper function to find assigned COC data from MRP API
+        const getAssignedCocForMaterial = (materialName, pdiNumber) => {
+          // Normalize material name for matching
+          const normalizeMatName = (name) => {
+            if (!name) return '';
+            const lower = name.toLowerCase().trim();
+            // Map variations
+            if (lower.includes('cell')) return 'solar cell';
+            if (lower.includes('front glass')) return 'glass';
+            if (lower.includes('back glass')) return 'glass';
+            if (lower.includes('ribbon') && lower.includes('busbar')) return 'ribbon';
+            if (lower.includes('ribbon')) return 'ribbon';
+            if (lower.includes('flux')) return 'flux';
+            if (lower.includes('epe')) return 'epe';
+            if (lower.includes('frame') || lower.includes('aluminium')) return 'aluminium frame';
+            if (lower.includes('sealent') || lower.includes('sealant')) return 'sealent';
+            if (lower.includes('potting') || lower.includes('jb potting')) return 'jb potting';
+            if (lower.includes('junction') || lower.includes('jb')) return 'junction box';
+            if (lower.includes('rfid')) return 'rfid';
+            if (lower.includes('eva')) return 'eva';
+            return lower;
+          };
+          
+          const normalizedMaterial = normalizeMatName(materialName);
+          
+          // Find matching records from assigned COC data
+          return assignedCocData.filter(rec => {
+            const recMaterial = normalizeMatName(rec.material_name);
+            const recPdi = rec.pdi_no?.toLowerCase() || '';
+            const targetPdi = pdiNumber?.toLowerCase() || '';
+            
+            // Match material and PDI
+            const materialMatch = recMaterial === normalizedMaterial;
+            const pdiMatch = !targetPdi || recPdi.includes(targetPdi.replace('pdi-', '')) || targetPdi.includes(recPdi.replace('pdi-', ''));
+            
+            return materialMatch && pdiMatch;
+          });
+        };
+        
         // First, collect all unique material-invoice combinations from COC linking
         const materialCocPairs = [];
         pdiRecords.forEach(record => {
@@ -4404,16 +4484,31 @@ function DailyReport() {
                    baseName.includes(bm.materialName);
           });
           
+          // Get assigned COC data from MRP API for this material
+          const mrpAssignedCocs = getAssignedCocForMaterial(material.name, selectedPdiForDetails);
+          
           if (assignedCocs.length > 0) {
             // Add each COC as separate row with spec from COC_MATERIALS
             assignedCocs.forEach(coc => {
+              // Find matching MRP data for this invoice
+              const mrpMatch = mrpAssignedCocs.find(m => 
+                m.invoice_no === coc.lotNumber || 
+                m.lot_batch_no === coc.lotBatchNo
+              );
+              
               consolidatedBom.push({
                 ...coc,
-                spec: material.spec || coc.spec || ''
+                spec: material.spec || coc.spec || '',
+                mrpRemainingQty: mrpMatch?.remaining_qty || null,
+                mrpPdiNo: mrpMatch?.pdi_no || null,
+                mrpIsExhausted: mrpMatch?.is_exhausted || false
               });
             });
           } else {
-            // No COC assigned - show empty row with spec
+            // No COC assigned - show empty row with spec and MRP data
+            // Check if MRP has any assigned COCs for this material
+            const mrpTotal = mrpAssignedCocs.reduce((sum, m) => sum + (m.remaining_qty || 0), 0);
+            
             consolidatedBom.push({
               materialName: material.name,
               unit: material.unit,
@@ -4421,7 +4516,10 @@ function DailyReport() {
               lotNumber: null,
               cocQty: null,
               invoiceQty: null,
-              imagePath: null
+              imagePath: null,
+              mrpRemainingQty: mrpTotal > 0 ? mrpTotal : null,
+              mrpAssignedCount: mrpAssignedCocs.length,
+              mrpAssignedCocs: mrpAssignedCocs.slice(0, 3) // Show first 3 for reference
             });
           }
         });
@@ -4430,6 +4528,18 @@ function DailyReport() {
           <div className="modal-overlay" onClick={() => setShowPdiDetailsModal(false)}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto'}}>
               <h3>📋 {selectedPdiForDetails} - BOM Materials & COC Details</h3>
+              
+              {/* MRP Data Status Indicator */}
+              {loadingAssignedCoc ? (
+                <div style={{padding: '10px', backgroundColor: '#fff3cd', borderRadius: '5px', marginBottom: '10px', textAlign: 'center'}}>
+                  ⏳ Loading COC assignments from MRP...
+                </div>
+              ) : assignedCocData.length > 0 && (
+                <div style={{padding: '10px', backgroundColor: '#d4edda', borderRadius: '5px', marginBottom: '10px', fontSize: '12px'}}>
+                  ✅ <strong>MRP Data Loaded:</strong> {assignedCocData.length} COC assignments found | 
+                  Data shows remaining quantities per material assigned to PDIs (Lot 1 = PDI-1, Lot 2 = PDI-2, etc.)
+                </div>
+              )}
               
               <div style={{padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '5px', marginBottom: '20px', border: '2px solid #28a745'}}>
                 <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Total Records:</strong> {pdiRecords.length} days</p>
@@ -4762,7 +4872,48 @@ function DailyReport() {
                               border: '1px solid #dee2e6',
                               fontSize: '10px'
                             }}>
-                              {bm.usedInPdis && bm.usedInPdis.length > 0 ? (
+                              {/* Show MRP assigned data if available */}
+                              {bm.mrpRemainingQty !== null && bm.mrpRemainingQty !== undefined ? (
+                                <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
+                                  <span style={{
+                                    padding: '3px 8px',
+                                    backgroundColor: bm.mrpIsExhausted ? '#dc3545' : '#28a745',
+                                    color: 'white',
+                                    borderRadius: '4px',
+                                    fontSize: '9px',
+                                    fontWeight: '500',
+                                    whiteSpace: 'nowrap',
+                                    display: 'inline-block'
+                                  }}>
+                                    {bm.mrpPdiNo || selectedPdiForDetails}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '10px',
+                                    color: bm.mrpIsExhausted ? '#dc3545' : '#28a745',
+                                    fontWeight: '500'
+                                  }}>
+                                    Remaining: {bm.mrpRemainingQty?.toLocaleString() || 0}
+                                  </span>
+                                </div>
+                              ) : bm.mrpAssignedCocs && bm.mrpAssignedCocs.length > 0 ? (
+                                <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
+                                  <span style={{fontSize: '9px', color: '#666'}}>
+                                    {bm.mrpAssignedCount} COC(s) assigned
+                                  </span>
+                                  {bm.mrpAssignedCocs.map((mrp, mIdx) => (
+                                    <span key={mIdx} style={{
+                                      padding: '2px 6px',
+                                      backgroundColor: mrp.is_exhausted ? '#dc3545' : '#28a745',
+                                      color: 'white',
+                                      borderRadius: '4px',
+                                      fontSize: '8px',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      {mrp.pdi_no}: {mrp.remaining_qty?.toLocaleString() || 0}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : bm.usedInPdis && bm.usedInPdis.length > 0 ? (
                                 <div style={{display: 'flex', flexDirection: 'column', gap: '3px'}}>
                                   {bm.usedInPdis.map((pdiWithCompany, pdiIdx) => {
                                     const pdiMatch = pdiWithCompany.match(/^([^\(]+)/);

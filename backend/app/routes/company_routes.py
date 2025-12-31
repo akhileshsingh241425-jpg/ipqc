@@ -4,25 +4,63 @@ from app.models.database import db, Company, ProductionRecord, RejectedModule, B
 
 company_bp = Blueprint('company', __name__)
 
-# BOM Materials list - Only COC-required materials
+# BOM Materials list - Aligned with MRP API material names
+# API endpoint: https://umanmrp.in/a/get_assigned_coc_records.php
 BOM_MATERIALS = [
-    "Solar Cell",
-    "FRONT GLASS",
-    "BACK GLASS",
-    "RIBBON",
-    "RIBBON (0.26 mm)",
-    "RIBBON (4.0X0.4)",
-    "RIBBON (6.0X0.4)",
+    "Solar Cell",       # material_id: 1
+    "EVA",              # material_id: 2 (added - was missing)
+    "Glass",            # material_id: 11 (renamed from FRONT/BACK GLASS)
+    "FRONT GLASS",      # kept for backward compatibility
+    "BACK GLASS",       # kept for backward compatibility
+    "Ribbon",           # material_id: 5 (simplified)
+    "RIBBON",           # kept for backward compatibility
+    "RIBBON (0.26 mm)", # kept for backward compatibility
+    "RIBBON (4.0X0.4)", # kept for backward compatibility
+    "RIBBON (6.0X0.4)", # kept for backward compatibility
     "Ribbon(BUSBAR) 4mm",
     "Ribbon(BUSBAR) 6mm",
-    "FLUX",
-    "EPE FRONT",
-    "EPE",
-    "Aluminium Frame",
-    "SEALENT",
-    "JB Potting (A and B)",
-    "JUNCTION BOX"
+    "Flux",             # material_id: 7 (case normalized)
+    "FLUX",             # kept for backward compatibility
+    "EPE",              # material_id: 14
+    "EPE FRONT",        # kept for backward compatibility
+    "Aluminium Frame",  # material_id: 12
+    "Sealent",          # material_id: 6 (case normalized)
+    "SEALENT",          # kept for backward compatibility
+    "JB Potting",       # material_id: 10 (simplified from "JB Potting (A and B)")
+    "JB Potting (A and B)", # kept for backward compatibility
+    "Junction Box",     # material_id: 9 (case normalized)
+    "JUNCTION BOX",     # kept for backward compatibility
+    "RFID"              # material_id: 8 (added - was missing)
 ]
+
+# MRP API Material Name Mapping (API name -> normalized names for matching)
+MRP_MATERIAL_MAPPING = {
+    'solar cell': ['solar cell'],
+    'eva': ['eva'],
+    'glass': ['glass', 'front glass', 'back glass'],
+    'ribbon': ['ribbon', 'ribbon (0.26 mm)', 'ribbon (4.0x0.4)', 'ribbon (6.0x0.4)', 'ribbon(busbar) 4mm', 'ribbon(busbar) 6mm'],
+    'flux': ['flux'],
+    'epe': ['epe', 'epe front'],
+    'aluminium frame': ['aluminium frame', 'aluminum frame'],
+    'sealent': ['sealent', 'sealant'],
+    'jb potting': ['jb potting', 'jb potting (a and b)'],
+    'junction box': ['junction box'],
+    'rfid': ['rfid']
+}
+
+def normalize_material_name(material_name):
+    """Normalize material name for matching with MRP API"""
+    if not material_name:
+        return None
+    
+    name_lower = material_name.lower().strip()
+    
+    # Find matching MRP category
+    for mrp_name, variations in MRP_MATERIAL_MAPPING.items():
+        if name_lower in variations or mrp_name in name_lower:
+            return mrp_name
+    
+    return name_lower
 
 # Get all companies
 @company_bp.route('/api/companies', methods=['GET'])
@@ -92,27 +130,46 @@ def get_bom_suppliers():
                     brand = doc.get('brand')
                     invoice_date = doc.get('invoice_date', '')
                     
-                    # Filter by material type if provided
+                    # Filter by material type if provided using normalized matching
                     should_include = False
                     if material_filter:
-                        # Check if material_name matches filter
-                        if material_filter in material_name or material_name in material_filter:
-                            should_include = True
-                        # Special cases for common materials
-                        elif 'cell' in material_filter and 'cell' in material_name:
-                            should_include = True
-                        elif 'glass' in material_filter and 'glass' in material_name:
-                            should_include = True
-                        elif 'ribbon' in material_filter and 'ribbon' in material_name:
-                            should_include = True
-                        elif 'eva' in material_filter and 'eva' in material_name:
-                            should_include = True
-                        elif 'flux' in material_filter and 'flux' in material_name:
-                            should_include = True
-                        elif 'bus' in material_filter and 'bus' in material_name:
-                            should_include = True
-                        elif 'frame' in material_filter and 'frame' in material_name:
-                            should_include = True
+                        # Use normalized material matching
+                        normalized_api_material = normalize_material_name(material_name)
+                        normalized_filter = normalize_material_name(material_filter)
+                        
+                        if normalized_api_material and normalized_filter:
+                            if normalized_api_material == normalized_filter:
+                                should_include = True
+                        
+                        # Fallback: Check if material_name matches filter directly
+                        if not should_include:
+                            if material_filter in material_name or material_name in material_filter:
+                                should_include = True
+                            # Special cases for common materials
+                            elif 'cell' in material_filter and 'cell' in material_name:
+                                should_include = True
+                            elif 'glass' in material_filter and 'glass' in material_name:
+                                should_include = True
+                            elif 'ribbon' in material_filter and 'ribbon' in material_name:
+                                should_include = True
+                            elif 'eva' in material_filter and 'eva' in material_name:
+                                should_include = True
+                            elif 'flux' in material_filter and 'flux' in material_name:
+                                should_include = True
+                            elif 'bus' in material_filter and 'bus' in material_name:
+                                should_include = True
+                            elif 'frame' in material_filter and 'frame' in material_name:
+                                should_include = True
+                            elif 'sealent' in material_filter and 'sealent' in material_name:
+                                should_include = True
+                            elif 'jb' in material_filter and 'jb' in material_name:
+                                should_include = True
+                            elif 'potting' in material_filter and 'potting' in material_name:
+                                should_include = True
+                            elif 'junction' in material_filter and 'junction' in material_name:
+                                should_include = True
+                            elif 'rfid' in material_filter and 'rfid' in material_name:
+                                should_include = True
                     else:
                         # No filter - add all
                         should_include = True

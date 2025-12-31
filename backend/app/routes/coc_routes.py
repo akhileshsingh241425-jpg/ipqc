@@ -125,8 +125,170 @@ def list_coc_documents():
             'error': str(e),
             'coc_data': []
         }), 500
+
+
+@coc_bp.route('/assigned', methods=['GET'])
+def get_assigned_coc_records():
+    """
+    Get COC records assigned to PDIs from MRP system
+    API: https://umanmrp.in/a/get_assigned_coc_records.php
+    Returns: material assignments with remaining qty per company/PDI
+    """
+    try:
+        import requests
         
-        result = db.session.execute(text(query), params).fetchall()
+        # Company filter (optional)
+        company_filter = request.args.get('company', '').lower()
+        pdi_filter = request.args.get('pdi', '').lower()
+        material_filter = request.args.get('material', '').lower()
+        
+        # Fetch from MRP assigned COC API
+        ASSIGNED_COC_API = 'https://umanmrp.in/a/get_assigned_coc_records.php'
+        
+        print(f"🌐 Fetching assigned COC records from: {ASSIGNED_COC_API}")
+        response = requests.get(ASSIGNED_COC_API, timeout=15)
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'API returned status {response.status_code}',
+                'data': []
+            }), 500
+        
+        api_data = response.json()
+        
+        if api_data.get('status') != 'success':
+            return jsonify({
+                'success': False,
+                'error': 'API returned unsuccessful status',
+                'data': []
+            }), 500
+        
+        records = api_data.get('data', [])
+        
+        # Company name mapping (API -> Full name)
+        COMPANY_MAP = {
+            's&w': 'Sterlin and Wilson',
+            'l&t': 'Larsen & Toubro',
+            'rays power': 'Rays Power',
+            'rays': 'Rays Power'
+        }
+        
+        # PDI number mapping (Lot 1 -> PDI-1)
+        def normalize_pdi(pdi_str):
+            if not pdi_str:
+                return None
+            pdi_lower = pdi_str.lower().strip()
+            # Handle "Lot 1", "Lot 2", etc.
+            if 'lot' in pdi_lower:
+                import re
+                match = re.search(r'lot\s*(\d+)', pdi_lower)
+                if match:
+                    return f"PDI-{match.group(1)}"
+            # Handle "PDI-1", "PDI1", etc.
+            if 'pdi' in pdi_lower:
+                import re
+                match = re.search(r'pdi[- ]?(\d+)', pdi_lower)
+                if match:
+                    return f"PDI-{match.group(1)}"
+            return pdi_str
+        
+        # Transform and filter data
+        transformed_records = []
+        for record in records:
+            assigned_to = (record.get('assigned_to') or '').lower().strip()
+            pdi_no = record.get('pdi_no', '')
+            material_name = record.get('material_name', '')
+            
+            # Get full company name
+            company_full = COMPANY_MAP.get(assigned_to, record.get('assigned_to', ''))
+            
+            # Normalize PDI number
+            pdi_normalized = normalize_pdi(pdi_no)
+            
+            # Apply filters
+            if company_filter and company_filter not in assigned_to and company_filter not in company_full.lower():
+                continue
+            if pdi_filter and pdi_filter not in (pdi_normalized or '').lower():
+                continue
+            if material_filter and material_filter not in material_name.lower():
+                continue
+            
+            # Parse remaining qty
+            remaining_qty = record.get('remaining_qty')
+            try:
+                remaining_qty = float(remaining_qty) if remaining_qty else 0
+            except:
+                remaining_qty = 0
+            
+            transformed_records.append({
+                'id': record.get('id'),
+                'material_name': material_name,
+                'material_id': record.get('material_id'),
+                'company': company_full,
+                'company_short': record.get('assigned_to'),
+                'pdi_no': pdi_normalized,
+                'pdi_original': pdi_no,
+                'lot_batch_no': record.get('lot_batch_no'),
+                'invoice_no': record.get('invoice_no'),
+                'remaining_qty': remaining_qty,
+                'is_exhausted': remaining_qty <= 0
+            })
+        
+        # Group by material and company for summary
+        summary_by_material = {}
+        for rec in transformed_records:
+            mat = rec['material_name']
+            if mat not in summary_by_material:
+                summary_by_material[mat] = {
+                    'total_remaining': 0,
+                    'companies': {},
+                    'pdis': {}
+                }
+            summary_by_material[mat]['total_remaining'] += rec['remaining_qty']
+            
+            # By company
+            comp = rec['company']
+            if comp not in summary_by_material[mat]['companies']:
+                summary_by_material[mat]['companies'][comp] = 0
+            summary_by_material[mat]['companies'][comp] += rec['remaining_qty']
+            
+            # By PDI
+            pdi = rec['pdi_no']
+            if pdi:
+                if pdi not in summary_by_material[mat]['pdis']:
+                    summary_by_material[mat]['pdis'][pdi] = 0
+                summary_by_material[mat]['pdis'][pdi] += rec['remaining_qty']
+        
+        return jsonify({
+            'success': True,
+            'data': transformed_records,
+            'count': len(transformed_records),
+            'summary': summary_by_material,
+            'source': 'MRP API (get_assigned_coc_records.php)'
+        }), 200
+        
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            'success': False,
+            'error': 'Cannot connect to MRP API. Please check internet connection.',
+            'data': []
+        }), 503
+    except requests.exceptions.Timeout:
+        return jsonify({
+            'success': False,
+            'error': 'MRP API request timeout',
+            'data': []
+        }), 504
+    except Exception as e:
+        print(f"❌ Error fetching assigned COC records: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'data': []
+        }), 500
         
         coc_list = []
         for row in result:
