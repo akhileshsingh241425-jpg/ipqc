@@ -133,6 +133,33 @@ const AIAssistant = () => {
     "Packed vs Assigned comparison"
   ];
 
+  // Excel download handler
+  const handleExcelDownload = async (exportType, companyId = null, companyName = 'All') => {
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.post(`${API_BASE_URL}/api/ai/export/excel`, {
+        type: exportType,
+        company_id: companyId,
+        company_name: companyName
+      }, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `${exportType}_${companyName}_${new Date().toISOString().slice(0,10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Excel download error:', error);
+      alert('❌ Excel download failed: ' + (error.response?.data?.error || error.message));
+    }
+  };
+
   return (
     <div className="ai-assistant-container">
       {/* Header */}
@@ -201,6 +228,29 @@ const AIAssistant = () => {
           <button className="btn-refresh" onClick={loadFTRData}>
             🔄 Refresh Data
           </button>
+          
+          {/* Excel Export Buttons */}
+          <h4>📥 Export Excel</h4>
+          <div className="export-buttons">
+            <button className="btn-export" onClick={() => handleExcelDownload('all')}>
+              📊 Summary Report
+            </button>
+            <button className="btn-export" onClick={() => handleExcelDownload('packed', null, 'Rays Power')}>
+              📦 Rays Packed
+            </button>
+            <button className="btn-export" onClick={() => handleExcelDownload('dispatched', null, 'Rays Power')}>
+              🚚 Rays Dispatched
+            </button>
+            <button className="btn-export" onClick={() => handleExcelDownload('pending')}>
+              ⏳ All Pending
+            </button>
+            <button className="btn-export" onClick={() => handleExcelDownload('rejected')}>
+              ❌ All Rejected
+            </button>
+            <button className="btn-export" onClick={() => handleExcelDownload('binning')}>
+              🏷️ Binning Data
+            </button>
+          </div>
         </div>
 
         {/* Chat Area */}
