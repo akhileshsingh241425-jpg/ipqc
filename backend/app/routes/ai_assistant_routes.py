@@ -787,16 +787,44 @@ def get_pallet_full_details(company, pallet_no):
     
     return {'has_answer': True, 'answer': "\n".join(answer_parts), 'barcodes': pallet_barcodes}
 
-def get_total_pallets(company, running_order=None, binning=None):
-    """Get total pallet count with optional filters"""
+def get_total_pallets(company, running_order=None, binning=None, pdi_number=None):
+    """Get total pallet count with optional filters including PDI"""
+    
+    # If PDI number specified, get PDI serials first
+    pdi_serials = set()
+    if pdi_number:
+        try:
+            company_result = db.session.execute(text(
+                "SELECT id FROM companies WHERE company_name LIKE :name"
+            ), {'name': f'%{company.split()[0]}%'})
+            company_row = company_result.fetchone()
+            
+            if company_row:
+                pdi_result = db.session.execute(text("""
+                    SELECT serial_number FROM ftr_master_serials 
+                    WHERE company_id = :cid AND pdi_number = :pdi
+                    AND (class_status = 'OK' OR class_status IS NULL)
+                """), {'cid': company_row[0], 'pdi': pdi_number})
+                pdi_serials = {row[0] for row in pdi_result.fetchall()}
+        except Exception as e:
+            print(f"Error getting PDI serials: {e}")
+    
     mrp_result = get_all_mrp_data(company)
     if not mrp_result.get('success'):
         return {'has_answer': False, 'error': 'MRP API failed'}
     
     pallets = {}
+    total_modules = 0
+    dispatched_modules = 0
+    
     for b in mrp_result.get('data', []):
+        barcode = b.get('barcode', '')
         pallet_no = b.get('pallet_no', '')
         if not pallet_no:
+            continue
+        
+        # If PDI filter, check if barcode is in PDI serials
+        if pdi_number and pdi_serials and barcode not in pdi_serials:
             continue
         
         ro = extract_ro_from_ro(b.get('running_order', ''))
@@ -807,27 +835,47 @@ def get_total_pallets(company, running_order=None, binning=None):
         if binning and bin_val != binning.upper():
             continue
         
+        total_modules += 1
+        is_dispatched = bool(b.get('dispatch_party'))
+        if is_dispatched:
+            dispatched_modules += 1
+        
         if pallet_no not in pallets:
-            pallets[pallet_no] = {'count': 0, 'dispatched': False}
+            pallets[pallet_no] = {'count': 0, 'dispatched': False, 'dispatched_count': 0}
         pallets[pallet_no]['count'] += 1
-        if b.get('dispatch_party'):
-            pallets[pallet_no]['dispatched'] = True
+        if is_dispatched:
+            pallets[pallet_no]['dispatched_count'] += 1
+            # Mark pallet as dispatched if ALL modules dispatched
+            if pallets[pallet_no]['dispatched_count'] == pallets[pallet_no]['count']:
+                pallets[pallet_no]['dispatched'] = True
     
     total = len(pallets)
     dispatched = len([p for p in pallets.values() if p['dispatched']])
     pending = total - dispatched
+    remaining_modules = total_modules - dispatched_modules
     
     filter_str = company
+    if pdi_number:
+        filter_str += f" | {pdi_number}"
     if running_order:
         filter_str += f" | {running_order}"
     if binning:
         filter_str += f" | {binning}"
     
-    answer_parts = [f"**📦 {filter_str} - Pallet Count**\n"]
+    answer_parts = [f"**📦 {filter_str} - Pallet Status**\n"]
     answer_parts.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-    answer_parts.append(f"📊 **Total Pallets:** {total:,}")
-    answer_parts.append(f"🚚 **Dispatched:** {dispatched:,}")
-    answer_parts.append(f"⏳ **Pending:** {pending:,}")
+    answer_parts.append(f"📦 **Total Pallets:** {total:,}")
+    answer_parts.append(f"🚚 **Dispatched Pallets:** {dispatched:,}")
+    answer_parts.append(f"⏳ **Pending Pallets:** {pending:,}")
+    answer_parts.append(f"\n📊 **Total Modules:** {total_modules:,}")
+    answer_parts.append(f"🚚 **Dispatched Modules:** {dispatched_modules:,}")
+    answer_parts.append(f"⏳ **Remaining Modules:** {remaining_modules:,}")
+    
+    if total_modules > 0:
+        progress = (dispatched_modules / total_modules * 100)
+        filled = int(progress / 5)
+        bar = "█" * filled + "░" * (20 - filled)
+        answer_parts.append(f"\n**[{bar}] {progress:.1f}%**")
     
     return {'has_answer': True, 'answer': "\n".join(answer_parts)}
 
@@ -1594,8 +1642,10 @@ def parse_user_query(message):
     if 'audit' in message_lower or 'verify' in message_lower or 'sare pallet' in message_lower:
         result['wants_pallet_audit'] = True
     
-    if 'pallet' in message_lower and ('kitne' in message_lower or 'count' in message_lower or 'total' in message_lower):
-        result['wants_pallet_count'] = True
+    # Pallet count - detect "pallet kitne", "kitne pallet", "pallet + remaining/baaki"
+    if 'pallet' in message_lower:
+        if any(w in message_lower for w in ['kitne', 'kitna', 'count', 'total', 'remaining', 'baaki', 'baki', 'pending', 'hai']):
+            result['wants_pallet_count'] = True
     
     return result
 
@@ -1751,7 +1801,7 @@ def answer_specific_query(parsed_query):
         return get_pallet_full_details(company, pallet)
     
     if parsed_query.get('wants_pallet_count'):
-        return get_total_pallets(company, ro, binning)
+        return get_total_pallets(company, ro, binning, pdi)
     
     # ===== RUNNING ORDER QUERIES =====
     if parsed_query.get('wants_ro_comparison'):
