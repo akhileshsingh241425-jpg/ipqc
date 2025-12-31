@@ -1492,10 +1492,15 @@ def parse_user_query(message):
     if ro_match:
         result['running_order'] = f"R-{ro_match.group(1)}"
     
-    # Binning detection
+    # Binning detection (I1, I2, I3 or MB, MC, MD, MF, MG - NOT 'me' as it's Hindi word)
     bin_match = re.search(r'\bi[- ]?(\d+)\b', message_lower)
     if bin_match:
         result['binning'] = f"I{bin_match.group(1)}"
+    else:
+        # Alpha binnings like MB, MC, MD (excluding 'me' - Hindi word for 'in')
+        bin_alpha = re.search(r'\b(mb|mc|md|mf|mg)\s', message_lower)
+        if bin_alpha:
+            result['binning'] = bin_alpha.group(1).upper()
     
     # Pallet detection
     pallet_match = re.search(r'pallet[- ]?(\d+)|pallet\s*no\.?\s*(\d+)', message_lower)
@@ -2350,7 +2355,8 @@ def detect_excel_command(message):
     bin_match = re.search(r'i-?(\d+)', message_lower)
     binning = f"I{bin_match.group(1)}" if bin_match else None
     if not binning:
-        bin_alpha = re.search(r'\b(mb|mc|md|me|mf|mg)\b', message_lower, re.IGNORECASE)
+        # Note: 'me' removed as it conflicts with Hindi word 'me/mein' (meaning 'in')
+        bin_alpha = re.search(r'\b(mb|mc|md|mf|mg)\b', message_lower, re.IGNORECASE)
         if bin_alpha:
             binning = bin_alpha.group(1).upper()
     

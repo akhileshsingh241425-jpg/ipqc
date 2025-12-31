@@ -136,13 +136,61 @@ const AIAssistant = () => {
     }
   };
 
-  const quickQuestions = [
-    "Rays ka R-3 excel do",
-    "Rays ke I-2 packed barcodes",
-    "L&T ka dispatched excel do",
-    "Sterlin ka binning data",
-    "50 barcode packed list do"
-  ];
+  // Categorized suggested questions
+  const suggestedQuestions = {
+    pallet: {
+      icon: '📦',
+      title: 'Pallet',
+      questions: [
+        "Rays ke kitne pallet dispatch hue?",
+        "L&T ka pallet audit karo",
+        "S&W me total kitne pallet packed?",
+        "Mix packing check karo"
+      ]
+    },
+    julian: {
+      icon: '📅',
+      title: 'Julian Date',
+      questions: [
+        "Julian 350 se 365 ka data",
+        "Oldest pending julian batao",
+        "Rays ka julian wise breakdown",
+        "300 se purane pending modules"
+      ]
+    },
+    barcode: {
+      icon: '🔢',
+      title: 'Barcode',
+      questions: [
+        "50 barcode packed list do",
+        "R-3 I-2 ke pending barcodes",
+        "Duplicate barcode check karo",
+        "Missing barcodes in MRP"
+      ]
+    },
+    quality: {
+      icon: '✅',
+      title: 'Quality Check',
+      questions: [
+        "Binning mismatch check karo",
+        "Rejected packed check karo",
+        "Extra barcodes in MRP",
+        "Full quality audit karo"
+      ]
+    },
+    status: {
+      icon: '📊',
+      title: 'Status',
+      questions: [
+        "Rays ka R-3 status",
+        "L&T ka I-2 dispatched kitna?",
+        "All companies comparison",
+        "Sterlin ka full status"
+      ]
+    }
+  };
+
+  const [activeCategory, setActiveCategory] = useState('pallet');
 
   // Excel download handler
   const handleExcelDownload = async (exportType, companyId = null, companyName = null) => {
@@ -440,17 +488,33 @@ const AIAssistant = () => {
 
         {/* Chat Area */}
         <div className="ai-chat-area">
-          {/* Quick Questions */}
-          <div className="quick-questions">
-            {quickQuestions.map((q, idx) => (
-              <button 
-                key={idx} 
-                className="quick-q-btn"
-                onClick={() => setInput(q)}
-              >
-                {q}
-              </button>
-            ))}
+          {/* Suggested Questions - Categorized */}
+          <div className="suggested-questions-section">
+            {/* Category Tabs */}
+            <div className="category-tabs">
+              {Object.entries(suggestedQuestions).map(([key, category]) => (
+                <button
+                  key={key}
+                  className={`category-tab ${activeCategory === key ? 'active' : ''}`}
+                  onClick={() => setActiveCategory(key)}
+                >
+                  {category.icon} {category.title}
+                </button>
+              ))}
+            </div>
+            
+            {/* Questions for Active Category */}
+            <div className="category-questions">
+              {suggestedQuestions[activeCategory]?.questions.map((q, idx) => (
+                <button 
+                  key={idx} 
+                  className="quick-q-btn"
+                  onClick={() => setInput(q)}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* Messages */}
