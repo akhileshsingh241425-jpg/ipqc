@@ -1563,6 +1563,13 @@ def compare_pdi_with_mrp(company, pdi_number):
                 details = mrp_barcode_details.get(s, {})
                 answer_parts.append(f"   • {s} | {details.get('running_order', '')} | Pallet: {details.get('pallet', '')}")
         
+        # Sample packed
+        if packed_serials:
+            answer_parts.append(f"\n\n**📦 Sample Packed ({min(5, len(packed_serials))} of {packed_count}):**")
+            for s in packed_serials[:5]:
+                details = mrp_barcode_details.get(s, {})
+                answer_parts.append(f"   • {s} | {details.get('running_order', '')} | Pallet: {details.get('pallet', '')}")
+        
         # Sample remaining
         if remaining_serials:
             answer_parts.append(f"\n\n**⏳ Sample Remaining ({min(5, len(remaining_serials))} of {remaining_count}):**")
