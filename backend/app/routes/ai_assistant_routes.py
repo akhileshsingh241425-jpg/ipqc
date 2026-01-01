@@ -1437,6 +1437,138 @@ def full_pallet_audit(company):
     
     return {'has_answer': True, 'answer': "\n".join(answer_parts), 'issues': issues_summary}
 
+def get_packed_not_in_pdi(company=None):
+    """
+    Get all packed modules (from MRP) that are NOT assigned to any PDI
+    Shows company-wise breakdown with pallet numbers
+    """
+    import re
+    
+    try:
+        all_companies = ['Rays Power', 'Larsen & Toubro', 'Sterlin and Wilson']
+        companies_to_check = [company] if company else all_companies
+        
+        results = {}
+        total_packed_not_pdi = 0
+        
+        for comp in companies_to_check:
+            # Get MRP data
+            mrp_result = get_all_mrp_data(comp)
+            if not mrp_result.get('success'):
+                continue
+            
+            # Get company_id
+            company_result = db.session.execute(text(
+                "SELECT id FROM companies WHERE company_name LIKE :name"
+            ), {'name': f'%{comp.split()[0]}%'})
+            company_row = company_result.fetchone()
+            
+            if not company_row:
+                continue
+            
+            company_id = company_row[0]
+            
+            # Get all serials in database with PDI or rejected
+            db_result = db.session.execute(text("""
+                SELECT serial_number, pdi_number, class_status
+                FROM ftr_master_serials
+                WHERE company_id = :cid
+            """), {'cid': company_id})
+            
+            db_serials = {}
+            for row in db_result.fetchall():
+                db_serials[row[0]] = {
+                    'pdi': row[1],
+                    'class_status': row[2]
+                }
+            
+            # Filter MRP packed modules
+            packed_not_pdi = []
+            pallet_breakdown = {}
+            
+            for b in mrp_result.get('data', []):
+                barcode = b.get('barcode', '')
+                pallet_no = b.get('pallet_no', '')
+                status = b.get('status', '')
+                dispatch_party = b.get('dispatch_party')
+                ro = b.get('running_order', '')
+                
+                # Check if packed (not dispatched)
+                if status == 'packed' and not dispatch_party:
+                    # Check if NOT in PDI and NOT rejected
+                    db_info = db_serials.get(barcode, {})
+                    has_pdi = db_info.get('pdi')
+                    is_rejected = db_info.get('class_status') == 'REJECTED'
+                    
+                    if not has_pdi and not is_rejected:
+                        # Extract binning from running_order
+                        bin_match = re.search(r'i-?(\d+)', ro, re.IGNORECASE)
+                        binning = f"I{bin_match.group(1)}" if bin_match else 'Unknown'
+                        
+                        packed_not_pdi.append({
+                            'barcode': barcode,
+                            'pallet': pallet_no,
+                            'running_order': ro,
+                            'binning': binning
+                        })
+                        
+                        # Pallet breakdown
+                        if pallet_no:
+                            if pallet_no not in pallet_breakdown:
+                                pallet_breakdown[pallet_no] = {
+                                    'count': 0,
+                                    'binnings': set()
+                                }
+                            pallet_breakdown[pallet_no]['count'] += 1
+                            pallet_breakdown[pallet_no]['binnings'].add(binning)
+            
+            results[comp] = {
+                'total': len(packed_not_pdi),
+                'pallets': len(pallet_breakdown),
+                'samples': packed_not_pdi[:10],
+                'pallet_breakdown': {k: {'count': v['count'], 'binnings': list(v['binnings'])} 
+                                     for k, v in sorted(pallet_breakdown.items(), key=lambda x: int(x[0]) if x[0].isdigit() else 0)[:10]}
+            }
+            total_packed_not_pdi += len(packed_not_pdi)
+        
+        # Build answer
+        answer_parts = [f"**📦 Packed Modules (NOT in PDI & NOT Rejected)**\n"]
+        answer_parts.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        answer_parts.append(f"🔢 **Total:** {total_packed_not_pdi:,} modules\n")
+        
+        for comp, data in results.items():
+            if data['total'] > 0:
+                answer_parts.append(f"\n**🏭 {comp}:** {data['total']:,} modules | {data['pallets']} pallets")
+                
+                # Top pallets
+                if data['pallet_breakdown']:
+                    answer_parts.append(f"\n   **Top Pallets:**")
+                    for pallet, info in list(data['pallet_breakdown'].items())[:5]:
+                        binnings_str = ', '.join(info['binnings'])
+                        answer_parts.append(f"   • Pallet {pallet}: {info['count']} modules ({binnings_str})")
+                
+                # Sample barcodes
+                if data['samples']:
+                    answer_parts.append(f"\n   **Sample Barcodes:**")
+                    for s in data['samples'][:3]:
+                        answer_parts.append(f"   • {s['barcode']} | Pallet: {s['pallet']} | {s['binning']}")
+        
+        if total_packed_not_pdi == 0:
+            answer_parts.append(f"\n✅ **All packed modules are either assigned to PDI or rejected.**")
+        
+        return {
+            'has_answer': True,
+            'answer': "\n".join(answer_parts),
+            'data': results,
+            'total': total_packed_not_pdi
+        }
+        
+    except Exception as e:
+        print(f"Error in get_packed_not_in_pdi: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {'has_answer': False, 'error': str(e)}
+
 def compare_pdi_with_mrp(company, pdi_number):
     """
     Compare PDI serial numbers from database with MRP system
@@ -1992,6 +2124,11 @@ def parse_user_query(message):
         if any(w in message_lower for w in ['kitne', 'kitna', 'count', 'total', 'remaining', 'baaki', 'baki', 'pending', 'hai']):
             result['wants_pallet_count'] = True
     
+    # Packed but not in PDI (orphan packed modules)
+    if ('packed' in message_lower or 'pack' in message_lower) and ('pdi' in message_lower or 'rejaction' in message_lower or 'rejection' in message_lower):
+        if any(w in message_lower for w in ['na', 'not', 'nahi', 'without', 'bina', 'jo nahi']):
+            result['wants_packed_not_pdi'] = True
+    
     return result
 
 def get_specific_mrp_data(company, filters=None):
@@ -2130,6 +2267,10 @@ def answer_specific_query(parsed_query):
     
     if parsed_query.get('wants_pallet_audit'):
         return full_pallet_audit(company)
+    
+    # ===== PACKED NOT IN PDI =====
+    if parsed_query.get('wants_packed_not_pdi'):
+        return get_packed_not_in_pdi(company)
     
     # ===== JULIAN DATE QUERIES =====
     if parsed_query.get('wants_julian_list'):
