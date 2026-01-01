@@ -1649,21 +1649,28 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
                 'answer': f"**{company} - {pdi_number}**\n\n❌ No serial numbers found for {pdi_number}"
             }
         
+        print(f"[DEBUG] Found {total_pdi} serials in {pdi_number}. Fetching MRP data...")
+        
         # Step 3: Get MRP data for comparison
         mrp_party_name = get_mrp_party_name(company)
         response = requests.post(
             BARCODE_TRACKING_API,
             json={'party_name': mrp_party_name},
-            timeout=60
+            timeout=30  # Reduced from 60 seconds
         )
         
         if response.status_code != 200:
             return {'has_answer': False, 'error': 'MRP API failed'}
         
+        print(f"[DEBUG] MRP API response received. Processing...")
+        
         mrp_data = response.json()
         mrp_barcodes = mrp_data.get('data', [])
         
-        # Create lookup set for MRP barcodes
+        # OPTIMIZATION: Convert PDI serials to set for O(1) lookup
+        pdi_serials_set = set(pdi_serials)
+        
+        # Create lookup dictionaries - ONLY for PDI serials (much faster)
         mrp_dispatched = set()
         mrp_packed = set()
         mrp_barcode_details = {}
@@ -1671,8 +1678,15 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
         filtered_count = 0
         total_mrp_count = len(mrp_barcodes)
         
+        print(f"[DEBUG] Processing {total_mrp_count} MRP barcodes, filtering for {total_pdi} PDI serials...")
+        
         for b in mrp_barcodes:
             barcode = b.get('barcode', '')
+            
+            # CRITICAL OPTIMIZATION: Skip barcodes not in PDI
+            if barcode not in pdi_serials_set:
+                continue
+            
             ro = b.get('running_order', '') or ''
             
             # Extract R-O from running_order field
@@ -3117,11 +3131,17 @@ def ai_chat():
         if not user_message:
             return jsonify({'success': False, 'error': 'Message is required'}), 400
         
+        print(f"\n{'='*60}")
+        print(f"📥 NEW QUERY: {user_message}")
+        print(f"{'='*60}")
+        
         # STEP 1: Parse user query to understand intent
         parsed = parse_user_query(user_message)
+        print(f"🔍 PARSED RESULT: {parsed}")
         
         # STEP 2: Check if this is an Excel command
         excel_cmd = detect_excel_command(user_message)
+        print(f"📊 EXCEL COMMAND: {excel_cmd}")
         
         if excel_cmd:
             # Generate smart Excel
