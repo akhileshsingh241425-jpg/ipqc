@@ -2148,6 +2148,7 @@ def answer_specific_query(parsed_query):
         # Check if running order filter is also requested
         if ro:
             # Use the new filtered comparison function
+            # ro can be a string "R-1" or a list ["R-1", "R-2"]
             return compare_pdi_with_mrp_filtered(company, pdi, ro)
         else:
             return compare_pdi_with_mrp(company, pdi)
@@ -2162,6 +2163,10 @@ def answer_specific_query(parsed_query):
     
     # ===== COMBINED FILTERS (RO + Binning) =====
     if ro and binning:
+        # Normalize ro to list for comparison
+        ro_list = ro if isinstance(ro, list) else [ro]
+        ro_list = [r.upper() for r in ro_list]
+        
         # Get specific data with both filters
         mrp_result = get_all_mrp_data(company)
         if not mrp_result.get('success'):
@@ -2172,7 +2177,7 @@ def answer_specific_query(parsed_query):
             bc_ro = extract_ro_from_ro(b.get('running_order', ''))
             bc_bin = extract_binning_from_ro(b.get('running_order', ''))
             
-            if bc_ro == ro.upper() and bc_bin == binning.upper():
+            if bc_ro in ro_list and bc_bin == binning.upper():
                 filtered.append({
                     'barcode': b.get('barcode', ''),
                     'dispatched': bool(b.get('dispatch_party'))
