@@ -2714,21 +2714,21 @@ def generate_smart_excel(params):
                 ws.cell(row=row_idx, column=2).fill = yellow_fill
                 row_idx += 1
                 
-                # Write barcode details by binning
+                # Write ALL barcodes by binning
                 for binning, barcodes in sorted(binnings_by_type.items()):
                     # Binning group header
                     ws.cell(row=row_idx, column=2, value=f"  {binning}:").font = Font(bold=True, italic=True)
                     ws.cell(row=row_idx, column=5, value=len(barcodes)).border = thin_border
                     row_idx += 1
                     
-                    # Show first 10 barcodes of this binning
-                    for barcode in barcodes[:10]:
+                    # Show ALL barcodes (no limit)
+                    for bc_idx, barcode in enumerate(barcodes, 1):
+                        ws.cell(row=row_idx, column=1, value=bc_idx).border = thin_border
+                        ws.cell(row=row_idx, column=2, value=f"Pallet {pallet_no}").border = thin_border
                         ws.cell(row=row_idx, column=3, value=barcode).border = thin_border
                         ws.cell(row=row_idx, column=4, value=binning).border = thin_border
-                        row_idx += 1
-                    
-                    if len(barcodes) > 10:
-                        ws.cell(row=row_idx, column=3, value=f"... and {len(barcodes) - 10} more").font = Font(italic=True)
+                        ws.cell(row=row_idx, column=5, value="MIX PACKING").border = thin_border
+                        ws.cell(row=row_idx, column=5).fill = yellow_fill
                         row_idx += 1
                 
                 # Add spacing between pallets
