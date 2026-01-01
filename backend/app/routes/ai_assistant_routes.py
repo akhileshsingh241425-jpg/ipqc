@@ -26,6 +26,9 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
 OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
 USE_OPENAI = bool(OPENAI_API_KEY and OPENAI_API_KEY.startswith('sk-'))
 
+print(f"🔑 [STARTUP] OPENAI_API_KEY present: {bool(OPENAI_API_KEY)}")
+print(f"🔑 [STARTUP] USE_OPENAI: {USE_OPENAI}")
+
 # External Barcode Tracking API
 BARCODE_TRACKING_API = 'https://umanmrp.in/api/get_barcode_tracking.php'
 
