@@ -242,11 +242,12 @@ def check_mix_packing(company):
         mix_packed_pallets = []
         
         for pallet_no, data in pallets.items():
-            # Remove 'Unknown' and 'Not in Master FTR' from binnings for comparison
-            known_binnings = {b for b in data['binnings'] if b and b not in ['Unknown', 'Not in Master FTR']}
+            # Count ALL binning types - including Unknown and Not in Master FTR
+            # These are ALSO different categories and indicate issues
+            all_binnings = {b for b in data['binnings'] if b}
             
             # ❌ MIX PACKING if more than 1 binning type found
-            if len(known_binnings) > 1:
+            if len(all_binnings) > 1:
                 # Get binning breakdown with actual barcodes
                 binning_groups = {}  # {binning: [barcodes]}
                 for detail in data['binning_details']:
@@ -257,7 +258,7 @@ def check_mix_packing(company):
                 
                 mix_packed_pallets.append({
                     'pallet_no': pallet_no,
-                    'binnings': sorted(list(known_binnings)),
+                    'binnings': sorted(list(all_binnings)),  # Show ALL binning types
                     'binning_groups': binning_groups,  # Show which barcodes have which binning
                     'total_modules': len(data['barcodes']),
                     'all_binning_details': data['binning_details']  # Full details
@@ -276,6 +277,7 @@ def check_mix_packing(company):
         
         if mix_packed_pallets:
             answer_parts.append(f"\n\n**❌ MIX PACKING FOUND (Based on Master FTR Binning):**\n")
+            answer_parts.append(f"⚠️ NOTE: 'Not in Master FTR' means barcode exists in MRP but not in uploaded Master FTR data\n")
             
             for p in mix_packed_pallets[:20]:  # Show first 20
                 binnings_str = " + ".join(p['binnings'])
@@ -302,7 +304,12 @@ def check_mix_packing(company):
             'answer': "\n".join(answer_parts),
             'mix_packed_count': len(mix_packed_pallets),
             'total_pallets': len(pallets),
-            'mix_packed_pallets': mix_packed_pallets
+            'mix_packed_pallets': [{
+                'pallet_no': p['pallet_no'],
+                'binnings': p['binnings'],
+                'binnings_by_type': p['binning_groups'],  # For Excel - {binning: [barcodes]}
+                'total_modules': p['total_modules']
+            } for p in mix_packed_pallets]
         }
         
     except Exception as e:
