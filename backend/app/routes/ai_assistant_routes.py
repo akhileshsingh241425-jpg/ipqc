@@ -658,67 +658,126 @@ def get_oldest_pending_julian(company):
 
 def get_barcode_full_status(barcode):
     """Get complete status of a single barcode"""
+    # Clean barcode - remove spaces and convert to uppercase
+    barcode = barcode.strip().upper()
+    
     parsed = parse_barcode(barcode)
     if not parsed:
-        return {'has_answer': True, 'answer': f"❌ Invalid barcode format: {barcode}"}
+        return {'has_answer': True, 'answer': f"❌ Invalid barcode format: {barcode}\n\nBarcode should be 18 characters starting with 'GS', e.g., GS04875KG3022500075"}
     
     # Find in all companies' MRP
     found_in_mrp = None
-    for company in ['Rays Power', 'Larsen & Toubro', 'Sterlin and Wilson']:
-        mrp_result = get_all_mrp_data(company)
-        for b in mrp_result.get('data', []):
-            if b.get('barcode', '') == barcode:
-                found_in_mrp = {**b, 'company': company}
+    search_companies = [
+        ('Rays Power', 'RAYS POWER INFRA PRIVATE LIMITED'),
+        ('Larsen & Toubro', 'LARSEN & TOUBRO LIMITED, CONSTRUCTION'),
+        ('Sterlin and Wilson', 'STERLING AND WILSON RENEWABLE ENERGY LIMITED')
+    ]
+    
+    for company_name, mrp_party in search_companies:
+        try:
+            response = requests.post(
+                BARCODE_TRACKING_API,
+                json={'party_name': mrp_party},
+                timeout=30
+            )
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('status') == 'success':
+                    for b in data.get('data', []):
+                        if b.get('barcode', '').upper() == barcode:
+                            found_in_mrp = {
+                                **b, 
+                                'company': company_name,
+                                'mrp_party': mrp_party
+                            }
+                            break
+            if found_in_mrp:
                 break
-        if found_in_mrp:
-            break
+        except Exception as e:
+            print(f"Error searching {company_name}: {str(e)}")
+            continue
     
-    # Check in database
-    db_result = db.session.execute(text("""
-        SELECT m.*, c.company_name 
-        FROM ftr_master_serials m
-        JOIN companies c ON m.company_id = c.id
-        WHERE m.serial_number = :barcode
-    """), {'barcode': barcode})
-    db_row = db_result.fetchone()
+    # Check in local database
+    db_row = None
+    try:
+        db_result = db.session.execute(text("""
+            SELECT m.serial_number, m.status, m.pdi_number, m.binning, m.class_status, m.pmax,
+                   c.company_name 
+            FROM ftr_master_serials m
+            JOIN companies c ON m.company_id = c.id
+            WHERE m.serial_number = :barcode
+        """), {'barcode': barcode})
+        db_row = db_result.fetchone()
+    except Exception as e:
+        print(f"Database error: {str(e)}")
     
-    answer_parts = [f"**🔍 Barcode Status: {barcode}**\n"]
+    # Build answer
+    answer_parts = [f"**🔍 Barcode: {barcode}**\n"]
     answer_parts.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
     
-    # Parsed info
-    answer_parts.append(f"**📋 Barcode Details:**")
+    # Parsed info from barcode itself
+    answer_parts.append(f"**📋 Barcode Info:**")
     answer_parts.append(f"   🏭 Model: {parsed['model']}")
     answer_parts.append(f"   🏢 Plant: {parsed['plant']}")
-    answer_parts.append(f"   📅 Julian Date: {parsed['julian_date']}")
-    answer_parts.append(f"   🗓️ Manufacturing: {parsed['manufacturing_date']}")
+    answer_parts.append(f"   📅 Julian: {parsed['julian_date']}")
+    answer_parts.append(f"   🗓️ Mfg Date: {parsed['manufacturing_date']}")
     answer_parts.append(f"   🔢 Serial: {parsed['serial']}")
     
-    # Database status
-    answer_parts.append(f"\n**💾 Database Status:**")
+    # MRP Status (Production/Packing Info) - Most important
+    answer_parts.append(f"\n**📦 Production Status (MRP):**")
+    if found_in_mrp:
+        company = found_in_mrp.get('company', 'Unknown')
+        running_order = found_in_mrp.get('running_order', 'N/A')
+        pallet_no = found_in_mrp.get('pallet_no', 'N/A')
+        pack_date = found_in_mrp.get('date', 'N/A')
+        status = found_in_mrp.get('status', 'N/A')
+        dispatch_party = found_in_mrp.get('dispatch_party')
+        
+        # Extract binning from running_order (e.g., "R-3 i-3" -> "I3")
+        mrp_binning = extract_binning_from_ro(running_order)
+        mrp_ro = extract_ro_from_ro(running_order)
+        
+        answer_parts.append(f"   ✅ **Found in MRP System**")
+        answer_parts.append(f"   🏭 **Company:** {company}")
+        answer_parts.append(f"   🏷️ **Binning:** {mrp_binning or 'N/A'}")
+        answer_parts.append(f"   🔢 **Running Order:** {mrp_ro or running_order}")
+        answer_parts.append(f"   📦 **Pallet No:** {pallet_no}")
+        answer_parts.append(f"   📅 **Pack Date:** {pack_date}")
+        
+        if dispatch_party:
+            answer_parts.append(f"\n   🚚 **STATUS: DISPATCHED**")
+            answer_parts.append(f"   📤 Dispatched to: {dispatch_party}")
+        else:
+            answer_parts.append(f"\n   📦 **STATUS: PACKED** (Not Dispatched)")
+    else:
+        answer_parts.append(f"   ❌ **Not found in MRP**")
+        answer_parts.append(f"   Module is NOT packed yet or barcode is incorrect")
+    
+    # Database status (FTR Data)
+    answer_parts.append(f"\n**💾 FTR Database:**")
     if db_row:
         answer_parts.append(f"   ✅ Found in Database")
         answer_parts.append(f"   Company: {db_row.company_name}")
-        answer_parts.append(f"   Status: {db_row.status}")
+        answer_parts.append(f"   Status: {db_row.status or 'N/A'}")
         answer_parts.append(f"   PDI: {db_row.pdi_number or 'Not Assigned'}")
-        answer_parts.append(f"   Binning: {db_row.binning or 'N/A'}")
+        answer_parts.append(f"   DB Binning: {db_row.binning or 'N/A'}")
         answer_parts.append(f"   Class: {db_row.class_status or 'OK'}")
+        if db_row.pmax:
+            answer_parts.append(f"   Pmax: {db_row.pmax}W")
     else:
-        answer_parts.append(f"   ❌ Not found in Database")
+        answer_parts.append(f"   ❌ Not in FTR Database")
     
-    # MRP status
-    answer_parts.append(f"\n**📦 MRP Status:**")
+    # Summary at the end
+    answer_parts.append(f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     if found_in_mrp:
-        answer_parts.append(f"   ✅ Found in MRP")
-        answer_parts.append(f"   Company: {found_in_mrp['company']}")
-        answer_parts.append(f"   Pallet: {found_in_mrp.get('pallet_no', 'N/A')}")
-        answer_parts.append(f"   Running Order: {found_in_mrp.get('running_order', 'N/A')}")
-        answer_parts.append(f"   MRP Binning: {extract_binning_from_ro(found_in_mrp.get('running_order', ''))}")
+        binning = extract_binning_from_ro(found_in_mrp.get('running_order', ''))
+        company = found_in_mrp.get('company', 'Unknown')
         if found_in_mrp.get('dispatch_party'):
-            answer_parts.append(f"   🚚 **DISPATCHED** to {found_in_mrp.get('dispatch_party')}")
+            answer_parts.append(f"**✅ Summary: {company} | {binning or 'N/A'} | 🚚 DISPATCHED**")
         else:
-            answer_parts.append(f"   📦 **PACKED** (Not Dispatched)")
+            answer_parts.append(f"**✅ Summary: {company} | {binning or 'N/A'} | 📦 PACKED**")
     else:
-        answer_parts.append(f"   ❌ Not found in MRP (Not packed yet)")
+        answer_parts.append(f"**⚠️ Module not found in packing system**")
     
     return {'has_answer': True, 'answer': "\n".join(answer_parts)}
 
@@ -1569,10 +1628,14 @@ def parse_user_query(message):
         result['julian_range'] = (int(julian_range_match.group(1)), int(julian_range_match.group(2)))
         result['wants_julian_query'] = True
     
-    # Specific barcode check (GS format)
-    barcode_match = re.search(r'(GS\d{16,18})', message, re.IGNORECASE)
+    # Specific barcode check (GS format - more flexible matching)
+    # Matches: GS04875KG3022544039, gs04875kg3022544039, GS 04875 KG 302 25 44039
+    barcode_match = re.search(r'(GS\s*\d{5}\s*[A-Z]{2}\s*\d{3}\s*\d{2}\s*\d{5})', message.replace(' ', ''), re.IGNORECASE)
+    if not barcode_match:
+        # Try simpler pattern - just GS followed by 16+ alphanumeric
+        barcode_match = re.search(r'(GS[A-Z0-9]{16,18})', message.replace(' ', ''), re.IGNORECASE)
     if barcode_match:
-        result['specific_barcode'] = barcode_match.group(1).upper()
+        result['specific_barcode'] = barcode_match.group(1).upper().replace(' ', '')
         result['wants_barcode_status'] = True
     
     # Count needed
