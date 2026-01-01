@@ -46,6 +46,9 @@ class Config:
     # CORS Configuration
     FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
     
+    # AI Configuration
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+    
     # JSON settings
     JSON_SORT_KEYS = False
     JSONIFY_PRETTYPRINT_REGULAR = True

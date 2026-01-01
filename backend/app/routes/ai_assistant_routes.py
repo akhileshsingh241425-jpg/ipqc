@@ -17,10 +17,14 @@ except ImportError:
 
 ai_assistant_bp = Blueprint('ai_assistant', __name__)
 
-# Groq API Configuration
-# Set GROQ_API_KEY environment variable on server
+# AI API Configuration
 GROQ_API_KEY = os.environ.get('GROQ_API_KEY', '')
 GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
+
+# OpenAI Configuration
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'
+USE_OPENAI = bool(OPENAI_API_KEY and OPENAI_API_KEY.startswith('sk-'))
 
 # External Barcode Tracking API
 BARCODE_TRACKING_API = 'https://umanmrp.in/api/get_barcode_tracking.php'
@@ -2713,6 +2717,143 @@ def query_groq(user_message, ftr_data):
             'error': str(e)
         }
 
+def query_openai_with_functions(user_message):
+    """
+    Query OpenAI GPT-4o-mini with function calling
+    This is the SMART AI that automatically calls the right function
+    """
+    if not OPENAI_API_KEY:
+        return {'success': False, 'error': 'OpenAI API key not configured'}
+    
+    from .openai_functions import OPENAI_FUNCTIONS
+    
+    try:
+        print(f"🤖 [OpenAI] Calling GPT-4o-mini with function calling...")
+        
+        response = requests.post(
+            OPENAI_API_URL,
+            headers={
+                'Authorization': f'Bearer {OPENAI_API_KEY}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'model': 'gpt-4o-mini',
+                'messages': [
+                    {
+                        'role': 'system',
+                        'content': '''You are an AI assistant for FTR (Final Test Report) Management System.
+Your job is to understand user queries and call the appropriate function with correct parameters.
+
+Companies:
+- "SW", "Sterlin", "Wilson" → "Sterlin and Wilson"
+- "Rays", "RP" → "Rays Power"  
+- "L&T", "Larsen", "Toubro" → "Larsen & Toubro"
+
+Running Orders: R-1, R-2, R-3, etc.
+PDI Numbers: PDI-1, PDI-2, etc.
+Binning: I1, I2, I3
+
+Examples:
+- "SW R1 me PDI-1 me kitne packed" → compare_pdi_with_mrp_filtered(company="Sterlin and Wilson", pdi="PDI-1", running_orders=["R-1"])
+- "R1 aur R2 me kitne" → compare_pdi_with_mrp_filtered with running_orders=["R-1", "R-2"]
+'''
+                    },
+                    {'role': 'user', 'content': user_message}
+                ],
+                'functions': OPENAI_FUNCTIONS,
+                'function_call': 'auto',
+                'temperature': 0.1
+            },
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            print(f"❌ [OpenAI] Error: {response.status_code}")
+            return {'success': False, 'error': f'OpenAI API error: {response.status_code}'}
+        
+        result = response.json()
+        message = result['choices'][0]['message']
+        
+        # Check if function was called
+        if message.get('function_call'):
+            function_name = message['function_call']['name']
+            function_args = json.loads(message['function_call']['arguments'])
+            
+            print(f"✅ [OpenAI] Function called: {function_name}")
+            print(f"📋 [OpenAI] Arguments: {function_args}")
+            
+            # Call the actual function
+            function_result = execute_function(function_name, function_args)
+            
+            return {
+                'success': True,
+                'function_called': function_name,
+                'arguments': function_args,
+                'result': function_result,
+                'ai_powered': True
+            }
+        else:
+            # No function call, return text response
+            return {
+                'success': True,
+                'response': message.get('content', 'No response'),
+                'ai_powered': True
+            }
+            
+    except Exception as e:
+        print(f"❌ [OpenAI] Exception: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+def execute_function(function_name, arguments):
+    """Execute the function called by OpenAI"""
+    try:
+        if function_name == 'compare_pdi_with_mrp':
+            return compare_pdi_with_mrp(arguments['company'], arguments['pdi_number'])
+        
+        elif function_name == 'compare_pdi_with_mrp_filtered':
+            return compare_pdi_with_mrp_filtered(
+                arguments['company'],
+                arguments['pdi_number'],
+                arguments['running_orders']
+            )
+        
+        elif function_name == 'get_running_order_status':
+            return get_running_order_status(arguments['company'], arguments['running_order'])
+        
+        elif function_name == 'get_binning_status':
+            return get_binning_status(arguments['company'], arguments['binning'])
+        
+        elif function_name == 'check_mix_packing':
+            return check_mix_packing(arguments['company'])
+        
+        elif function_name == 'check_duplicate_barcodes':
+            return check_duplicate_barcodes(arguments['company'])
+        
+        elif function_name == 'get_pallet_full_details':
+            return get_pallet_full_details(arguments['company'], arguments['pallet_no'])
+        
+        elif function_name == 'get_company_full_status':
+            return get_company_full_status(arguments['company'])
+        
+        elif function_name == 'get_total_pallets':
+            return get_total_pallets(
+                arguments['company'],
+                arguments.get('running_order'),
+                arguments.get('binning'),
+                arguments.get('pdi_number')
+            )
+        
+        else:
+            return {'has_answer': False, 'error': f'Unknown function: {function_name}'}
+            
+    except Exception as e:
+        print(f"❌ Error executing function {function_name}: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {'has_answer': False, 'error': str(e)}
+
 def detect_excel_command(message):
     """
     Detect if user wants Excel export from chat message
@@ -3179,11 +3320,38 @@ def ai_chat():
                     'response': f"❌ Excel generation failed: {summary}"
                 })
         
-        # STEP 3: Try to answer specifically without AI
+        # STEP 3: Try OpenAI with function calling first (if available)
+        if USE_OPENAI:
+            print(f"🤖 [AI] Using OpenAI GPT-4o-mini with function calling...")
+            openai_result = query_openai_with_functions(user_message)
+            
+            if openai_result.get('success'):
+                # Check if a function was called
+                if 'function_called' in openai_result:
+                    function_result = openai_result.get('result', {})
+                    
+                    if function_result.get('has_answer'):
+                        return jsonify({
+                            'success': True,
+                            'response': function_result.get('answer', 'No answer'),
+                            'source': 'openai_function_call',
+                            'function_called': openai_result['function_called'],
+                            'ai_powered': True
+                        })
+                else:
+                    # Text response from OpenAI
+                    return jsonify({
+                        'success': True,
+                        'response': openai_result.get('response', ''),
+                        'source': 'openai_direct',
+                        'ai_powered': True
+                    })
+        
+        # STEP 4: Try to answer specifically without AI (fallback)
         specific_answer = answer_specific_query(parsed)
         
         if specific_answer and specific_answer.get('has_answer'):
-            # Direct answer without Groq API
+            # Direct answer without AI
             return jsonify({
                 'success': True,
                 'response': specific_answer.get('answer', 'No answer generated'),
@@ -3191,7 +3359,7 @@ def ai_chat():
                 'parsed_query': parsed
             })
         
-        # STEP 4: Fall back to Groq AI for general questions
+        # STEP 5: Fall back to Groq AI for general questions
         # Get fresh FTR data
         ftr_data = get_all_ftr_data()
         
