@@ -1719,6 +1719,7 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
         print(f"[DEBUG] Total MRP barcodes: {total_mrp_count}, Filtered by RO: {filtered_count}")
         
         # Step 4: Compare PDI serials with FILTERED MRP
+        print(f"[DEBUG] Step 4: Comparing {total_pdi} PDI serials with {filtered_count} filtered MRP barcodes...")
         dispatched_count = 0
         packed_count = 0
         remaining_count = 0
@@ -1730,6 +1731,7 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
         
         ro_breakdown = {}
         
+        print(f"[DEBUG] Starting serial comparison loop for {len(pdi_serials)} serials...")
         for serial in pdi_serials:
             if serial in mrp_dispatched:
                 dispatched_count += 1
@@ -1748,6 +1750,8 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
                 remaining_serials.append(serial)
                 if serial not in mrp_barcode_details:
                     not_in_filtered_mrp += 1
+        
+        print(f"[DEBUG] Comparison complete: Dispatched={dispatched_count}, Packed={packed_count}, Remaining={remaining_count}")
         
         # Build answer
         answer_parts = []
