@@ -188,7 +188,24 @@ def check_mix_packing(company):
         mrp_data = response.json()
         all_barcodes = mrp_data.get('data', [])
         
-        # Step 3: Group barcodes by pallet and get ACTUAL binning from database
+        # Step 3: ⚡ OPTIMIZED - Fetch ALL binnings in ONE query
+        all_serials = [b.get('barcode') for b in all_barcodes if b.get('barcode')]
+        
+        if not all_serials:
+            return {'success': False, 'error': 'No barcodes found in MRP data'}
+        
+        # Single query to get all binnings from Master FTR database
+        binning_result = db.session.execute(text("""
+            SELECT serial_number, binning, class_status 
+            FROM ftr_master_serials 
+            WHERE company_id = :cid 
+            AND serial_number IN :serials
+        """), {'cid': company_id, 'serials': tuple(all_serials)})
+        
+        # Step 4: Create instant lookup dictionary
+        binning_lookup = {row[0]: {'binning': row[1], 'class_status': row[2]} for row in binning_result.fetchall()}
+        
+        # Step 5: Group barcodes by pallet with ACTUAL binning from database
         pallets = {}  # {pallet_no: {'barcodes': [], 'binnings': set(), 'binning_details': []}}
         
         for b in all_barcodes:
@@ -200,20 +217,10 @@ def check_mix_packing(company):
             if not barcode:
                 continue
             
-            # Step 4: Get ACTUAL binning from Master FTR database (NOT from running_order)
-            db_result = db.session.execute(text("""
-                SELECT binning, class_status FROM ftr_master_serials 
-                WHERE company_id = :cid AND serial_number = :serial
-            """), {'cid': company_id, 'serial': barcode})
-            
-            db_row = db_result.fetchone()
-            
-            if db_row:
-                actual_binning = db_row[0] if db_row[0] else 'Unknown'
-                class_status = db_row[1] if db_row[1] else 'OK'
-            else:
-                actual_binning = 'Not in Master FTR'
-                class_status = 'Unknown'
+            # Get ACTUAL binning from Master FTR database (instant lookup - no DB query)
+            db_data = binning_lookup.get(barcode, {'binning': 'Not in Master FTR', 'class_status': 'Unknown'})
+            actual_binning = db_data['binning'] if db_data['binning'] else 'Unknown'
+            class_status = db_data['class_status'] if db_data['class_status'] else 'OK'
             
             if pallet_no not in pallets:
                 pallets[pallet_no] = {
@@ -240,20 +247,20 @@ def check_mix_packing(company):
             
             # ❌ MIX PACKING if more than 1 binning type found
             if len(known_binnings) > 1:
-                # Get binning breakdown
-                binning_count = {}
+                # Get binning breakdown with actual barcodes
+                binning_groups = {}  # {binning: [barcodes]}
                 for detail in data['binning_details']:
                     bin_val = detail['binning']
-                    if bin_val not in binning_count:
-                        binning_count[bin_val] = 0
-                    binning_count[bin_val] += 1
+                    if bin_val not in binning_groups:
+                        binning_groups[bin_val] = []
+                    binning_groups[bin_val].append(detail['barcode'])
                 
                 mix_packed_pallets.append({
                     'pallet_no': pallet_no,
-                    'binnings': list(known_binnings),
-                    'binning_breakdown': binning_count,
+                    'binnings': sorted(list(known_binnings)),
+                    'binning_groups': binning_groups,  # Show which barcodes have which binning
                     'total_modules': len(data['barcodes']),
-                    'sample_barcodes': data['barcodes'][:5]
+                    'all_binning_details': data['binning_details']  # Full details
                 })
         
         # Sort by pallet number
@@ -271,14 +278,18 @@ def check_mix_packing(company):
             answer_parts.append(f"\n\n**❌ MIX PACKING FOUND (Based on Master FTR Binning):**\n")
             
             for p in mix_packed_pallets[:20]:  # Show first 20
-                binnings_str = " + ".join(sorted(p['binnings']))
-                breakdown_str = ", ".join([f"{b}: {c}" for b, c in sorted(p['binning_breakdown'].items())])
+                binnings_str = " + ".join(p['binnings'])
                 
-                answer_parts.append(f"\n🔸 **Pallet {p['pallet_no']}**")
-                answer_parts.append(f"   ❌ Mixed Binnings: {binnings_str}")
-                answer_parts.append(f"   📊 Breakdown: {breakdown_str}")
-                answer_parts.append(f"   📦 Total Modules: {p['total_modules']}")
-                answer_parts.append(f"   📋 Sample: {', '.join(p['sample_barcodes'][:3])}")
+                answer_parts.append(f"\n🔸 **Pallet {p['pallet_no']}** ({p['total_modules']} modules)")
+                answer_parts.append(f"   ❌ **Mixed Binnings:** {binnings_str}")
+                
+                # Show barcode breakdown by binning
+                for binning, barcodes in sorted(p['binning_groups'].items()):
+                    if binning in ['Unknown', 'Not in Master FTR']:
+                        continue
+                    answer_parts.append(f"   • **{binning}**: {len(barcodes)} modules")
+                    # Show first 3 barcodes of each binning type
+                    answer_parts.append(f"      {', '.join(barcodes[:3])}")
             
             if len(mix_packed_pallets) > 20:
                 answer_parts.append(f"\n\n... and {len(mix_packed_pallets) - 20} more pallets with mix packing")
