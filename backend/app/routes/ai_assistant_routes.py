@@ -2621,7 +2621,7 @@ def generate_smart_excel(params):
         elif quality_check == 'mix_packing':
             result = check_mix_packing(company)
             ws.title = f"{company[:20]}_MixPacking"
-            headers = ["S.No", "Pallet No", "R-O Values", "Binning Values", "Total Barcodes"]
+            headers = ["S.No", "Pallet No", "Barcode", "Actual Binning (Master FTR)", "Issue"]
             
         elif quality_check == 'pallet_audit':
             result = full_pallet_audit(company)
@@ -2699,40 +2699,23 @@ def generate_smart_excel(params):
                 
         elif quality_check == 'mix_packing':
             mixed_pallets = result.get('mix_packed_pallets', [])
+            barcode_row_num = 1
+            
             for pallet_idx, p in enumerate(mixed_pallets, 1):
                 pallet_no = p.get('pallet_no', '')
                 binnings_by_type = p.get('binnings_by_type', {})
-                total_modules = p.get('total_modules', 0)
                 
-                # Write pallet header row
-                ws.cell(row=row_idx, column=1, value=pallet_idx).border = thin_border
-                ws.cell(row=row_idx, column=2, value=f"Pallet {pallet_no}").border = thin_border
-                ws.cell(row=row_idx, column=2).font = Font(bold=True)
-                ws.cell(row=row_idx, column=3, value=", ".join(p.get('running_orders', []))).border = thin_border
-                ws.cell(row=row_idx, column=4, value=", ".join(p.get('binnings', []))).border = thin_border
-                ws.cell(row=row_idx, column=5, value=total_modules).border = thin_border
-                ws.cell(row=row_idx, column=2).fill = yellow_fill
-                row_idx += 1
-                
-                # Write ALL barcodes by binning
+                # Write each barcode as a separate row
                 for binning, barcodes in sorted(binnings_by_type.items()):
-                    # Binning group header
-                    ws.cell(row=row_idx, column=2, value=f"  {binning}:").font = Font(bold=True, italic=True)
-                    ws.cell(row=row_idx, column=5, value=len(barcodes)).border = thin_border
-                    row_idx += 1
-                    
-                    # Show ALL barcodes (no limit)
-                    for bc_idx, barcode in enumerate(barcodes, 1):
-                        ws.cell(row=row_idx, column=1, value=bc_idx).border = thin_border
+                    for barcode in barcodes:
+                        ws.cell(row=row_idx, column=1, value=barcode_row_num).border = thin_border
                         ws.cell(row=row_idx, column=2, value=f"Pallet {pallet_no}").border = thin_border
                         ws.cell(row=row_idx, column=3, value=barcode).border = thin_border
                         ws.cell(row=row_idx, column=4, value=binning).border = thin_border
                         ws.cell(row=row_idx, column=5, value="MIX PACKING").border = thin_border
                         ws.cell(row=row_idx, column=5).fill = yellow_fill
                         row_idx += 1
-                
-                # Add spacing between pallets
-                row_idx += 1
+                        barcode_row_num += 1
         
         # If no data found
         if row_idx == 2:
