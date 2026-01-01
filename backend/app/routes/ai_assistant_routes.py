@@ -2769,8 +2769,13 @@ def detect_excel_command(message):
     dispatched = 'dispatch' in message_lower or 'sent' in message_lower or 'bheja' in message_lower
     pending = 'pending' in message_lower or 'baaki' in message_lower or 'remaining' in message_lower
     
+    # IMPORTANT: If PDI number is detected, DON'T treat as Excel command
+    # PDI queries should go to answer_specific_query for proper PDI comparison
+    if pdi_number:
+        return None
+    
     # If any specific filter detected with excel intent
-    if has_excel_intent or running_order or binning or (pdi_number and requested_count) or detected_quality_check:
+    if has_excel_intent or running_order or binning or detected_quality_check:
         return {
             'type': 'excel_command',
             'company': detected_company,
