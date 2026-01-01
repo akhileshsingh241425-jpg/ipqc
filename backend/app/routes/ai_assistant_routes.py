@@ -1594,6 +1594,190 @@ def compare_pdi_with_mrp(company, pdi_number):
         traceback.print_exc()
         return {'has_answer': False, 'error': str(e)}
 
+def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
+    """
+    Compare PDI with MRP but filter by specific running orders
+    running_orders: list of running orders like ['R-1', 'R-2'] or single string 'R-1'
+    """
+    import re
+    
+    try:
+        # Normalize running_orders to list
+        if running_orders:
+            if isinstance(running_orders, str):
+                running_orders = [running_orders]
+            running_orders = [ro.upper() for ro in running_orders]
+        
+        # Step 1: Get company_id
+        company_result = db.session.execute(text("""
+            SELECT id FROM companies WHERE company_name LIKE :name
+        """), {'name': f'%{company.split()[0]}%'})
+        company_row = company_result.fetchone()
+        
+        if not company_row:
+            return {'has_answer': False, 'error': 'Company not found'}
+        
+        company_id = company_row[0]
+        
+        # Step 2: Get all serial numbers assigned to this PDI
+        pdi_serials_result = db.session.execute(text("""
+            SELECT serial_number, binning, class_status
+            FROM ftr_master_serials 
+            WHERE company_id = :cid AND pdi_number = :pdi
+            AND (class_status = 'OK' OR class_status IS NULL)
+        """), {'cid': company_id, 'pdi': pdi_number})
+        
+        pdi_serials = []
+        binning_breakdown = {}
+        for row in pdi_serials_result.fetchall():
+            serial = row[0]
+            binning = row[1] or 'Unknown'
+            pdi_serials.append(serial)
+            binning_breakdown[binning] = binning_breakdown.get(binning, 0) + 1
+        
+        total_pdi = len(pdi_serials)
+        
+        if total_pdi == 0:
+            return {
+                'has_answer': True,
+                'answer': f"**{company} - {pdi_number}**\n\n❌ No serial numbers found for {pdi_number}"
+            }
+        
+        # Step 3: Get MRP data for comparison
+        mrp_party_name = get_mrp_party_name(company)
+        response = requests.post(
+            BARCODE_TRACKING_API,
+            json={'party_name': mrp_party_name},
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            return {'has_answer': False, 'error': 'MRP API failed'}
+        
+        mrp_data = response.json()
+        mrp_barcodes = mrp_data.get('data', [])
+        
+        # Create lookup set for MRP barcodes
+        mrp_dispatched = set()
+        mrp_packed = set()
+        mrp_barcode_details = {}
+        
+        for b in mrp_barcodes:
+            barcode = b.get('barcode', '')
+            ro = b.get('running_order', '') or ''
+            
+            # Extract R-O from running_order field
+            ro_match = re.search(r'(R-\d+)', ro, re.IGNORECASE)
+            extracted_ro = ro_match.group(1).upper() if ro_match else ''
+            
+            # Extract binning from running_order
+            bin_match = re.search(r'i-?(\d+)', ro, re.IGNORECASE)
+            mrp_binning = f"I{bin_match.group(1)}" if bin_match else ''
+            
+            # Filter by running order if specified
+            if running_orders and extracted_ro not in running_orders:
+                continue
+            
+            mrp_barcode_details[barcode] = {
+                'running_order': ro,
+                'extracted_ro': extracted_ro,
+                'binning': mrp_binning,
+                'pallet': b.get('pallet_no', ''),
+                'date': b.get('date', '')
+            }
+            
+            if b.get('dispatch_party') or b.get('status') == 'dispatched':
+                mrp_dispatched.add(barcode)
+            elif b.get('status') == 'packed':
+                mrp_packed.add(barcode)
+        
+        # Step 4: Compare PDI serials with FILTERED MRP
+        dispatched_count = 0
+        packed_count = 0
+        remaining_count = 0
+        not_in_filtered_mrp = 0
+        
+        dispatched_serials = []
+        packed_serials = []
+        remaining_serials = []
+        
+        ro_breakdown = {}
+        
+        for serial in pdi_serials:
+            if serial in mrp_dispatched:
+                dispatched_count += 1
+                dispatched_serials.append(serial)
+                ro = mrp_barcode_details.get(serial, {}).get('extracted_ro', 'Unknown')
+                ro_breakdown[ro] = ro_breakdown.get(ro, {'dispatched': 0, 'packed': 0})
+                ro_breakdown[ro]['dispatched'] += 1
+            elif serial in mrp_packed:
+                packed_count += 1
+                packed_serials.append(serial)
+                ro = mrp_barcode_details.get(serial, {}).get('extracted_ro', 'Unknown')
+                ro_breakdown[ro] = ro_breakdown.get(ro, {'dispatched': 0, 'packed': 0})
+                ro_breakdown[ro]['packed'] += 1
+            else:
+                remaining_count += 1
+                remaining_serials.append(serial)
+                if serial not in mrp_barcode_details:
+                    not_in_filtered_mrp += 1
+        
+        # Build answer
+        answer_parts = []
+        ro_filter_str = " + ".join(running_orders) if running_orders else "All"
+        answer_parts.append(f"**🏭 {company} - {pdi_number} | {ro_filter_str}**\n")
+        answer_parts.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        answer_parts.append(f"📊 **Total Serial Numbers in {pdi_number}:** {total_pdi:,}\n")
+        answer_parts.append(f"\n**MRP Status (Filtered by {ro_filter_str}):**\n")
+        answer_parts.append(f"🚚 **Dispatched:** {dispatched_count:,}")
+        answer_parts.append(f"📦 **Packed (Not Dispatched):** {packed_count:,}")
+        answer_parts.append(f"⏳ **Remaining/Not in {ro_filter_str}:** {remaining_count:,}")
+        
+        # Running Order breakdown
+        if ro_breakdown:
+            answer_parts.append(f"\n\n**📋 Running Order Breakdown:**")
+            for ro, counts in sorted(ro_breakdown.items()):
+                total_ro = counts['dispatched'] + counts['packed']
+                answer_parts.append(f"   **{ro}:** {total_ro:,} (🚚 {counts['dispatched']:,} | 📦 {counts['packed']:,})")
+        
+        # Sample dispatched
+        if dispatched_serials:
+            answer_parts.append(f"\n\n**✅ Sample Dispatched ({min(5, len(dispatched_serials))} of {dispatched_count}):**")
+            for s in dispatched_serials[:5]:
+                details = mrp_barcode_details.get(s, {})
+                answer_parts.append(f"   • {s} | {details.get('running_order', '')} | Pallet: {details.get('pallet', '')}")
+        
+        # Sample packed
+        if packed_serials:
+            answer_parts.append(f"\n\n**📦 Sample Packed ({min(5, len(packed_serials))} of {packed_count}):**")
+            for s in packed_serials[:5]:
+                details = mrp_barcode_details.get(s, {})
+                answer_parts.append(f"   • {s} | {details.get('running_order', '')} | Pallet: {details.get('pallet', '')}")
+        
+        # Sample remaining
+        if remaining_serials:
+            answer_parts.append(f"\n\n**⏳ Sample Not in {ro_filter_str} ({min(5, len(remaining_serials))} of {remaining_count}):**")
+            for s in remaining_serials[:5]:
+                answer_parts.append(f"   • {s}")
+        
+        return {
+            'has_answer': True,
+            'answer': "\n".join(answer_parts),
+            'data': {
+                'total_pdi': total_pdi,
+                'dispatched': dispatched_count,
+                'packed': packed_count,
+                'remaining': remaining_count,
+                'ro_breakdown': ro_breakdown
+            }
+        }
+        
+    except Exception as e:
+        print(f"Error in compare_pdi_with_mrp_filtered: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {'has_answer': False, 'error': str(e)}
+
 def parse_user_query(message):
     """
     Parse user query to understand EXACTLY what they're asking
@@ -1605,6 +1789,7 @@ def parse_user_query(message):
         'company': None,
         'pdi_number': None,
         'running_order': None,
+        'multiple_running_orders': False,
         'binning': None,
         'pallet_no': None,
         'julian_date': None,
@@ -1653,10 +1838,15 @@ def parse_user_query(message):
     if pdi_match:
         result['pdi_number'] = f"PDI-{pdi_match.group(1)}"
     
-    # Running Order detection
-    ro_match = re.search(r'r[- ]?(\d+)', message_lower)
-    if ro_match:
-        result['running_order'] = f"R-{ro_match.group(1)}"
+    # Running Order detection - support multiple (R1 aur R2)
+    ro_matches = re.findall(r'r[- ]?(\d+)', message_lower)
+    if ro_matches:
+        if len(ro_matches) == 1:
+            result['running_order'] = f"R-{ro_matches[0]}"
+        else:
+            # Multiple ROs detected
+            result['running_order'] = [f"R-{ro}" for ro in ro_matches]
+            result['multiple_running_orders'] = True
     
     # Binning detection (I1, I2, I3 or MB, MC, MD, MF, MG - NOT 'me' as it's Hindi word)
     # Use negative lookbehind to NOT match PDI-1 as binning I1
@@ -1946,7 +2136,12 @@ def answer_specific_query(parsed_query):
     
     # ===== PDI vs MRP COMPARISON =====
     if pdi:
-        return compare_pdi_with_mrp(company, pdi)
+        # Check if running order filter is also requested
+        if ro:
+            # Use the new filtered comparison function
+            return compare_pdi_with_mrp_filtered(company, pdi, ro)
+        else:
+            return compare_pdi_with_mrp(company, pdi)
     
     # ===== RUNNING ORDER STATUS (default if RO provided) =====
     if ro and not binning:
