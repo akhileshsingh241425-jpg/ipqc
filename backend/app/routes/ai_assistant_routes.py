@@ -1608,6 +1608,8 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
                 running_orders = [running_orders]
             running_orders = [ro.upper() for ro in running_orders]
         
+        print(f"[DEBUG] compare_pdi_with_mrp_filtered: company={company}, pdi={pdi_number}, running_orders={running_orders}")
+        
         # Step 1: Get company_id
         company_result = db.session.execute(text("""
             SELECT id FROM companies WHERE company_name LIKE :name
@@ -1662,6 +1664,9 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
         mrp_packed = set()
         mrp_barcode_details = {}
         
+        filtered_count = 0
+        total_mrp_count = len(mrp_barcodes)
+        
         for b in mrp_barcodes:
             barcode = b.get('barcode', '')
             ro = b.get('running_order', '') or ''
@@ -1678,6 +1683,8 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
             if running_orders and extracted_ro not in running_orders:
                 continue
             
+            filtered_count += 1
+            
             mrp_barcode_details[barcode] = {
                 'running_order': ro,
                 'extracted_ro': extracted_ro,
@@ -1690,6 +1697,8 @@ def compare_pdi_with_mrp_filtered(company, pdi_number, running_orders=None):
                 mrp_dispatched.add(barcode)
             elif b.get('status') == 'packed':
                 mrp_packed.add(barcode)
+        
+        print(f"[DEBUG] Total MRP barcodes: {total_mrp_count}, Filtered by RO: {filtered_count}")
         
         # Step 4: Compare PDI serials with FILTERED MRP
         dispatched_count = 0
