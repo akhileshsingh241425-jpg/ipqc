@@ -3822,6 +3822,70 @@ def export_to_excel():
             if company_id:
                 query += f" AND m.company_id = {company_id}"
             query += " ORDER BY c.company_name, m.serial_number"
+        
+        elif export_type == 'packed_not_pdi':
+            # Export packed modules that are NOT in PDI and NOT rejected
+            ws.title = "Packed Not in PDI"
+            headers = ["S.No", "Barcode", "Company", "Running Order", "Binning", "Pallet No", "Pack Date", "PDI Status", "Class Status"]
+            
+            # Get from get_packed_not_in_pdi function
+            result = get_packed_not_in_pdi(company_name)
+            if not result.get('has_answer'):
+                return jsonify({'success': False, 'error': 'Failed to fetch packed modules'}), 500
+            
+            # Write headers
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = thin_border
+            
+            # Collect all modules from all companies in result
+            all_modules = []
+            for comp_name, comp_data in result.get('data', {}).items():
+                # Get MRP data for this company
+                mrp_result = get_all_mrp_data(comp_name)
+                if mrp_result.get('success'):
+                    mrp_data = mrp_result.get('data', [])
+                    # Filter to only packed modules from samples
+                    for sample in comp_data.get('samples', []):
+                        barcode = sample['barcode']
+                        # Find full details from MRP
+                        mrp_detail = next((b for b in mrp_data if b.get('barcode') == barcode), None)
+                        if mrp_detail:
+                            all_modules.append({
+                                'barcode': barcode,
+                                'company': comp_name,
+                                'running_order': sample.get('running_order', ''),
+                                'binning': sample.get('binning', ''),
+                                'pallet': sample.get('pallet', ''),
+                                'date': mrp_detail.get('date', ''),
+                            })
+            
+            # Write data
+            for idx, module in enumerate(all_modules, 1):
+                ws.cell(row=idx+1, column=1, value=idx).border = thin_border
+                ws.cell(row=idx+1, column=2, value=module['barcode']).border = thin_border
+                ws.cell(row=idx+1, column=3, value=module['company']).border = thin_border
+                ws.cell(row=idx+1, column=4, value=module['running_order']).border = thin_border
+                ws.cell(row=idx+1, column=5, value=module['binning']).border = thin_border
+                ws.cell(row=idx+1, column=6, value=module['pallet']).border = thin_border
+                ws.cell(row=idx+1, column=7, value=module['date']).border = thin_border
+                ws.cell(row=idx+1, column=8, value='Not Assigned').border = thin_border
+                ws.cell(row=idx+1, column=9, value='OK').border = thin_border
+            
+            # Auto-width columns
+            for col in ws.columns:
+                max_length = max(len(str(cell.value or '')) for cell in col)
+                ws.column_dimensions[col[0].column_letter].width = max_length + 2
+            
+            buffer = io.BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            filename = f"Packed_Not_in_PDI_{company_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            return send_file(buffer, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                           as_attachment=True, download_name=filename)
             
         else:  # all - company summary
             ws.title = "Company Summary"

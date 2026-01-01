@@ -459,6 +459,14 @@ const AIAssistant = () => {
             >
               🏷️ Binning Data
             </button>
+            <button 
+              className="btn-export btn-packed-not-pdi" 
+              onClick={() => handleExcelDownload('packed_not_pdi')}
+              disabled={exportLoading || !selectedCompany}
+              title={!selectedCompany ? 'Select company first' : 'Packed modules not in any PDI and not rejected'}
+            >
+              📦❌ Packed Not in PDI
+            </button>
           </div>
           {exportLoading && <p className="export-loading">⏳ Downloading...</p>}
           
