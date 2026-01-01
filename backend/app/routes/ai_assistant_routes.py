@@ -3825,13 +3825,39 @@ def export_to_excel():
         
         elif export_type == 'packed_not_pdi':
             # Export packed modules that are NOT in PDI and NOT rejected
+            import re
             ws.title = "Packed Not in PDI"
             headers = ["S.No", "Barcode", "Company", "Running Order", "Binning", "Pallet No", "Pack Date", "PDI Status", "Class Status"]
             
-            # Get from get_packed_not_in_pdi function
-            result = get_packed_not_in_pdi(company_name)
-            if not result.get('has_answer'):
-                return jsonify({'success': False, 'error': 'Failed to fetch packed modules'}), 500
+            # Get MRP data directly
+            mrp_result = get_all_mrp_data(company_name)
+            if not mrp_result.get('success'):
+                return jsonify({'success': False, 'error': 'Failed to fetch MRP data'}), 500
+            
+            # Get company_id from database
+            company_result = db.session.execute(text(
+                "SELECT id FROM companies WHERE company_name LIKE :name"
+            ), {'name': f'%{company_name.split()[0]}%'})
+            company_row = company_result.fetchone()
+            
+            if not company_row:
+                return jsonify({'success': False, 'error': f'Company {company_name} not found'}), 404
+            
+            company_id = company_row[0]
+            
+            # Get all serials in database with PDI or rejected
+            db_result = db.session.execute(text("""
+                SELECT serial_number, pdi_number, class_status
+                FROM ftr_master_serials
+                WHERE company_id = :cid
+            """), {'cid': company_id})
+            
+            db_serials = {}
+            for row in db_result.fetchall():
+                db_serials[row[0]] = {
+                    'pdi': row[1],
+                    'class_status': row[2]
+                }
             
             # Write headers
             for col, header in enumerate(headers, 1):
@@ -3840,39 +3866,38 @@ def export_to_excel():
                 cell.fill = header_fill
                 cell.border = thin_border
             
-            # Collect all modules from all companies in result
-            all_modules = []
-            for comp_name, comp_data in result.get('data', {}).items():
-                # Get MRP data for this company
-                mrp_result = get_all_mrp_data(comp_name)
-                if mrp_result.get('success'):
-                    mrp_data = mrp_result.get('data', [])
-                    # Filter to only packed modules from samples
-                    for sample in comp_data.get('samples', []):
-                        barcode = sample['barcode']
-                        # Find full details from MRP
-                        mrp_detail = next((b for b in mrp_data if b.get('barcode') == barcode), None)
-                        if mrp_detail:
-                            all_modules.append({
-                                'barcode': barcode,
-                                'company': comp_name,
-                                'running_order': sample.get('running_order', ''),
-                                'binning': sample.get('binning', ''),
-                                'pallet': sample.get('pallet', ''),
-                                'date': mrp_detail.get('date', ''),
-                            })
-            
-            # Write data
-            for idx, module in enumerate(all_modules, 1):
-                ws.cell(row=idx+1, column=1, value=idx).border = thin_border
-                ws.cell(row=idx+1, column=2, value=module['barcode']).border = thin_border
-                ws.cell(row=idx+1, column=3, value=module['company']).border = thin_border
-                ws.cell(row=idx+1, column=4, value=module['running_order']).border = thin_border
-                ws.cell(row=idx+1, column=5, value=module['binning']).border = thin_border
-                ws.cell(row=idx+1, column=6, value=module['pallet']).border = thin_border
-                ws.cell(row=idx+1, column=7, value=module['date']).border = thin_border
-                ws.cell(row=idx+1, column=8, value='Not Assigned').border = thin_border
-                ws.cell(row=idx+1, column=9, value='OK').border = thin_border
+            # Filter MRP packed modules
+            row_num = 2
+            for b in mrp_result.get('data', []):
+                barcode = b.get('barcode', '')
+                pallet_no = b.get('pallet_no', '')
+                status = b.get('status', '')
+                dispatch_party = b.get('dispatch_party')
+                ro = b.get('running_order', '')
+                pack_date = b.get('date', '')
+                
+                # Check if packed (not dispatched)
+                if status == 'packed' and not dispatch_party:
+                    # Check if NOT in PDI and NOT rejected
+                    db_info = db_serials.get(barcode, {})
+                    has_pdi = db_info.get('pdi')
+                    is_rejected = db_info.get('class_status') == 'REJECTED'
+                    
+                    if not has_pdi and not is_rejected:
+                        # Extract binning from running_order
+                        bin_match = re.search(r'i-?(\d+)', ro, re.IGNORECASE)
+                        binning = f"I{bin_match.group(1)}" if bin_match else 'Unknown'
+                        
+                        ws.cell(row=row_num, column=1, value=row_num-1).border = thin_border
+                        ws.cell(row=row_num, column=2, value=barcode).border = thin_border
+                        ws.cell(row=row_num, column=3, value=company_name).border = thin_border
+                        ws.cell(row=row_num, column=4, value=ro).border = thin_border
+                        ws.cell(row=row_num, column=5, value=binning).border = thin_border
+                        ws.cell(row=row_num, column=6, value=pallet_no).border = thin_border
+                        ws.cell(row=row_num, column=7, value=pack_date).border = thin_border
+                        ws.cell(row=row_num, column=8, value='Not Assigned').border = thin_border
+                        ws.cell(row=row_num, column=9, value='OK').border = thin_border
+                        row_num += 1
             
             # Auto-width columns
             for col in ws.columns:
