@@ -2145,12 +2145,15 @@ def answer_specific_query(parsed_query):
     
     # ===== PDI vs MRP COMPARISON =====
     if pdi:
+        print(f"[DEBUG answer_specific_query] PDI detected: {pdi}, RO: {ro}, type(ro): {type(ro)}")
         # Check if running order filter is also requested
         if ro:
             # Use the new filtered comparison function
             # ro can be a string "R-1" or a list ["R-1", "R-2"]
+            print(f"[DEBUG] Calling compare_pdi_with_mrp_filtered with ro={ro}")
             return compare_pdi_with_mrp_filtered(company, pdi, ro)
         else:
+            print(f"[DEBUG] Calling compare_pdi_with_mrp (no RO filter)")
             return compare_pdi_with_mrp(company, pdi)
     
     # ===== RUNNING ORDER STATUS (default if RO provided) =====
