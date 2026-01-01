@@ -24,10 +24,14 @@ BOM_MATERIALS = [
     "EPE",              # material_id: 14
     "EPE FRONT",        # kept for backward compatibility
     "Aluminium Frame",  # material_id: 12
+    "Aluminium Frame LONG",  # Frontend variant
+    "Aluminium Frame SHORT", # Frontend variant
     "Sealent",          # material_id: 6 (case normalized)
     "SEALENT",          # kept for backward compatibility
     "JB Potting",       # material_id: 10 (simplified from "JB Potting (A and B)")
     "JB Potting (A and B)", # kept for backward compatibility
+    "JB Potting A",     # Frontend variant - Part A
+    "JB Potting B",     # Frontend variant - Part B
     "Junction Box",     # material_id: 9 (case normalized)
     "JUNCTION BOX",     # kept for backward compatibility
     "RFID"              # material_id: 8 (added - was missing)
@@ -606,8 +610,14 @@ def upload_bom_material(company_id, record_id):
                 except:
                     existing_paths = []
             
-            # Append new images
-            existing_paths.extend(uploaded_images)
+            # Only append images that don't already exist (prevent duplicates)
+            for new_image in uploaded_images:
+                # Extract just the filename for comparison (not the full path)
+                new_filename = new_image.split('/')[-1]
+                # Check if any existing path contains this filename
+                if not any(new_filename in existing_path for existing_path in existing_paths):
+                    existing_paths.append(new_image)
+            
             bom_material.image_paths = json.dumps(existing_paths)
         
         db.session.commit()
