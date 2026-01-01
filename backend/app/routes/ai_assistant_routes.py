@@ -162,6 +162,10 @@ def check_mix_packing(company):
     """
     import re
     
+    # Default to Rays Power if no company specified
+    if not company:
+        company = 'Rays Power'
+    
     try:
         # Step 1: Get company_id from database
         company_result = db.session.execute(text(
@@ -2787,7 +2791,7 @@ def generate_smart_excel(params):
     """Generate Excel based on smart command parameters - supports quality checks too"""
     import re
     
-    company = params.get('company', 'Rays Power')
+    company = params.get('company') or 'Rays Power'
     running_order_filter = params.get('running_order')
     binning_filter = params.get('binning')
     julian_filter = params.get('julian_date')
