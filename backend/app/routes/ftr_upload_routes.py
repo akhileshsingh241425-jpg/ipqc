@@ -37,7 +37,8 @@ def get_graphs():
                         wattage = parts[0]
                         if wattage not in graphs:
                             graphs[wattage] = []
-                        graphs[wattage].append(f"/uploads/iv_graphs/{filename}")
+                        # Use API route for serving images
+                        graphs[wattage].append(f"/api/ftr/graph-image/{filename}")
         
         return jsonify({'success': True, 'graphs': graphs}), 200
     except Exception as e:
@@ -127,6 +128,14 @@ def clear_all_graphs():
         }), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@ftr_upload_bp.route('/api/ftr/graph-image/<path:filename>', methods=['GET'])
+def serve_graph_image(filename):
+    """Serve graph image file"""
+    try:
+        return send_file(os.path.join(GRAPHS_FOLDER, filename), mimetype='image/png')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 404
 
 @ftr_upload_bp.route('/api/ftr/upload-bulk', methods=['POST'])
 def upload_bulk_ftr():
