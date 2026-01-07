@@ -17,17 +17,16 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 5mm;
+  padding-top: 10mm;
   padding-left: 10mm;
   padding-right: 15mm;
-  padding-bottom: 3mm;
-  background: white !important;
-  background-image: none !important;
+  padding-bottom: 5mm;
+  background: white;
   border: none;
 }
 
 .ftr-logo {
-  width: 55mm;
+  width: 70mm;
   height: auto;
   object-fit: contain;
   background: white;
@@ -37,7 +36,7 @@
 }
 
 .ftr-title {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 400;
   color: #999999;
   font-family: 'Times New Roman', Times, serif;
@@ -46,11 +45,11 @@
 
 /* Blue Bar - Lighter blue like original */
 .ftr-blue-bar {
-  height: 2mm;
+  height: 3mm;
   background: #7B8FA8;
   margin: 0 10mm;
   position: absolute;
-  top: 28mm;
+  top: 38mm;
   left: 0;
   right: 0;
 }
@@ -69,9 +68,9 @@
 .ftr-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6mm;
+  gap: 10mm;
   padding: 0;
-  margin-top: 6mm;
+  margin-top: 12.15mm;
   padding-left: 16.46mm;
   padding-right: 10mm;
 }
@@ -81,23 +80,23 @@
 .ftr-right-column {
   display: flex;
   flex-direction: column;
-  gap: 3mm;
+  gap: 6.4mm;
 }
 
 /* Sections */
 .ftr-section,
 .ftr-reference-section,
 .ftr-other-info {
-  margin-bottom: 2mm;
+  margin-bottom: 4mm;
 }
 
 .ftr-section-title {
-  font-size: 16px;
+  font-size: 20px;
   font-family: 'Arial MT', Arial, sans-serif;
   font-weight: 400;
   color: #000;
-  margin-bottom: 2mm;
-  padding-bottom: 0.5mm;
+  margin-bottom: 3mm;
+  padding-bottom: 1mm;
   padding-left: 3mm;
 }
 
@@ -105,13 +104,13 @@
 .ftr-field-row {
   display: flex;
   align-items: baseline;
-  min-height: 5mm;
-  margin-bottom: 0.5mm;
+  min-height: 7.56mm;
+  margin-bottom: 1.26mm;
   position: relative;
 }
 
 .ftr-label {
-  font-size: 13px;
+  font-size: 16px;
   font-family: 'Arial MT', Arial, sans-serif;
   color: #000;
   font-weight: 500;
@@ -122,7 +121,7 @@
 }
 
 .ftr-value {
-  font-size: 12px;
+  font-size: 14.4px;
   font-family: 'Arial MT', Arial, sans-serif;
   color: #000;
   font-weight: 500;
@@ -130,8 +129,8 @@
   border-bottom: 1px solid #999;
   padding-bottom: 1px;
   padding-left: 3px;
-  min-height: 16px;
-  line-height: 16px;
+  min-height: 18px;
+  line-height: 18px;
 }
 
 .ftr-value-inline {
@@ -147,14 +146,14 @@
 
 /* Graph */
 .ftr-graph-container {
-  width: 85mm;
-  height: 80mm;
+  width: 105.6mm;
+  height: 115.5mm;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   background: white;
-  margin-bottom: 2mm;
+  margin-bottom: 5mm;
   padding: 0;
   box-sizing: border-box;
 }
@@ -174,7 +173,7 @@
 
 /* Reference Section */
 .ftr-reference-section {
-  margin-top: 1mm;
+  margin-top: 3mm;
 }
 
 .ftr-reference-section .ftr-field-row:nth-child(2) .ftr-label {
