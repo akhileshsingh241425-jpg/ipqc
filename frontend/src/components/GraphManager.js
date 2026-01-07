@@ -4,6 +4,10 @@ import '../styles/GraphManager.css';
 const GraphManager = () => {
   const [uploadedGraphs, setUploadedGraphs] = useState({});
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedWattage, setSelectedWattage] = useState('630');
+
+  // Common wattages list
+  const wattageOptions = ['510', '520', '530', '540', '550', '560', '580', '590', '600', '610', '625', '630', '650', '655'];
 
   // Check if user is super admin
   const isSuperAdmin = () => {
@@ -39,39 +43,29 @@ const GraphManager = () => {
     let loadedCount = 0;
 
     files.forEach(file => {
-      // Extract power from filename (e.g., 510.png, 630W.png, 650_watt.png)
-      const match = file.name.match(/(\d+)(?:W|_watt|w)?\.png/i);
-      if (match) {
-        const power = match[1];
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          // Store as array to support multiple graphs per wattage
-          if (!newGraphs[power]) {
-            newGraphs[power] = [];
-          }
-          // If it's a single string (old format), convert to array
-          if (typeof newGraphs[power] === 'string') {
-            newGraphs[power] = [newGraphs[power]];
-          }
-          // Add new graph to the array
-          newGraphs[power].push(event.target.result);
-          
-          loadedCount++;
-          if (loadedCount === files.length) {
-            setUploadedGraphs(newGraphs);
-            setIsUploading(false);
-            alert(`✓ ${files.length} graph(s) uploaded successfully!`);
-          }
-        };
-        reader.readAsDataURL(file);
-      } else {
+      // Use selected wattage from dropdown
+      const power = selectedWattage;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        // Store as array to support multiple graphs per wattage
+        if (!newGraphs[power]) {
+          newGraphs[power] = [];
+        }
+        // If it's a single string (old format), convert to array
+        if (typeof newGraphs[power] === 'string') {
+          newGraphs[power] = [newGraphs[power]];
+        }
+        // Add new graph to the array
+        newGraphs[power].push(event.target.result);
+        
         loadedCount++;
-        console.warn(`Skipped file: ${file.name} (invalid format)`);
         if (loadedCount === files.length) {
           setUploadedGraphs(newGraphs);
           setIsUploading(false);
+          alert(`✓ ${files.length} graph(s) uploaded successfully for ${power}W!`);
         }
-      }
+      };
+      reader.readAsDataURL(file);
     });
   };
 
@@ -125,17 +119,43 @@ const GraphManager = () => {
           <h3>📤 Upload Graph Images</h3>
           <div className="instruction-list">
             <p>• File format: PNG images only</p>
-            <p>• Naming convention: <code>510.png</code>, <code>630.png</code>, <code>650.png</code> (power rating in filename)</p>
+            <p>• Select wattage from dropdown below</p>
             <p>• You can upload multiple files at once</p>
-            <p>• Already uploaded graphs will be replaced if same power rating is uploaded again</p>
+            <p>• Upload same wattage multiple times to add more graphs</p>
+            <p>• Example: Select 630W and upload 50 different graph images</p>
           </div>
         </div>
         
         <div className="upload-box-graph">
+          <div className="wattage-selector">
+            <label htmlFor="wattage-select" style={{fontSize: '16px', fontWeight: '600', color: '#1e3a8a', marginBottom: '12px', display: 'block'}}>
+              Select Module Wattage:
+            </label>
+            <select 
+              id="wattage-select"
+              value={selectedWattage}
+              onChange={(e) => setSelectedWattage(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                fontSize: '16px',
+                border: '2px solid #1e3a8a',
+                borderRadius: '6px',
+                marginBottom: '20px',
+                backgroundColor: 'white',
+                cursor: 'pointer'
+              }}
+            >
+              {wattageOptions.map(watt => (
+                <option key={watt} value={watt}>{watt}W</option>
+              ))}
+            </select>
+          </div>
+          
           <label htmlFor="graph-upload" className="upload-label">
             <div className="upload-icon">📁</div>
             <div className="upload-text">
-              {isUploading ? 'Uploading...' : 'Click to select graph images'}
+              {isUploading ? 'Uploading...' : `Click to select graph images for ${selectedWattage}W`}
             </div>
             <div className="upload-hint">or drag and drop here</div>
           </label>

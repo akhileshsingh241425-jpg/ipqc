@@ -17,37 +17,39 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 10mm;
+  padding-top: 5mm;
   padding-left: 10mm;
   padding-right: 15mm;
-  padding-bottom: 5mm;
+  padding-bottom: 3mm;
   background: white;
+  border: none;
 }
 
 .ftr-logo {
-  width: 70mm;
+  width: 55mm;
   height: auto;
   object-fit: contain;
   background: white;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  padding: 8px;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 
 .ftr-title {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 400;
-  color: #8B4B5C;
+  color: #999999;
   font-family: 'Times New Roman', Times, serif;
+  letter-spacing: 0.5px;
 }
 
 /* Blue Bar - Lighter blue like original */
 .ftr-blue-bar {
-  height: 3mm;
+  height: 2mm;
   background: #7B8FA8;
   margin: 0 10mm;
   position: absolute;
-  top: 38mm;
+  top: 28mm;
   left: 0;
   right: 0;
 }
@@ -66,9 +68,9 @@
 .ftr-content {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10mm;
+  gap: 6mm;
   padding: 0;
-  margin-top: 12.15mm;
+  margin-top: 6mm;
   padding-left: 16.46mm;
   padding-right: 10mm;
 }
@@ -78,23 +80,23 @@
 .ftr-right-column {
   display: flex;
   flex-direction: column;
-  gap: 6.4mm;
+  gap: 3mm;
 }
 
 /* Sections */
 .ftr-section,
 .ftr-reference-section,
 .ftr-other-info {
-  margin-bottom: 4mm;
+  margin-bottom: 2mm;
 }
 
 .ftr-section-title {
-  font-size: 20px;
+  font-size: 16px;
   font-family: 'Arial MT', Arial, sans-serif;
   font-weight: 400;
   color: #000;
-  margin-bottom: 3mm;
-  padding-bottom: 1mm;
+  margin-bottom: 2mm;
+  padding-bottom: 0.5mm;
   padding-left: 3mm;
 }
 
@@ -102,13 +104,13 @@
 .ftr-field-row {
   display: flex;
   align-items: baseline;
-  min-height: 7.56mm;
-  margin-bottom: 1.26mm;
+  min-height: 5mm;
+  margin-bottom: 0.5mm;
   position: relative;
 }
 
 .ftr-label {
-  font-size: 16px;
+  font-size: 13px;
   font-family: 'Arial MT', Arial, sans-serif;
   color: #000;
   font-weight: 500;
@@ -119,7 +121,7 @@
 }
 
 .ftr-value {
-  font-size: 14.4px;
+  font-size: 12px;
   font-family: 'Arial MT', Arial, sans-serif;
   color: #000;
   font-weight: 500;
@@ -127,8 +129,8 @@
   border-bottom: 1px solid #999;
   padding-bottom: 1px;
   padding-left: 3px;
-  min-height: 18px;
-  line-height: 18px;
+  min-height: 16px;
+  line-height: 16px;
 }
 
 .ftr-value-inline {
@@ -144,8 +146,8 @@
 
 /* Graph */
 .ftr-graph-container {
-  width: 105.6mm;
-  height: 115.5mm;
+  width: 90mm;
+  height: 95mm;
   border: none;
   display: flex;
   align-items: center;
