@@ -21,7 +21,9 @@
   padding-left: 10mm;
   padding-right: 15mm;
   padding-bottom: 5mm;
-  background: white;
+  background: #ffffff !important;
+  background-color: #ffffff !important;
+  background-image: none !important;
   border: none;
 }
 
@@ -49,7 +51,7 @@
   background: #1e3a6e;
   margin: 0 10mm;
   position: absolute;
-  top: 38mm;
+  top: 32mm;
   left: 0;
   right: 0;
 }
