@@ -30,8 +30,48 @@ const BulkFTRGenerator = () => {
       const sheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(sheet);
       
-      setExcelData(data);
-      alert(`${data.length} records loaded from Excel!`);
+      // Normalize data - map various column names to standard names
+      const normalizedData = data.map((row, idx) => {
+        // Handle date - convert Julian to readable format
+        let dateVal = row.Date || row.date || '';
+        if (typeof dateVal === 'number' && dateVal > 40000) {
+          // Excel Julian date - convert to date string
+          const excelEpoch = new Date(1899, 11, 30);
+          const date = new Date(excelEpoch.getTime() + dateVal * 86400000);
+          dateVal = date.toISOString().split('T')[0];
+        }
+        
+        return {
+          // Serial Number - try multiple column names
+          SerialNumber: row.ID || row.Id || row.id || row.SerialNumber || row['Serial Number'] || row.serial_number || row.Barcode || row.barcode || '',
+          // Module Type
+          ModuleType: row.ModuleType || row['Module Type'] || row.module_type || row.Type || row.type || '',
+          // Producer
+          Producer: row.Producer || row.producer || row.Manufacturer || 'Gautam Solar',
+          // Test values
+          Pmax: parseFloat(row.Pmax || row.pmax || 0),
+          Voc: parseFloat(row.Voc || row.voc || 0),
+          Isc: parseFloat(row.Isc || row.isc || 0),
+          Vpm: parseFloat(row.Vpm || row.vpm || 0),
+          Ipm: parseFloat(row.Ipm || row.ipm || 0),
+          FF: parseFloat(row.FF || row.ff || row.FillFactor || 0),
+          Rs: parseFloat(row.Rs || row.rs || 0),
+          Rsh: parseFloat(row.Rsh || row.rsh || 0),
+          Eff: parseFloat(row.Eff || row.eff || row.Efficiency || 0),
+          // Temperature
+          ModuleTemp: parseFloat(row.T_Object || row.t_object || row.ModuleTemp || row.Cel_T || 25),
+          AmbientTemp: parseFloat(row.Ambient || row.ambient || row.AmbientTemp || row.T_Ambient || 25),
+          // Irradiance
+          Irradiance: parseFloat(row.Irr_Target || row.irr_target || row.Irradiance || 1000),
+          // Date
+          Date: dateVal,
+          // Class
+          Class: row.Class || row.class || row.Irr_Target_Class || ''
+        };
+      });
+      
+      setExcelData(normalizedData);
+      alert(`${normalizedData.length} records loaded from Excel!`);
     };
     reader.readAsBinaryString(file);
   };
@@ -134,27 +174,27 @@ const BulkFTRGenerator = () => {
     for (let i = 0; i < excelData.length; i++) {
       const row = excelData[i];
       
-      // Map Excel data to testData format
+      // Map Excel data to testData format (data is already normalized)
       const testData = {
         producer: row.Producer || 'Gautam Solar',
-        moduleType: row.ModuleType || row['Module Type'] || '',
-        serialNumber: row.SerialNumber || row['Serial Number'] || '',
+        moduleType: row.ModuleType || '',
+        serialNumber: row.SerialNumber || '',
         testDate: row.Date || new Date().toLocaleDateString('en-CA'),
         testTime: row.Time || new Date().toLocaleTimeString('en-GB', { hour12: false }),
-        irradiance: parseFloat(row.Irradiance) || 1000,
-        moduleTemp: parseFloat(row.ModuleTemp || row['Module Temperature']) || 25,
-        ambientTemp: parseFloat(row.AmbientTemp || row['Ambient Temperature']) || 23,
-        moduleArea: parseFloat(row.ModuleArea || row['Module Area']) || 2.7,
+        irradiance: row.Irradiance || 1000,
+        moduleTemp: row.ModuleTemp || 25,
+        ambientTemp: row.AmbientTemp || 23,
+        moduleArea: row.ModuleArea || 2.7,
         results: {
-          pmax: parseFloat(row.Pmax) || 0,
-          vpm: parseFloat(row.Vpm) || 0,
-          ipm: parseFloat(row.Ipm) || 0,
-          voc: parseFloat(row.Voc) || 0,
-          isc: parseFloat(row.Isc) || 0,
-          fillFactor: parseFloat(row.FillFactor || row['Fill Factor']) || 0,
-          rs: parseFloat(row.Rs) || 0,
-          rsh: parseFloat(row.Rsh) || 0,
-          efficiency: parseFloat(row.Efficiency) || 0
+          pmax: row.Pmax || 0,
+          vpm: row.Vpm || 0,
+          ipm: row.Ipm || 0,
+          voc: row.Voc || 0,
+          isc: row.Isc || 0,
+          fillFactor: row.FF || 0,
+          rs: row.Rs || 0,
+          rsh: row.Rsh || 0,
+          efficiency: row.Eff || 0
         }
       };
 
