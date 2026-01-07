@@ -21,7 +21,8 @@
   padding-left: 10mm;
   padding-right: 15mm;
   padding-bottom: 3mm;
-  background: white;
+  background: white !important;
+  background-image: none !important;
   border: none;
 }
 
@@ -146,14 +147,14 @@
 
 /* Graph */
 .ftr-graph-container {
-  width: 90mm;
-  height: 95mm;
+  width: 85mm;
+  height: 80mm;
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
   background: white;
-  margin-bottom: 5mm;
+  margin-bottom: 2mm;
   padding: 0;
   box-sizing: border-box;
 }
@@ -173,7 +174,7 @@
 
 /* Reference Section */
 .ftr-reference-section {
-  margin-top: 3mm;
+  margin-top: 1mm;
 }
 
 .ftr-reference-section .ftr-field-row:nth-child(2) .ftr-label {

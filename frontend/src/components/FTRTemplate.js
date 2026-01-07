@@ -5,9 +5,9 @@ const FTRTemplate = ({ testData, graphImage }) => {
   return (
     <div className="ftr-template-page">
       {/* Header with Logo */}
-      <div className="ftr-header">
+      <div className="ftr-header" style={{background: 'white', backgroundImage: 'none'}}>
         <img src="/gautam-solar-logo.jpg" alt="Gautam Solar" className="ftr-logo" />
-        <div className="ftr-title">Production Testing Report</div>
+        <div className="ftr-title" style={{color: '#999999'}}>Production Testing Report</div>
       </div>
 
       {/* Blue bar - Top */}
