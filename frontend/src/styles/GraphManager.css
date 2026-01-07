@@ -246,6 +246,16 @@
   font-weight: 600;
 }
 
+.more-graphs {
+  padding: 10px;
+  text-align: center;
+  color: #1e3a8a;
+  font-weight: 600;
+  font-size: 14px;
+  background: #e0e7ff;
+  border-radius: 4px;
+}
+
 /* Empty State */
 .empty-state-graph {
   text-align: center;

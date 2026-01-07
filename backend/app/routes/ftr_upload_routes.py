@@ -3,16 +3,130 @@ import os
 import base64
 from datetime import datetime
 from werkzeug.utils import secure_filename
+import json
 
 ftr_upload_bp = Blueprint('ftr_upload', __name__)
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), '../../uploads/ftr_reports')
+GRAPHS_FOLDER = os.path.join(os.path.dirname(__file__), '../../uploads/iv_graphs')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(GRAPHS_FOLDER, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {'pdf'}
+ALLOWED_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def allowed_image(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_IMAGE_EXTENSIONS
+
+# ============= IV GRAPH MANAGEMENT =============
+
+@ftr_upload_bp.route('/api/ftr/graphs', methods=['GET'])
+def get_graphs():
+    """Get all uploaded IV curve graphs organized by wattage"""
+    try:
+        graphs = {}
+        if os.path.exists(GRAPHS_FOLDER):
+            for filename in os.listdir(GRAPHS_FOLDER):
+                if allowed_image(filename):
+                    # Extract wattage from filename (e.g., 630_1.png -> 630)
+                    parts = filename.split('_')
+                    if parts:
+                        wattage = parts[0]
+                        if wattage not in graphs:
+                            graphs[wattage] = []
+                        graphs[wattage].append(f"/uploads/iv_graphs/{filename}")
+        
+        return jsonify({'success': True, 'graphs': graphs}), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@ftr_upload_bp.route('/api/ftr/graphs/upload', methods=['POST'])
+def upload_graphs():
+    """Upload IV curve graph images for a specific wattage"""
+    try:
+        wattage = request.form.get('wattage')
+        if not wattage:
+            return jsonify({'error': 'Wattage not specified'}), 400
+        
+        if 'files' not in request.files:
+            return jsonify({'error': 'No files provided'}), 400
+        
+        files = request.files.getlist('files')
+        uploaded = []
+        
+        # Count existing graphs for this wattage
+        existing_count = 0
+        for f in os.listdir(GRAPHS_FOLDER):
+            if f.startswith(f"{wattage}_"):
+                existing_count += 1
+        
+        for i, file in enumerate(files):
+            if file and allowed_image(file.filename):
+                # Generate unique filename
+                ext = file.filename.rsplit('.', 1)[1].lower()
+                new_filename = f"{wattage}_{existing_count + i + 1}.{ext}"
+                filepath = os.path.join(GRAPHS_FOLDER, new_filename)
+                file.save(filepath)
+                uploaded.append(f"/uploads/iv_graphs/{new_filename}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'{len(uploaded)} graphs uploaded for {wattage}W',
+            'uploaded': uploaded
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@ftr_upload_bp.route('/api/ftr/graphs/<wattage>', methods=['DELETE'])
+def delete_graphs(wattage):
+    """Delete all graphs for a specific wattage"""
+    try:
+        deleted = 0
+        for filename in os.listdir(GRAPHS_FOLDER):
+            if filename.startswith(f"{wattage}_"):
+                os.remove(os.path.join(GRAPHS_FOLDER, filename))
+                deleted += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'{deleted} graphs deleted for {wattage}W'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@ftr_upload_bp.route('/api/ftr/graphs/<wattage>/<int:index>', methods=['DELETE'])
+def delete_single_graph(wattage, index):
+    """Delete a specific graph"""
+    try:
+        # Find and delete the specific file
+        for filename in os.listdir(GRAPHS_FOLDER):
+            if filename.startswith(f"{wattage}_{index}."):
+                os.remove(os.path.join(GRAPHS_FOLDER, filename))
+                return jsonify({'success': True, 'message': 'Graph deleted'}), 200
+        
+        return jsonify({'error': 'Graph not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@ftr_upload_bp.route('/api/ftr/graphs/clear', methods=['DELETE'])
+def clear_all_graphs():
+    """Delete all graphs"""
+    try:
+        deleted = 0
+        for filename in os.listdir(GRAPHS_FOLDER):
+            if allowed_image(filename):
+                os.remove(os.path.join(GRAPHS_FOLDER, filename))
+                deleted += 1
+        
+        return jsonify({
+            'success': True,
+            'message': f'{deleted} graphs deleted'
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @ftr_upload_bp.route('/api/ftr/upload-bulk', methods=['POST'])
 def upload_bulk_ftr():

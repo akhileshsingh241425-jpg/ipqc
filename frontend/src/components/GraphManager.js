@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import '../styles/GraphManager.css';
+
+const getApiEndpoint = (path) => {
+  const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
+  return API_BASE_URL.endsWith('/api') ? `${API_BASE_URL}${path}` : `${API_BASE_URL}/api${path}`;
+};
 
 const GraphManager = () => {
   const [uploadedGraphs, setUploadedGraphs] = useState({});
   const [isUploading, setIsUploading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedWattage, setSelectedWattage] = useState('630');
 
   // Common wattages list
@@ -14,90 +21,113 @@ const GraphManager = () => {
     return localStorage.getItem('userRole') === 'super_admin';
   };
 
-  // Load graphs from localStorage on mount
+  // Load graphs from backend on mount
   useEffect(() => {
-    const storedGraphs = localStorage.getItem('ftr_graphs');
-    if (storedGraphs) {
-      try {
-        setUploadedGraphs(JSON.parse(storedGraphs));
-      } catch (error) {
-        console.error('Failed to load stored graphs:', error);
-      }
-    }
+    loadGraphsFromServer();
   }, []);
 
-  // Save graphs to localStorage whenever they change
-  useEffect(() => {
-    if (Object.keys(uploadedGraphs).length > 0) {
-      localStorage.setItem('ftr_graphs', JSON.stringify(uploadedGraphs));
+  const loadGraphsFromServer = async () => {
+    try {
+      setIsLoading(true);
+      const response = await axios.get(getApiEndpoint('/ftr/graphs'));
+      if (response.data.success) {
+        setUploadedGraphs(response.data.graphs || {});
+      }
+    } catch (error) {
+      console.error('Failed to load graphs from server:', error);
+      // Fallback to localStorage for backward compatibility
+      const storedGraphs = localStorage.getItem('ftr_graphs');
+      if (storedGraphs) {
+        try {
+          setUploadedGraphs(JSON.parse(storedGraphs));
+        } catch (e) {
+          console.error('Failed to parse localStorage graphs:', e);
+        }
+      }
+    } finally {
+      setIsLoading(false);
     }
-  }, [uploadedGraphs]);
+  };
 
-  // Handle multiple graph uploads - NOW SUPPORTS MULTIPLE GRAPHS PER WATTAGE
-  const handleGraphUpload = (e) => {
+  // Handle multiple graph uploads to server
+  const handleGraphUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
     setIsUploading(true);
-    const newGraphs = { ...uploadedGraphs };
-    let loadedCount = 0;
+    
+    try {
+      const formData = new FormData();
+      formData.append('wattage', selectedWattage);
+      files.forEach(file => {
+        formData.append('files', file);
+      });
 
-    files.forEach(file => {
-      // Use selected wattage from dropdown
-      const power = selectedWattage;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        // Store as array to support multiple graphs per wattage
-        if (!newGraphs[power]) {
-          newGraphs[power] = [];
+      const response = await axios.post(getApiEndpoint('/ftr/graphs/upload'), formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
         }
-        // If it's a single string (old format), convert to array
-        if (typeof newGraphs[power] === 'string') {
-          newGraphs[power] = [newGraphs[power]];
-        }
-        // Add new graph to the array
-        newGraphs[power].push(event.target.result);
-        
-        loadedCount++;
-        if (loadedCount === files.length) {
-          setUploadedGraphs(newGraphs);
-          setIsUploading(false);
-          alert(`✓ ${files.length} graph(s) uploaded successfully for ${power}W!`);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+      });
+
+      if (response.data.success) {
+        alert(`✓ ${files.length} graph(s) uploaded successfully for ${selectedWattage}W!`);
+        // Reload graphs from server
+        await loadGraphsFromServer();
+      } else {
+        alert('Upload failed: ' + (response.data.error || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Upload failed: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      e.target.value = '';
+    }
   };
 
-  // Delete a specific graph
-  const deleteGraph = (power, index = null) => {
-    const newGraphs = { ...uploadedGraphs };
+  // Delete all graphs for a wattage
+  const deleteGraph = async (power) => {
+    if (!window.confirm(`Delete all graphs for ${power}W?`)) return;
     
-    if (index !== null && Array.isArray(newGraphs[power])) {
-      // Delete specific graph from array
-      newGraphs[power].splice(index, 1);
-      if (newGraphs[power].length === 0) {
-        delete newGraphs[power];
+    try {
+      const response = await axios.delete(getApiEndpoint(`/ftr/graphs/${power}`));
+      if (response.data.success) {
+        alert(response.data.message);
+        await loadGraphsFromServer();
       }
-    } else {
-      // Delete all graphs for this power
-      delete newGraphs[power];
+    } catch (error) {
+      alert('Delete failed: ' + (error.response?.data?.error || error.message));
     }
-    
-    setUploadedGraphs(newGraphs);
-    localStorage.setItem('ftr_graphs', JSON.stringify(newGraphs));
   };
 
   // Clear all graphs
-  const clearAllGraphs = () => {
-    if (window.confirm('Are you sure you want to delete all graphs?')) {
-      setUploadedGraphs({});
-      localStorage.removeItem('ftr_graphs');
-      alert('All graphs cleared!');
+  const clearAllGraphs = async () => {
+    if (!window.confirm('Are you sure you want to delete ALL graphs?')) return;
+    
+    try {
+      const response = await axios.delete(getApiEndpoint('/ftr/graphs/clear'));
+      if (response.data.success) {
+        alert(response.data.message);
+        setUploadedGraphs({});
+        localStorage.removeItem('ftr_graphs');
+      }
+    } catch (error) {
+      alert('Clear failed: ' + (error.response?.data?.error || error.message));
     }
   };
 
   const sortedPowers = Object.keys(uploadedGraphs).sort((a, b) => parseInt(a) - parseInt(b));
+
+  if (isLoading) {
+    return (
+      <div className="graph-manager">
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+          <h3>Loading graphs...</h3>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="graph-manager">
@@ -118,11 +148,12 @@ const GraphManager = () => {
         <div className="upload-instructions">
           <h3>📤 Upload Graph Images</h3>
           <div className="instruction-list">
-            <p>• File format: PNG images only</p>
+            <p>• File format: PNG/JPG images</p>
             <p>• Select wattage from dropdown below</p>
             <p>• You can upload multiple files at once</p>
             <p>• Upload same wattage multiple times to add more graphs</p>
             <p>• Example: Select 630W and upload 50 different graph images</p>
+            <p>• <strong>Graphs are stored on server (no storage limit!)</strong></p>
           </div>
         </div>
         
@@ -162,7 +193,7 @@ const GraphManager = () => {
           <input 
             id="graph-upload"
             type="file" 
-            accept=".png" 
+            accept=".png,.jpg,.jpeg" 
             multiple 
             onChange={handleGraphUpload}
             disabled={isUploading}
@@ -178,14 +209,13 @@ const GraphManager = () => {
           <div className="graphs-grid">
             {sortedPowers.map(power => {
               const graphs = uploadedGraphs[power];
-              const isArray = Array.isArray(graphs);
-              const graphList = isArray ? graphs : [graphs];
+              const graphList = Array.isArray(graphs) ? graphs : [graphs];
               
               return (
                 <div key={power} className="graph-card">
                   <div className="graph-card-header">
                     <span className="power-badge">
-                      {power}W {isArray && `(${graphList.length} graphs)`}
+                      {power}W ({graphList.length} graphs)
                     </span>
                     {isSuperAdmin() && (
                       <button 
@@ -198,24 +228,18 @@ const GraphManager = () => {
                     )}
                   </div>
                   <div className="graph-preview">
-                    {graphList.map((graphSrc, idx) => (
+                    {graphList.slice(0, 3).map((graphSrc, idx) => (
                       <div key={idx} className="graph-item">
                         <img 
                           src={graphSrc} 
                           alt={`${power}W I-V Curve #${idx + 1}`}
                           className="graph-image"
                         />
-                        {isSuperAdmin() && graphList.length > 1 && (
-                          <button 
-                            onClick={() => deleteGraph(power, idx)}
-                            className="btn-delete-single"
-                            title={`Delete graph #${idx + 1}`}
-                          >
-                            🗑️ #{idx + 1}
-                          </button>
-                        )}
                       </div>
                     ))}
+                    {graphList.length > 3 && (
+                      <div className="more-graphs">+{graphList.length - 3} more</div>
+                    )}
                   </div>
                   <div className="graph-card-footer">
                     <span className="graph-status">✓ Ready to use (random selection)</span>
@@ -239,8 +263,7 @@ const GraphManager = () => {
         <ul>
           <li>Upload multiple graphs for the same wattage (e.g., 50+ graphs for 630W)</li>
           <li>When generating reports, one graph will be randomly selected from the available graphs for that wattage</li>
-          <li>Graphs are stored in your browser (persists across sessions)</li>
-          <li>Upload graphs with same filename (e.g., 630.png) multiple times to add more variations</li>
+          <li>Graphs are stored on server (no storage limit like browser!)</li>
           <li>No need to upload graphs again for each report generation</li>
         </ul>
       </div>
@@ -248,20 +271,29 @@ const GraphManager = () => {
   );
 };
 
-// Export utility function to get graphs from localStorage
-export const getStoredGraphs = () => {
+// API helper for external use
+const getApiEndpointExternal = (path) => {
+  const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
+  return API_BASE_URL.endsWith('/api') ? `${API_BASE_URL}${path}` : `${API_BASE_URL}/api${path}`;
+};
+
+// Export utility function to get graphs from server
+export const getStoredGraphs = async () => {
   try {
-    const storedGraphs = localStorage.getItem('ftr_graphs');
-    return storedGraphs ? JSON.parse(storedGraphs) : {};
+    const response = await axios.get(getApiEndpointExternal('/ftr/graphs'));
+    if (response.data.success) {
+      return response.data.graphs || {};
+    }
+    return {};
   } catch (error) {
-    console.error('Failed to get stored graphs:', error);
+    console.error('Failed to get graphs from server:', error);
     return {};
   }
 };
 
 // Export utility function to get random graph for a specific power
-export const getRandomGraphForPower = (power) => {
-  const graphs = getStoredGraphs();
+export const getRandomGraphForPower = async (power) => {
+  const graphs = await getStoredGraphs();
   const powerGraphs = graphs[power];
   
   if (!powerGraphs) return null;

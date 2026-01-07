@@ -218,7 +218,7 @@ const BulkFTRGenerator = () => {
       };
 
       // Get random graph for selected wattage
-      const graphImage = getRandomGraphForPower(selectedWattage);
+      const graphImage = await getRandomGraphForPower(selectedWattage);
 
       try {
         // Generate PDF blob

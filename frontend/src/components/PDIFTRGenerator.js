@@ -234,7 +234,7 @@ const PDIFTRGenerator = () => {
       // Get graph image from stored graphs - USE RANDOM SELECTION
       const powerMatch = testData.moduleType.match(/(\d+)/);
       const power = powerMatch ? powerMatch[1] : null;
-      const graphImage = power ? getRandomGraphForPower(power) : null;
+      const graphImage = power ? await getRandomGraphForPower(power) : null;
 
       try {
         // Generate PDF blob
