@@ -22,13 +22,12 @@
   padding-right: 15mm;
   padding-bottom: 5mm;
   background: #ffffff !important;
-  background-color: #ffffff !important;
   background-image: none !important;
   border: none;
 }
 
 .ftr-logo {
-  width: 91mm;
+  width: 70mm;
   height: auto;
   object-fit: contain;
   background: white;
@@ -40,7 +39,7 @@
 .ftr-title {
   font-size: 22px;
   font-weight: 400;
-  color: #000000;
+  color: #999999;
   font-family: 'Times New Roman', Times, serif;
   letter-spacing: 0.5px;
 }
