@@ -29,7 +29,7 @@ const GraphManager = () => {
     }
   }, [uploadedGraphs]);
 
-  // Handle multiple graph uploads
+  // Handle multiple graph uploads - NOW SUPPORTS MULTIPLE GRAPHS PER WATTAGE
   const handleGraphUpload = (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -45,7 +45,17 @@ const GraphManager = () => {
         const power = match[1];
         const reader = new FileReader();
         reader.onload = (event) => {
-          newGraphs[power] = event.target.result;
+          // Store as array to support multiple graphs per wattage
+          if (!newGraphs[power]) {
+            newGraphs[power] = [];
+          }
+          // If it's a single string (old format), convert to array
+          if (typeof newGraphs[power] === 'string') {
+            newGraphs[power] = [newGraphs[power]];
+          }
+          // Add new graph to the array
+          newGraphs[power].push(event.target.result);
+          
           loadedCount++;
           if (loadedCount === files.length) {
             setUploadedGraphs(newGraphs);
@@ -66,9 +76,20 @@ const GraphManager = () => {
   };
 
   // Delete a specific graph
-  const deleteGraph = (power) => {
+  const deleteGraph = (power, index = null) => {
     const newGraphs = { ...uploadedGraphs };
-    delete newGraphs[power];
+    
+    if (index !== null && Array.isArray(newGraphs[power])) {
+      // Delete specific graph from array
+      newGraphs[power].splice(index, 1);
+      if (newGraphs[power].length === 0) {
+        delete newGraphs[power];
+      }
+    } else {
+      // Delete all graphs for this power
+      delete newGraphs[power];
+    }
+    
     setUploadedGraphs(newGraphs);
     localStorage.setItem('ftr_graphs', JSON.stringify(newGraphs));
   };
@@ -133,34 +154,55 @@ const GraphManager = () => {
       {/* Graphs Display */}
       {sortedPowers.length > 0 ? (
         <div className="graphs-display">
-          <h3>📈 Uploaded Graphs ({sortedPowers.length})</h3>
+          <h3>📈 Uploaded Graphs ({sortedPowers.length} wattages)</h3>
           <div className="graphs-grid">
-            {sortedPowers.map(power => (
-              <div key={power} className="graph-card">
-                <div className="graph-card-header">
-                  <span className="power-badge">{power}W</span>
-                  {isSuperAdmin() && (
-                    <button 
-                      onClick={() => deleteGraph(power)}
-                      className="btn-delete"
-                      title="Delete this graph"
-                    >
-                      ✕
-                    </button>
-                  )}
+            {sortedPowers.map(power => {
+              const graphs = uploadedGraphs[power];
+              const isArray = Array.isArray(graphs);
+              const graphList = isArray ? graphs : [graphs];
+              
+              return (
+                <div key={power} className="graph-card">
+                  <div className="graph-card-header">
+                    <span className="power-badge">
+                      {power}W {isArray && `(${graphList.length} graphs)`}
+                    </span>
+                    {isSuperAdmin() && (
+                      <button 
+                        onClick={() => deleteGraph(power)}
+                        className="btn-delete"
+                        title="Delete all graphs for this wattage"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  <div className="graph-preview">
+                    {graphList.map((graphSrc, idx) => (
+                      <div key={idx} className="graph-item">
+                        <img 
+                          src={graphSrc} 
+                          alt={`${power}W I-V Curve #${idx + 1}`}
+                          className="graph-image"
+                        />
+                        {isSuperAdmin() && graphList.length > 1 && (
+                          <button 
+                            onClick={() => deleteGraph(power, idx)}
+                            className="btn-delete-single"
+                            title={`Delete graph #${idx + 1}`}
+                          >
+                            🗑️ #{idx + 1}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="graph-card-footer">
+                    <span className="graph-status">✓ Ready to use (random selection)</span>
+                  </div>
                 </div>
-                <div className="graph-preview">
-                  <img 
-                    src={uploadedGraphs[power]} 
-                    alt={`${power}W I-V Curve`}
-                    className="graph-image"
-                  />
-                </div>
-                <div className="graph-card-footer">
-                  <span className="graph-status">✓ Ready to use</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -175,9 +217,10 @@ const GraphManager = () => {
       <div className="usage-info">
         <h4>ℹ️ How it works</h4>
         <ul>
-          <li>Upload all your I-V curve graphs here once</li>
+          <li>Upload multiple graphs for the same wattage (e.g., 50+ graphs for 630W)</li>
+          <li>When generating reports, one graph will be randomly selected from the available graphs for that wattage</li>
           <li>Graphs are stored in your browser (persists across sessions)</li>
-          <li>When generating FTR reports (from Test Report or PDI section), the system will automatically match and use the appropriate graph based on module power rating</li>
+          <li>Upload graphs with same filename (e.g., 630.png) multiple times to add more variations</li>
           <li>No need to upload graphs again for each report generation</li>
         </ul>
       </div>
@@ -194,6 +237,27 @@ export const getStoredGraphs = () => {
     console.error('Failed to get stored graphs:', error);
     return {};
   }
+};
+
+// Export utility function to get random graph for a specific power
+export const getRandomGraphForPower = (power) => {
+  const graphs = getStoredGraphs();
+  const powerGraphs = graphs[power];
+  
+  if (!powerGraphs) return null;
+  
+  // Handle both old format (single string) and new format (array)
+  if (typeof powerGraphs === 'string') {
+    return powerGraphs;
+  }
+  
+  if (Array.isArray(powerGraphs) && powerGraphs.length > 0) {
+    // Return random graph from array
+    const randomIndex = Math.floor(Math.random() * powerGraphs.length);
+    return powerGraphs[randomIndex];
+  }
+  
+  return null;
 };
 
 export default GraphManager;

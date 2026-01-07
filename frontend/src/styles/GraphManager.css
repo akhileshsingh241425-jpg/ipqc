@@ -192,9 +192,20 @@
   padding: 16px;
   background: white;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 12px;
   min-height: 200px;
+}
+
+.graph-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f9fafb;
 }
 
 .graph-image {
@@ -202,6 +213,24 @@
   max-height: 200px;
   object-fit: contain;
   border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.btn-delete-single {
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+
+.btn-delete-single:hover {
+  background: #fca5a5;
+  transform: scale(1.05);
 }
 
 .graph-card-footer {

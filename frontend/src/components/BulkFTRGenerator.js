@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import html2pdf from 'html2pdf.js';
 import axios from 'axios';
 import FTRTemplate from './FTRTemplate';
-import { getStoredGraphs } from './GraphManager';
+import { getStoredGraphs, getRandomGraphForPower } from './GraphManager';
 import '../styles/BulkFTR.css';
 
 const BulkFTRGenerator = () => {
@@ -123,7 +123,7 @@ const BulkFTRGenerator = () => {
   // Upload PDFs to backend
   const uploadPDFsToBackend = async (pdfDataArray) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
+      const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
       
       // Convert blobs to base64
       const reports = await Promise.all(pdfDataArray.map(async (item) => {
@@ -166,6 +166,23 @@ const BulkFTRGenerator = () => {
       return;
     }
 
+    // Get available wattages
+    const availableWattages = Object.keys(storedGraphs).sort((a, b) => parseInt(a) - parseInt(b));
+    
+    // Ask user which wattage to use for bulk generation
+    const wattagePrompt = `Available wattages with graphs:\n${availableWattages.join('W, ')}W\n\nEnter the wattage (WP) for these modules:`;
+    const selectedWattage = prompt(wattagePrompt, availableWattages[0]);
+    
+    if (!selectedWattage) {
+      return; // User cancelled
+    }
+    
+    // Validate selected wattage
+    if (!storedGraphs[selectedWattage]) {
+      alert(`No graphs found for ${selectedWattage}W! Please select from available wattages or upload graphs for ${selectedWattage}W first.`);
+      return;
+    }
+
     setIsGenerating(true);
     setProgress(0);
 
@@ -177,7 +194,7 @@ const BulkFTRGenerator = () => {
       // Map Excel data to testData format (data is already normalized)
       const testData = {
         producer: row.Producer || 'Gautam Solar',
-        moduleType: row.ModuleType || '',
+        moduleType: `${selectedWattage}W`, // Use selected wattage
         serialNumber: row.SerialNumber || '',
         testDate: row.Date || new Date().toLocaleDateString('en-CA'),
         testTime: row.Time || new Date().toLocaleTimeString('en-GB', { hour12: false }),
@@ -198,10 +215,8 @@ const BulkFTRGenerator = () => {
         }
       };
 
-      // Get graph image from stored graphs
-      const powerMatch = testData.moduleType.match(/(\d+)W?/i);
-      const power = powerMatch ? powerMatch[1] : null;
-      const graphImage = power ? storedGraphs[power] : null;
+      // Get random graph for selected wattage
+      const graphImage = getRandomGraphForPower(selectedWattage);
 
       try {
         // Generate PDF blob

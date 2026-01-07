@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import html2pdf from 'html2pdf.js';
 import axios from 'axios';
 import FTRTemplate from './FTRTemplate';
-import { getStoredGraphs } from './GraphManager';
+import { getStoredGraphs, getRandomGraphForPower } from './GraphManager';
 import '../styles/PDIFTRGenerator.css';
 
 const PDIFTRGenerator = () => {
@@ -144,7 +144,7 @@ const PDIFTRGenerator = () => {
   // Upload PDFs to backend
   const uploadPDFsToBackend = async (pdfDataArray) => {
     try {
-      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
+      const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
       
       // Convert blobs to base64
       const reports = await Promise.all(pdfDataArray.map(async (item) => {
@@ -229,10 +229,10 @@ const PDIFTRGenerator = () => {
         };
       }
 
-      // Get graph image from stored graphs
+      // Get graph image from stored graphs - USE RANDOM SELECTION
       const powerMatch = testData.moduleType.match(/(\d+)/);
       const power = powerMatch ? powerMatch[1] : null;
-      const graphImage = power ? storedGraphs[power] : null;
+      const graphImage = power ? getRandomGraphForPower(power) : null;
 
       try {
         // Generate PDF blob
