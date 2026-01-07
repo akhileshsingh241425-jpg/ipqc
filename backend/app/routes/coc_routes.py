@@ -907,21 +907,52 @@ def upload_flash_data():
         # Normalize column names
         df.columns = df.columns.str.strip().str.lower()
         
-        # Convert to list of dicts
+        # Convert to list of dicts with flexible column mapping
         flash_data = []
         for idx, row in df.iterrows():
+            # Get serial number (try multiple column names)
+            serial = str(row.get('id', '') or row.get('serial_number', '') or row.get('serialnumber', '') or row.get('s/n', '') or row.get('barcode', '') or '')
+            
+            # Get date (try multiple formats)
+            date_val = row.get('date', '') or row.get('test_date', '') or row.get('testdate', '') or ''
+            if pd.notna(date_val) and date_val != '':
+                try:
+                    if isinstance(date_val, (int, float)):
+                        # Julian date format - convert to date string
+                        date_str = str(int(date_val))
+                    else:
+                        date_str = str(date_val)
+                except:
+                    date_str = ''
+            else:
+                date_str = ''
+            
+            # Get module type
+            module_type = str(row.get('module_type', '') or row.get('moduletype', '') or row.get('module type', '') or row.get('type', '') or '')
+            
+            # Get producer
+            producer = str(row.get('producer', '') or row.get('manufacturer', '') or 'Gautam Solar')
+            
             flash_data.append({
-                'sn': int(row.get('sn', idx + 1)),
-                'id': str(row.get('id', '')),
-                'serial_number': str(row.get('id', '')),
-                'pmax': float(row.get('pmax', 0)),
-                'isc': float(row.get('isc', 0)),
-                'voc': float(row.get('voc', 0)),
-                'ipm': float(row.get('ipm', 0)),
-                'vpm': float(row.get('vpm', 0)),
-                'ff': float(row.get('ff', 0)),
-                'rs': float(row.get('rs', 0)),
-                'eff': float(row.get('eff', 0))
+                'sn': int(row.get('sn', idx + 1)) if pd.notna(row.get('sn', None)) else idx + 1,
+                'id': serial,
+                'serial_number': serial,
+                'module_type': module_type,
+                'producer': producer,
+                'date': date_str,
+                'pmax': float(row.get('pmax', 0)) if pd.notna(row.get('pmax', None)) else 0,
+                'isc': float(row.get('isc', 0)) if pd.notna(row.get('isc', None)) else 0,
+                'voc': float(row.get('voc', 0)) if pd.notna(row.get('voc', None)) else 0,
+                'ipm': float(row.get('ipm', 0)) if pd.notna(row.get('ipm', None)) else 0,
+                'vpm': float(row.get('vpm', 0)) if pd.notna(row.get('vpm', None)) else 0,
+                'ff': float(row.get('ff', 0)) if pd.notna(row.get('ff', None)) else 0,
+                'rs': float(row.get('rs', 0)) if pd.notna(row.get('rs', None)) else 0,
+                'rsh': float(row.get('rsh', 0)) if pd.notna(row.get('rsh', None)) else 0,
+                'eff': float(row.get('eff', 0) or row.get('efficiency', 0)) if pd.notna(row.get('eff', None) or row.get('efficiency', None)) else 0,
+                'module_temp': float(row.get('t_object', 0) or row.get('module_temp', 0) or row.get('moduletemp', 0) or row.get('cel_t', 0)) if pd.notna(row.get('t_object', None) or row.get('module_temp', None)) else 25,
+                'ambient_temp': float(row.get('ambient', 0) or row.get('ambient_temp', 0) or row.get('ambienttemp', 0) or row.get('t_ambient', 0)) if pd.notna(row.get('ambient', None) or row.get('ambient_temp', None)) else 25,
+                'irradiance': float(row.get('irr_target', 0) or row.get('irradiance', 0) or row.get('irr', 0)) if pd.notna(row.get('irr_target', None) or row.get('irradiance', None)) else 1000,
+                'class': str(row.get('class', '') or row.get('irr_target class', '') or '')
             })
         
         return jsonify({

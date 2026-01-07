@@ -12,43 +12,49 @@
   box-sizing: border-box;
 }
 
-/* Header */
+/* Header - Original Report Style */
 .ftr-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-top: 14.16mm;
+  padding-top: 10mm;
   padding-left: 10mm;
-  padding-right: 9.48mm;
-  padding-bottom: 3mm;
+  padding-right: 15mm;
+  padding-bottom: 5mm;
+  background: white;
 }
 
 .ftr-logo {
-  width: 66.30mm;
-  height: 21.41mm;
+  width: 70mm;
+  height: auto;
   object-fit: contain;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 8px;
 }
 
 .ftr-title {
-  font-size: 24px;
-  font-weight: 500;
-  color: #333;
+  font-size: 22px;
+  font-weight: 400;
+  color: #8B4B5C;
+  font-family: 'Times New Roman', Times, serif;
 }
 
-/* Blue Bar */
+/* Blue Bar - Lighter blue like original */
 .ftr-blue-bar {
-  height: 2.80mm;
-  background: #1e3a8a;
+  height: 3mm;
+  background: #7B8FA8;
   margin: 0 10mm;
   position: absolute;
-  top: 35.50mm;
+  top: 38mm;
   left: 0;
   right: 0;
 }
 
 .ftr-blue-bar-bottom {
-  height: 2.80mm;
-  background: #1e3a8a;
+  height: 3mm;
+  background: #7B8FA8;
   margin: 0 10mm;
   position: absolute;
   bottom: 14mm;

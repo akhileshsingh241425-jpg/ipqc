@@ -156,31 +156,32 @@ function FTRReportManager() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>SN</th>
-                  <th>ID / Serial Number</th>
+                  <th>#</th>
+                  <th>Serial Number</th>
+                  <th>Module Type</th>
+                  <th>Producer</th>
                   <th>Pmax (W)</th>
-                  <th>Isc (A)</th>
                   <th>Voc (V)</th>
-                  <th>Ipm (A)</th>
-                  <th>Vpm (V)</th>
-                  <th>FF (%)</th>
-                  <th>Rs (Ω)</th>
-                  <th>Eff (%)</th>
+                  <th>Isc (A)</th>
+                  <th>Date</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {flashData.slice(0, 10).map((row, idx) => (
                   <tr key={idx}>
                     <td>{row.sn || idx + 1}</td>
-                    <td>{row.id || row.serial_number}</td>
-                    <td>{row.pmax}</td>
-                    <td>{row.isc}</td>
-                    <td>{row.voc}</td>
-                    <td>{row.ipm}</td>
-                    <td>{row.vpm}</td>
-                    <td>{row.ff}</td>
-                    <td>{row.rs}</td>
-                    <td>{row.eff}</td>
+                    <td>{row.serial_number || row.id || '-'}</td>
+                    <td>{row.module_type || '-'}</td>
+                    <td>{row.producer || '-'}</td>
+                    <td>{row.pmax?.toFixed ? row.pmax.toFixed(2) : row.pmax}</td>
+                    <td>{row.voc?.toFixed ? row.voc.toFixed(2) : row.voc}</td>
+                    <td>{row.isc?.toFixed ? row.isc.toFixed(2) : row.isc}</td>
+                    <td>{row.date || '-'}</td>
+                    <td>
+                      <button className="btn-edit" title="Edit">✏️</button>
+                      <button className="btn-delete" title="Delete">🗑️</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
