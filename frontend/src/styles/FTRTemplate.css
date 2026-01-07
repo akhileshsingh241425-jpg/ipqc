@@ -28,7 +28,7 @@
 }
 
 .ftr-logo {
-  width: 70mm;
+  width: 91mm;
   height: auto;
   object-fit: contain;
   background: white;
@@ -40,7 +40,7 @@
 .ftr-title {
   font-size: 22px;
   font-weight: 400;
-  color: #999999;
+  color: #000000;
   font-family: 'Times New Roman', Times, serif;
   letter-spacing: 0.5px;
 }
