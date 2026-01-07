@@ -245,6 +245,17 @@ const PDIFTRGenerator = () => {
           moduleType: testData.moduleType,
           pmax: testData.results.pmax
         });
+        
+        // Download each PDF individually
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `FTR_${testData.serialNumber.replace(/\//g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
       } catch (error) {
         console.error(`Error generating PDF for ${testData.serialNumber}:`, error);
       }
@@ -260,11 +271,11 @@ const PDIFTRGenerator = () => {
       const uploadResult = await uploadPDFsToBackend(pdfDataArray);
       setIsGenerating(false);
       setProgress(0);
-      alert(`✅ ${uploadResult.files.length} FTR reports generated and saved successfully!\n\nYou can view them in the production records.`);
+      alert(`✅ ${uploadResult.files.length} FTR reports generated and downloaded successfully!`);
     } catch (error) {
       setIsGenerating(false);
       setProgress(0);
-      alert('❌ Reports generated but upload failed: ' + error.message);
+      alert(`✅ ${pdfDataArray.length} FTR reports generated and downloaded!\n\n⚠️ Upload to server failed: ${error.message}`);
     }
   };
 

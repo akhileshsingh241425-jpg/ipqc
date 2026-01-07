@@ -229,6 +229,17 @@ const BulkFTRGenerator = () => {
           moduleType: testData.moduleType,
           pmax: testData.results.pmax
         });
+        
+        // Download each PDF individually
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `FTR_${testData.serialNumber.replace(/\//g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
       } catch (error) {
         console.error(`Error generating PDF for ${testData.serialNumber}:`, error);
       }
@@ -243,10 +254,41 @@ const BulkFTRGenerator = () => {
     try {
       const uploadResult = await uploadPDFsToBackend(pdfDataArray);
       setIsGenerating(false);
-      alert(`✅ ${uploadResult.files.length} FTR reports generated and saved successfully!\n\nYou can view them in the production records.`);
+      alert(`✅ ${uploadResult.files.length} FTR reports generated and downloaded successfully!`);
     } catch (error) {
       setIsGenerating(false);
-      alert('❌ Reports generated but upload failed: ' + error.message);
+      alert(`✅ ${pdfDataArray.length} FTR reports generated and downloaded!\n\n⚠️ Upload to server failed: ${error.message}`);
+    }
+  };
+
+  // Download all PDFs as a ZIP file
+  const downloadAllAsZip = async (pdfDataArray) => {
+    try {
+      // Dynamically import JSZip
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      
+      // Add all PDFs to ZIP
+      pdfDataArray.forEach((item, index) => {
+        const filename = `FTR_${item.serialNumber.replace(/\//g, '_')}.pdf`;
+        zip.file(filename, item.blob);
+      });
+      
+      // Generate ZIP file
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      
+      // Download ZIP
+      const url = window.URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `FTR_Reports_${new Date().toISOString().split('T')[0]}_${pdfDataArray.length}files.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error creating ZIP:', error);
+      alert('Failed to create ZIP file: ' + error.message);
     }
   };
 
