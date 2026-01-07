@@ -145,6 +145,8 @@ const PDIFTRGenerator = () => {
   const uploadPDFsToBackend = async (pdfDataArray) => {
     try {
       const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
+      // Construct proper API endpoint (avoid double /api)
+      const endpoint = API_BASE_URL.endsWith('/api') ? `${API_BASE_URL}/ftr/upload-bulk` : `${API_BASE_URL}/api/ftr/upload-bulk`;
       
       // Convert blobs to base64
       const reports = await Promise.all(pdfDataArray.map(async (item) => {
@@ -162,7 +164,7 @@ const PDIFTRGenerator = () => {
         };
       }));
       
-      const response = await axios.post(`${API_BASE_URL}/api/ftr/upload-bulk`, {
+      const response = await axios.post(endpoint, {
         reports: reports
       });
       
