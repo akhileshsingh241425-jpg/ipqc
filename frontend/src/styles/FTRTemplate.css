@@ -43,10 +43,10 @@
   letter-spacing: 0.5px;
 }
 
-/* Blue Bar - Lighter blue like original */
+/* Blue Bar - Dark blue like original */
 .ftr-blue-bar {
   height: 3mm;
-  background: #7B8FA8;
+  background: #1e3a6e;
   margin: 0 10mm;
   position: absolute;
   top: 38mm;
@@ -56,7 +56,7 @@
 
 .ftr-blue-bar-bottom {
   height: 3mm;
-  background: #7B8FA8;
+  background: #1e3a6e;
   margin: 0 10mm;
   position: absolute;
   bottom: 14mm;
