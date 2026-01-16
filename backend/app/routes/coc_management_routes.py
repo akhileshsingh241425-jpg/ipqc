@@ -68,6 +68,30 @@ def get_fifo_suggestions():
         material_names = data.get('material_names', [])
         shift = data.get('shift', 'day')
         
+        # Get company name from database
+        from app.models.database import Company
+        company = Company.query.get(company_id)
+        if not company:
+            return jsonify({'success': False, 'error': 'Company not found'}), 404
+        
+        company_name = company.companyName.strip()
+        
+        # Company name mapping for API matching
+        COMPANY_NAME_MAPPING = {
+            'Rays Power': 'RAYS POWER INFRA PRIVATE LIMITED',
+            'Larsen & Toubro': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
+            'Sterlin and Wilson': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED'
+        }
+        
+        # Get API company name
+        api_company_name = COMPANY_NAME_MAPPING.get(company_name)
+        
+        if not api_company_name:
+            return jsonify({
+                'success': False, 
+                'error': f'Company mapping not found for: {company_name}'
+            }), 400
+        
         # Fetch COC data from API
         to_date = datetime.now().strftime('%Y-%m-%d')
         from_date = (datetime.now() - timedelta(days=180)).strftime('%Y-%m-%d')
@@ -80,6 +104,15 @@ def get_fifo_suggestions():
         
         coc_data = response.json()
         coc_documents = coc_data.get('data', []) if isinstance(coc_data, dict) else coc_data
+        
+        # Filter COC documents for this company only
+        company_coc_documents = []
+        for doc in coc_documents:
+            if not isinstance(doc, dict):
+                continue
+            doc_company = (doc.get('company_name', '') or '').upper()
+            if api_company_name.upper() in doc_company or doc_company in api_company_name.upper():
+                company_coc_documents.append(doc)
         
         suggestions = {}
         
@@ -96,7 +129,7 @@ def get_fifo_suggestions():
             material_cocs_used_brands = []  # COCs from previously used brands
             material_cocs_new_brands = []   # COCs from new brands
             
-            for doc in coc_documents:
+            for doc in company_coc_documents:
                 if not isinstance(doc, dict):
                     continue
                 
