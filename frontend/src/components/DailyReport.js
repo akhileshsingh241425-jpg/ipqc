@@ -4886,7 +4886,8 @@ function DailyReport() {
                 </div>
               )}
 
-              <h4 style={{marginTop: '20px', marginBottom: '15px'}}>📦 BOM Materials for Complete PDI:</h4>
+              {/* OLD BOM Table - Hidden, using new MRP table below */}
+              {/* <h4 style={{marginTop: '20px', marginBottom: '15px'}}>📦 BOM Materials for Complete PDI:</h4>
               {consolidatedBom.length > 0 ? (
                 <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px', border: '1px solid #dee2e6'}}>
                   <table style={{width: '100%', fontSize: '11px'}}>
@@ -5128,6 +5129,7 @@ function DailyReport() {
                   No BOM materials uploaded yet. Use the "COC Link" button in the production table to add materials.
                 </p>
               )}
+              */}
 
               {/* NEW: MRP Assigned COC Table - Shows ALL materials with FIFO suggestions */}
               <h4 style={{marginTop: '30px', marginBottom: '15px', color: '#1976d2'}}>📋 COC Status & FIFO Suggestions (MRP Data)</h4>
@@ -5287,19 +5289,64 @@ function DailyReport() {
                   if (mat.includes('eva')) return actualProduction * 2;
                   return actualProduction * 1;
                 };
+                // Export COC Suggestion Report to Excel
+                const exportCocSuggestionReport = () => {
+                  const reportData = MRP_MATERIALS.map(material => {
+                    const assignedCocs = getAssignedCocs(material);
+                    const fifoSuggestions = getFifoSuggestions(material);
+                    const bomCompanies = getBomCompaniesForMaterial(material);
+                    const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
+                    const totalAssignedQty = assignedCocs.reduce((sum, coc) => sum + (parseFloat(coc.remaining_qty) || 0), 0);
+                    const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
+                    
+                    return {
+                      'Material': material,
+                      'BOM Companies': bomCompanies.map(c => c.company).join(', ') || '-',
+                      'Assigned COC': assignedCocs.map(c => `${c.invoice_no} (${c.lot_batch_no})`).join(', ') || 'Not Assigned',
+                      'COC Qty (Remaining)': totalAssignedQty || 0,
+                      'Used Qty': usedQty,
+                      'Gap': gap,
+                      'Status': gap >= 0 ? 'Sufficient' : 'Need More',
+                      'FIFO Suggestion Invoice': fifoSuggestions.map(s => s.invoice_no).join(', ') || '-',
+                      'FIFO Suggestion Qty': fifoSuggestions.map(s => s.coc_qty).join(', ') || '-',
+                      'FIFO Suggestion Brand': fifoSuggestions.map(s => s.brand?.substring(0, 30)).join(', ') || '-',
+                      'FIFO Suggestion Date': fifoSuggestions.map(s => s.invoice_date).join(', ') || '-'
+                    };
+                  });
+                  
+                  const ws = XLSX.utils.json_to_sheet(reportData);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, 'COC Suggestions');
+                  
+                  // Set column widths
+                  ws['!cols'] = [
+                    {wch: 15}, {wch: 25}, {wch: 35}, {wch: 15}, {wch: 12}, {wch: 12}, {wch: 12},
+                    {wch: 25}, {wch: 15}, {wch: 30}, {wch: 12}
+                  ];
+                  
+                  XLSX.writeFile(wb, `COC_Suggestions_${mrpCompanyName}_${selectedPdiForDetails}_${new Date().toISOString().split('T')[0]}.xlsx`);
+                };
                 
                 return (
                   <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '5px', border: '1px solid #2196F3'}}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px'}}>
                       <p style={{fontSize: '11px', color: '#666', margin: 0}}>
                         <strong>{mrpCompanyName}</strong> - <strong>Lot {targetPdiNum}</strong> | Production: {actualProduction} modules
                       </p>
-                      <button
-                        onClick={loadMasterCocData}
-                        style={{padding: '5px 10px', fontSize: '10px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
-                      >
-                        🔄 Load FIFO Suggestions
-                      </button>
+                      <div style={{display: 'flex', gap: '8px'}}>
+                        <button
+                          onClick={loadMasterCocData}
+                          style={{padding: '5px 10px', fontSize: '10px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                        >
+                          🔄 Load FIFO Suggestions
+                        </button>
+                        <button
+                          onClick={exportCocSuggestionReport}
+                          style={{padding: '5px 10px', fontSize: '10px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                        >
+                          📊 Export Report
+                        </button>
+                      </div>
                     </div>
                     <table style={{width: '100%', fontSize: '11px'}}>
                       <thead>
@@ -5315,24 +5362,31 @@ function DailyReport() {
                       <tbody>
                         {MRP_MATERIALS.map((material, idx) => {
                           const assignedCocs = getAssignedCocs(material);
-                          const fifoSuggestions = getFifoSuggestions(material); // Now returns array
+                          const fifoSuggestions = getFifoSuggestions(material);
                           const bomCompanies = getBomCompaniesForMaterial(material);
                           const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
                           
-                          // Calculate total assigned qty - use coc_qty for assigned data
-                          const totalAssignedQty = assignedCocs.reduce((sum, coc) => 
-                            sum + (parseFloat(coc.coc_qty || coc.remaining_qty) || 0), 0);
-                          // Gap = COC - Used (positive = surplus, negative = shortage)
+                          // Calculate total assigned qty from Assigned API (remaining_qty field)
+                          // Note: remaining_qty shows what's left after usage
+                          const totalAssignedQty = assignedCocs.reduce((sum, coc) => {
+                            // Assigned API returns remaining_qty (what's left)
+                            const qty = parseFloat(coc.remaining_qty) || 0;
+                            return sum + qty;
+                          }, 0);
+                          
+                          // Gap = COC Remaining - Used Required
+                          // Positive = Extra COC available (green)
+                          // Negative = Need more COC (red)
                           const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
                           
                           const hasAssigned = assignedCocs.length > 0;
-                          const needsMore = gap < 0; // Negative gap means need more
+                          const needsMore = !hasAssigned || gap < 0;
                           
                           return (
                             <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f5f5f5'}}>
                               <td style={{padding: '8px', border: '1px solid #dee2e6', fontWeight: '500'}}>
                                 {material}
-                                {(!hasAssigned || needsMore) && <span style={{color: '#dc3545', marginLeft: '5px'}}>⚠️</span>}
+                                {needsMore && <span style={{color: '#dc3545', marginLeft: '5px'}}>⚠️</span>}
                                 {bomCompanies.length > 0 && (
                                   <div style={{fontSize: '8px', color: '#666', marginTop: '3px'}}>
                                     BOM: {bomCompanies.map(c => c.company).join(', ')}
@@ -5345,6 +5399,9 @@ function DailyReport() {
                                     {assignedCocs.map((coc, i) => (
                                       <div key={i} style={{marginBottom: i < assignedCocs.length - 1 ? '3px' : 0}}>
                                         {coc.invoice_no} <span style={{color: '#666'}}>({coc.lot_batch_no})</span>
+                                        <span style={{color: '#1976d2', marginLeft: '5px', fontSize: '9px'}}>
+                                          [{parseFloat(coc.remaining_qty || 0).toLocaleString()}]
+                                        </span>
                                       </div>
                                     ))}
                                   </div>
@@ -5365,10 +5422,10 @@ function DailyReport() {
                                 fontWeight: '500',
                                 color: !hasAssigned ? '#999' : (gap >= 0 ? '#28a745' : '#dc3545')
                               }}>
-                                {hasAssigned ? gap.toLocaleString() : '-'}
+                                {hasAssigned ? (gap >= 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()) : '-'}
                               </td>
                               <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
-                                {needsMore || !hasAssigned ? (
+                                {needsMore ? (
                                   fifoSuggestions.length > 0 ? (
                                     <div style={{maxHeight: '150px', overflowY: 'auto'}}>
                                       {fifoSuggestions.map((suggestion, sIdx) => (
