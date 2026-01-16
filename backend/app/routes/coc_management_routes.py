@@ -76,11 +76,11 @@ def get_fifo_suggestions():
         
         company_name = company.companyName.strip()
         
-        # Company name mapping for API matching
+        # Company name mapping for API matching (API uses assigned_to field)
         COMPANY_NAME_MAPPING = {
-            'Rays Power': 'RAYS POWER INFRA PRIVATE LIMITED',
-            'Larsen & Toubro': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
-            'Sterlin and Wilson': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED'
+            'Rays Power': 'Rays Power',
+            'Larsen & Toubro': 'L&T',
+            'Sterlin and Wilson': 'S&W'
         }
         
         # Get API company name
@@ -89,7 +89,7 @@ def get_fifo_suggestions():
         if not api_company_name:
             return jsonify({
                 'success': False, 
-                'error': f'Company mapping not found for: {company_name}'
+                'error': f'Company mapping not found for: {company_name}. Available: {list(COMPANY_NAME_MAPPING.keys())}'
             }), 400
         
         # Fetch COC data from API
@@ -103,15 +103,16 @@ def get_fifo_suggestions():
             return jsonify({'success': False, 'error': 'Failed to fetch COC data'}), 500
         
         coc_data = response.json()
-        coc_documents = coc_data.get('data', []) if isinstance(coc_data, dict) else coc_data
+        # API returns array directly
+        coc_documents = coc_data if isinstance(coc_data, list) else coc_data.get('data', [])
         
-        # Filter COC documents for this company only
+        # Filter COC documents for this company only (using assigned_to field)
         company_coc_documents = []
         for doc in coc_documents:
             if not isinstance(doc, dict):
                 continue
-            doc_company = (doc.get('company_name', '') or '').upper()
-            if api_company_name.upper() in doc_company or doc_company in api_company_name.upper():
+            doc_company = (doc.get('assigned_to', '') or '').strip()
+            if doc_company == api_company_name:
                 company_coc_documents.append(doc)
         
         suggestions = {}
@@ -155,63 +156,52 @@ def get_fifo_suggestions():
                 
                 if is_match:
                     invoice_no = doc.get('invoice_no', '')
-                    brand = doc.get('brand', '')
-                    invoice_date = doc.get('invoice_date', '')
-                    total_qty = doc.get('coc_qty', 0)
+                    lot_batch_no = doc.get('lot_batch_no', '')
+                    pdi_no = doc.get('pdi_no', '')
+                    remaining_qty = float(doc.get('remaining_qty', 0))
                     
-                    # Check if this invoice was already used by THIS COMPANY for this material
-                    already_used_by_company = db.session.query(COCUsageTracking)\
-                        .filter_by(
-                            company_id=company_id,
-                            coc_invoice_number=invoice_no, 
-                            material_name=material_name
-                        )\
-                        .first()
-                    
-                    # Check total usage across ALL companies (to prevent same COC to multiple customers)
-                    total_used_qty = db.session.query(db.func.sum(COCUsageTracking.coc_qty_used))\
-                        .filter_by(coc_invoice_number=invoice_no, material_name=material_name)\
-                        .scalar() or 0
-                    
-                    remaining_qty = total_qty - total_used_qty
-                    
-                    # Only show COC if:
-                    # 1. Has remaining quantity
-                    # 2. Either not used by this company OR has remaining quantity from this company's usage
+                    # Only show COC if has remaining quantity from API
                     if remaining_qty > 0:
+                        # Check if this invoice was previously used by this company
+                        previously_used = db.session.query(COCUsageTracking)\
+                            .filter_by(
+                                company_id=company_id,
+                                coc_invoice_number=invoice_no, 
+                                material_name=material_name
+                            )\
+                            .first()
+                        
                         coc_item = {
                             'invoiceNo': invoice_no,
-                            'brand': brand,
-                            'invoiceDate': invoice_date,
-                            'totalQty': total_qty,
-                            'usedQty': total_used_qty,
+                            'lotBatchNo': lot_batch_no,
+                            'pdiNo': pdi_no,
+                            'materialName': doc.get('material_name', ''),
+                            'assignedTo': doc.get('assigned_to', ''),
                             'remainingQty': remaining_qty,
-                            'fifoRank': invoice_date,
-                            'isPreviouslyUsed': brand in used_brand_list,
-                            'usedByThisCompany': already_used_by_company is not None
+                            'isPreviouslyUsed': previously_used is not None,
+                            'fifoRank': invoice_no  # Can use ID or invoice for sorting
                         }
                         
-                        # Separate based on whether brand was used before
-                        if brand in used_brand_list:
+                        # Add to list (prioritize previously used ones)
+                        if previously_used:
                             material_cocs_used_brands.append(coc_item)
                         else:
                             material_cocs_new_brands.append(coc_item)
             
-            # Sort each category by FIFO (oldest first)
-            material_cocs_used_brands.sort(key=lambda x: x['invoiceDate'] if x['invoiceDate'] else '9999-12-31')
-            material_cocs_new_brands.sort(key=lambda x: x['invoiceDate'] if x['invoiceDate'] else '9999-12-31')
+            # Sort by invoice number/ID (FIFO)
+            material_cocs_used_brands.sort(key=lambda x: x['invoiceNo'])
+            material_cocs_new_brands.sort(key=lambda x: x['invoiceNo'])
             
-            # Combine: Previously used brands first, then new brands
+            # Combine: Previously used first, then new ones
             material_cocs = material_cocs_used_brands + material_cocs_new_brands
             
             suggestions[material_name] = {
                 'materialName': material_name,
-                'availableCocs': material_cocs[:10],  # Top 10 COCs (used brands first)
+                'availableCocs': material_cocs[:10],  # Top 10 COCs
                 'recommendedCoc': material_cocs[0] if material_cocs else None,
                 'totalAvailable': len(material_cocs),
-                'previouslyUsedBrands': used_brand_list,
-                'usedBrandsCount': len(material_cocs_used_brands),
-                'newBrandsCount': len(material_cocs_new_brands)
+                'usedCount': len(material_cocs_used_brands),
+                'newCount': len(material_cocs_new_brands)
             }
         
         return jsonify({
