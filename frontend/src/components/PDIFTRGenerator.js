@@ -182,8 +182,8 @@ const PDIFTRGenerator = () => {
       return;
     }
 
-    // Get stored graphs from localStorage
-    const storedGraphs = getStoredGraphs();
+    // Get stored graphs from server (async)
+    const storedGraphs = await getStoredGraphs();
     if (Object.keys(storedGraphs).length === 0) {
       alert('No graphs found! Please upload graphs in Graph Manager first.');
       return;

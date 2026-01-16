@@ -58,6 +58,24 @@ PassengerStartupFile passenger_wsgi.py
 PassengerAppType wsgi
 PassengerPython /home/username/virtualenv/public_html/api/3.9/bin/python
 
+# Rewrite rules
+RewriteEngine On
+
+# Allow direct access to uploaded files and generated PDFs
+RewriteCond %{REQUEST_URI} ^/uploads/ [OR]
+RewriteCond %{REQUEST_URI} ^/generated_pdfs/
+RewriteRule ^ - [L]
+
+# Redirect all other requests to Flask app
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ passenger_wsgi.py [QSA,L]
+
+# CORS Headers
+Header set Access-Control-Allow-Origin "*"
+Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+
 # Security
 <Files "config.py">
     Order allow,deny
@@ -68,6 +86,32 @@ PassengerPython /home/username/virtualenv/public_html/api/3.9/bin/python
     Order allow,deny
     Deny from all
 </Files>
+EOF
+
+# Create uploads folder and .htaccess
+mkdir -p "$DEPLOY_DIR/api/uploads"
+cat > "$DEPLOY_DIR/api/uploads/.htaccess" << 'EOF'
+# Allow direct access to uploaded files
+Options -Indexes
+Order allow,deny
+Allow from all
+
+# Set correct MIME types
+<IfModule mod_mime.c>
+    AddType image/jpeg .jpg .jpeg
+    AddType image/png .png
+    AddType image/gif .gif
+    AddType application/pdf .pdf
+</IfModule>
+
+# CORS for uploaded files
+Header set Access-Control-Allow-Origin "*"
+Header set Access-Control-Allow-Methods "GET, OPTIONS"
+
+# Cache control
+<FilesMatch "\.(jpg|jpeg|png|gif|pdf)$">
+    Header set Cache-Control "max-age=2592000, public"
+</FilesMatch>
 EOF
 
 echo -e "${GREEN}✓ Backend prepared${NC}"

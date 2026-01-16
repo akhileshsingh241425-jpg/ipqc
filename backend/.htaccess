@@ -12,6 +12,13 @@ PassengerStartupFile passenger_wsgi.py
 
 # Rewrite rules
 RewriteEngine On
+
+# Allow direct access to uploaded files and generated PDFs
+RewriteCond %{REQUEST_URI} ^/uploads/ [OR]
+RewriteCond %{REQUEST_URI} ^/generated_pdfs/
+RewriteRule ^ - [L]
+
+# Redirect all other requests to Flask app
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ passenger_wsgi.py [QSA,L]

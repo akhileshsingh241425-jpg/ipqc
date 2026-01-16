@@ -12,6 +12,7 @@ import GraphManager from './components/GraphManager';
 import UserManagement from './components/UserManagement';
 import FTRManagement from './components/FTRManagement';
 import AIAssistant from './components/AIAssistant';
+import COCManagementDashboard from './components/COCManagementDashboard';
 import Login from './components/Login';
 import './styles/Navbar.css';
 import './App.css';
@@ -354,6 +355,8 @@ function App() {
         return <UserManagement />;
       case 'coc-dashboard':
         return <COCDashboard />;
+      case 'coc-management':
+        return <COCManagementDashboard />;
       default:
         return <IPQCForm />;
     }
@@ -537,6 +540,14 @@ function App() {
           >
             <span className="icon">📋</span>
             {!sidebarCollapsed && <span className="label">COC Dashboard</span>}
+          </li>
+          <li 
+            className={activeSection === 'coc-management' ? 'active' : ''}
+            onClick={() => handleMenuItemClick('coc-management')}
+            title="COC Usage Tracking & FIFO Management"
+          >
+            <span className="icon">📦</span>
+            {!sidebarCollapsed && <span className="label">COC Management</span>}
           </li>
           <li 
             className="logout-btn"

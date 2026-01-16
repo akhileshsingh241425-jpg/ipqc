@@ -549,8 +549,12 @@ def upload_bom_material(company_id, record_id):
         company = request.form.get('company', '')
         shift = request.form.get('shift', 'day')  # day or night
         
+        # Debug logging
+        print(f"[BOM DEBUG] Received material: '{material_name}', lot: '{lot_batch_no}', company: '{company}', shift: '{shift}'")
+        
         if not material_name or material_name not in BOM_MATERIALS:
-            return jsonify({'error': 'Invalid material name'}), 400
+            print(f"[BOM DEBUG] Material validation failed - material_name: '{material_name}', in list: {material_name in BOM_MATERIALS if material_name else 'N/A'}")
+            return jsonify({'error': f'Invalid material name: {material_name}'}), 400
         
         # Find or create BOM material record
         bom_material = BomMaterial.query.filter_by(
@@ -634,7 +638,7 @@ def upload_bom_material(company_id, record_id):
         traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
-# Upload IPQC PDF for production record
+# Upload IPQC PDF for production record (with shift support)
 @company_bp.route('/api/companies/<int:company_id>/production/<int:record_id>/ipqc-pdf', methods=['POST'])
 def upload_ipqc_pdf(company_id, record_id):
     try:
@@ -660,24 +664,41 @@ def upload_ipqc_pdf(company_id, record_id):
         if not (file.filename.lower().endswith('.pdf')):
             return jsonify({'error': 'Only PDF files are allowed'}), 400
         
+        # Get shift parameter (default to 'day' for backward compatibility)
+        shift = request.form.get('shift', 'day').lower()
+        if shift not in ['day', 'night']:
+            return jsonify({'error': 'Invalid shift. Must be "day" or "night"'}), 400
+        
         # Create uploads/ipqc_pdfs directory
         upload_folder = os.path.join(current_app.config['UPLOAD_FOLDER'], 'ipqc_pdfs')
         os.makedirs(upload_folder, exist_ok=True)
         
-        # Generate unique filename
-        filename = secure_filename(f"{company_id}_{record_id}_ipqc_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
+        # Generate unique filename with shift
+        filename = secure_filename(f"{company_id}_{record_id}_{shift}_ipqc_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf")
         filepath = os.path.join(upload_folder, filename)
         
         # Save file
         file.save(filepath)
         
-        # Update record - store relative path from backend directory
-        record.ipqc_pdf = f"uploads/ipqc_pdfs/{filename}"
+        # Update record - store relative path from backend directory based on shift
+        relative_path = f"uploads/ipqc_pdfs/{filename}"
+        if shift == 'day':
+            record.day_ipqc_pdf = relative_path
+        else:  # night
+            record.night_ipqc_pdf = relative_path
+        
+        # Keep backward compatibility - set ipqc_pdf to day shift if this is day shift
+        if shift == 'day':
+            record.ipqc_pdf = relative_path
+        
         db.session.commit()
         
         return jsonify({
-            'message': 'IPQC PDF uploaded successfully',
-            'ipqcPdf': record.ipqc_pdf
+            'message': f'IPQC PDF uploaded successfully for {shift} shift',
+            'shift': shift,
+            'dayIpqcPdf': record.day_ipqc_pdf,
+            'nightIpqcPdf': record.night_ipqc_pdf,
+            'ipqcPdf': record.ipqc_pdf  # Deprecated but kept for compatibility
         }), 200
         
     except Exception as e:

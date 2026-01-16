@@ -505,7 +505,13 @@ function DailyReport() {
       // Auto-generate IPQC PDF if serial numbers are present
       if (record.serialNumberStart && record.serialNumberEnd && record.serialCount > 0) {
         try {
-          await autoGenerateIPQCPDF(record);
+          // Generate IPQC for both shifts if they have production
+          if (record.dayProduction > 0) {
+            await autoGenerateIPQCPDF(record, 'day');
+          }
+          if (record.nightProduction > 0) {
+            await autoGenerateIPQCPDF(record, 'night');
+          }
         } catch (error) {
           console.error('IPQC auto-generation error:', error);
         }
@@ -533,7 +539,7 @@ function DailyReport() {
     }
   };
 
-  const autoGenerateIPQCPDF = async (record) => {
+  const autoGenerateIPQCPDF = async (record, shift = 'day') => {
     try {
       const API_BASE_URL = getAPIBaseURL();
       
@@ -544,7 +550,7 @@ function DailyReport() {
       
       const ipqcData = {
         date: record.date || new Date().toISOString().split('T')[0],
-        shift: 'A',
+        shift: shift === 'day' ? 'A' : 'B',  // Map to shift codes
         customer_id: 'GSPL/IPQC/IPC/003',
         po_number: record.runningOrder || selectedCompany.currentRunningOrder || '',
         serial_prefix: serialPrefix,
@@ -556,14 +562,14 @@ function DailyReport() {
         golden_module_number: `GM-${new Date().getFullYear()}-001`
       };
       
-      console.log('Auto-generating IPQC PDF:', ipqcData);
+      console.log(`Auto-generating IPQC PDF for ${shift} shift:`, ipqcData);
       
       const response = await axios.post(`${API_BASE_URL}/api/ipqc/generate-pdf-only`, ipqcData, {
         responseType: 'blob'
       });
       
       // Save the PDF path to record (backend should return the saved path)
-      console.log('✅ IPQC PDF auto-generated successfully');
+      console.log(`✅ IPQC PDF auto-generated successfully for ${shift} shift`);
       return true;
     } catch (error) {
       console.error('Auto-generate IPQC error:', error);
@@ -1773,6 +1779,8 @@ function DailyReport() {
         const hasNewCompany = materialData.company && materialData.company.trim() !== '';
         const hasNewImages = materialData.images && materialData.images.length > 0;
         
+        console.log(`[BOM DEBUG] Material: ${material.name}, lotBatchNo: '${materialData?.lotBatchNo}', company: '${materialData?.company}', hasImages: ${hasNewImages}, will send: ${hasNewLotBatchNo || hasNewCompany || hasNewImages}`);
+        
         // Only send request if there's actual new data to save
         if (materialData && (hasNewLotBatchNo || hasNewCompany || hasNewImages)) {
           const formData = new FormData();
@@ -1804,6 +1812,7 @@ function DailyReport() {
       if (ipqcPdf) {
         const formData = new FormData();
         formData.append('pdf', ipqcPdf);
+        formData.append('shift', selectedShift);  // Send shift (day or night)
         await axios.post(
           `${API_BASE.replace('/api', '')}/api/companies/${selectedCompany.id}/production/${recordId}/ipqc-pdf`,
           formData,
@@ -2293,6 +2302,8 @@ function DailyReport() {
           lot_number: r.lotNumber || 'N/A',
           bom_materials: r.bomMaterials || [],
           ipqc_pdf: r.ipqcPdf || null,
+          day_ipqc_pdf: r.dayIpqcPdf || null,
+          night_ipqc_pdf: r.nightIpqcPdf || null,
           ftr_document: r.ftrDocument || null
         })),
         cell_stock: calculateCellStock(),
@@ -2387,6 +2398,8 @@ function DailyReport() {
           lot_number: r.lotNumber || 'N/A',
           bom_materials: r.bomMaterials || [],
           ipqc_pdf: r.ipqcPdf || null,
+          day_ipqc_pdf: r.dayIpqcPdf || null,
+          night_ipqc_pdf: r.nightIpqcPdf || null,
           ftr_document: r.ftrDocument || null
         })),
         rejections: sortedRejections.map((rej, index) => ({
@@ -3206,109 +3219,124 @@ function DailyReport() {
                         </td>
                         <td style={{backgroundColor: '#d1ecf122', textAlign: 'center'}}>
                           {(() => {
-                            // Show IPQC button if uploaded OR if serial numbers are present
-                            const hasUploadedIpqc = record.ipqcPdf;
+                            // Show separate buttons for day and night IPQC
+                            const hasDayIpqc = record.dayIpqcPdf;
+                            const hasNightIpqc = record.nightIpqcPdf;
                             const hasSerialData = record.serialNumberStart && record.serialNumberEnd && record.serialCount > 0;
                             
-                            if (hasUploadedIpqc) {
-                              return (
-                                <button
-                                  onClick={() => {
-                                    const path = record.ipqcPdf.startsWith('/') ? record.ipqcPdf : `/${record.ipqcPdf}`;
-                                    const url = record.ipqcPdf.startsWith('http') 
-                                      ? record.ipqcPdf 
-                                      : `${getAPIBaseURL()}${path}`;
-                                    window.open(url, '_blank', 'noopener,noreferrer');
-                                  }}
-                                  style={{
-                                    color: '#0066cc',
-                                    backgroundColor: 'transparent',
-                                    border: 'none',
-                                    textDecoration: 'underline',
-                                    fontSize: '11px',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '3px',
-                                    margin: '0 auto'
-                                  }}
-                                >
-                                  📄 View
-                                </button>
-                              );
-                            } else if (hasSerialData) {
-                              return (
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      setLoading(true);
-                                      await autoGenerateIPQCPDF(record);
-                                      
-                                      // Download the generated PDF
-                                      const API_BASE_URL = getAPIBaseURL();
-                                      const serialStart = record.serialNumberStart || '';
-                                      const serialPrefix = serialStart.replace(/\\d+$/, '');
-                                      const startNum = parseInt(serialStart.match(/\\d+$/)?.[0] || '1');
-                                      
-                                      const ipqcData = {
-                                        date: record.date || new Date().toISOString().split('T')[0],
-                                        shift: 'A',
-                                        customer_id: 'GSPL/IPQC/IPC/003',
-                                        po_number: record.runningOrder || selectedCompany.currentRunningOrder || '',
-                                        serial_prefix: serialPrefix,
-                                        serial_start: startNum,
-                                        module_count: record.serialCount || 1,
-                                        cell_manufacturer: 'Solar Space',
-                                        cell_efficiency: 25.7,
-                                        jb_cable_length: 1200,
-                                        golden_module_number: `GM-${new Date().getFullYear()}-001`
-                                      };
-                                      
-                                      const response = await axios.post(`${API_BASE_URL}/api/ipqc/generate-pdf-only`, ipqcData, {
-                                        responseType: 'blob'
-                                      });
-                                      
-                                      const url = window.URL.createObjectURL(new Blob([response.data]));
-                                      const link = document.createElement('a');
-                                      link.href = url;
-                                      link.setAttribute('download', `IPQC_${record.date}_${record.serialCount}modules.pdf`);
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                      window.URL.revokeObjectURL(url);
-                                      
-                                      setLoading(false);
-                                      alert('\u2705 IPQC PDF downloaded successfully!');
-                                    } catch (error) {
-                                      console.error('IPQC generation error:', error);
-                                      setLoading(false);
-                                      alert('\u274c Failed to generate IPQC: ' + (error.response?.data?.error || error.message));
-                                    }
-                                  }}
-                                  style={{
-                                    color: '#007bff',
-                                    backgroundColor: 'transparent',
-                                    border: 'none',
-                                    textDecoration: 'underline',
-                                    fontSize: '11px',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '3px',
-                                    margin: '0 auto'
-                                  }}
-                                  title={`Auto-generate IPQC (${record.serialCount} modules)`}
-                                >
-                                  \ud83d\udce5 View
-                                </button>
-                              );
-                            } else {
-                              return <span style={{color: '#999', fontSize: '10px'}}>-</span>;
-                            }
+                            return (
+                              <div style={{display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center'}}>
+                                {/* Day Shift IPQC */}
+                                {hasDayIpqc ? (
+                                  <button
+                                    onClick={() => {
+                                      const path = record.dayIpqcPdf.startsWith('/') ? record.dayIpqcPdf : `/${record.dayIpqcPdf}`;
+                                      const url = record.dayIpqcPdf.startsWith('http') 
+                                        ? record.dayIpqcPdf 
+                                        : `${getAPIBaseURL()}${path}`;
+                                      window.open(url, '_blank', 'noopener,noreferrer');
+                                    }}
+                                    style={{
+                                      color: '#FF9800',
+                                      backgroundColor: '#FFF3E0',
+                                      border: '1px solid #FF9800',
+                                      borderRadius: '3px',
+                                      fontSize: '10px',
+                                      fontWeight: 'bold',
+                                      cursor: 'pointer',
+                                      padding: '3px 8px',
+                                      width: '100%'
+                                    }}
+                                  >
+                                    🌞 Day
+                                  </button>
+                                ) : hasSerialData ? (
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        setLoading(true);
+                                        await autoGenerateIPQCPDF(record, 'day');
+                                        await refreshSelectedCompany();
+                                        setLoading(false);
+                                      } catch (error) {
+                                        console.error('IPQC generation error:', error);
+                                        setLoading(false);
+                                        alert('❌ Failed to generate IPQC');
+                                      }
+                                    }}
+                                    style={{
+                                      color: '#FF9800',
+                                      backgroundColor: 'transparent',
+                                      border: '1px dashed #FF9800',
+                                      borderRadius: '3px',
+                                      fontSize: '10px',
+                                      cursor: 'pointer',
+                                      padding: '3px 8px',
+                                      width: '100%'
+                                    }}
+                                  >
+                                    🌞 Gen
+                                  </button>
+                                ) : null}
+
+                                {/* Night Shift IPQC */}
+                                {hasNightIpqc ? (
+                                  <button
+                                    onClick={() => {
+                                      const path = record.nightIpqcPdf.startsWith('/') ? record.nightIpqcPdf : `/${record.nightIpqcPdf}`;
+                                      const url = record.nightIpqcPdf.startsWith('http') 
+                                        ? record.nightIpqcPdf 
+                                        : `${getAPIBaseURL()}${path}`;
+                                      window.open(url, '_blank', 'noopener,noreferrer');
+                                    }}
+                                    style={{
+                                      color: '#2196F3',
+                                      backgroundColor: '#E3F2FD',
+                                      border: '1px solid #2196F3',
+                                      borderRadius: '3px',
+                                      fontSize: '10px',
+                                      fontWeight: 'bold',
+                                      cursor: 'pointer',
+                                      padding: '3px 8px',
+                                      width: '100%'
+                                    }}
+                                  >
+                                    🌙 Night
+                                  </button>
+                                ) : hasSerialData ? (
+                                  <button
+                                    onClick={async () => {
+                                      try {
+                                        setLoading(true);
+                                        await autoGenerateIPQCPDF(record, 'night');
+                                        await refreshSelectedCompany();
+                                        setLoading(false);
+                                      } catch (error) {
+                                        console.error('IPQC generation error:', error);
+                                        setLoading(false);
+                                        alert('❌ Failed to generate IPQC');
+                                      }
+                                    }}
+                                    style={{
+                                      color: '#2196F3',
+                                      backgroundColor: 'transparent',
+                                      border: '1px dashed #2196F3',
+                                      borderRadius: '3px',
+                                      fontSize: '10px',
+                                      cursor: 'pointer',
+                                      padding: '3px 8px',
+                                      width: '100%'
+                                    }}
+                                  >
+                                    🌙 Gen
+                                  </button>
+                                ) : null}
+
+                                {!hasDayIpqc && !hasNightIpqc && !hasSerialData && (
+                                  <span style={{fontSize: '10px', color: '#999'}}>-</span>
+                                )}
+                              </div>
+                            );
                           })()}
                         </td>
                         <td style={{backgroundColor: '#d4edda22', textAlign: 'center'}}>

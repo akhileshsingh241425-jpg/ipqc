@@ -56,7 +56,9 @@ class ProductionRecord(db.Model):
     coc_materials = db.Column(db.Text, nullable=True)  # JSON array for COC linking (customer docs)
     cell_rejection_percent = db.Column(db.Float, default=0.0)
     module_rejection_percent = db.Column(db.Float, default=0.0)
-    ipqc_pdf = db.Column(db.String(500), nullable=True)
+    ipqc_pdf = db.Column(db.String(500), nullable=True)  # Deprecated - use day_ipqc_pdf / night_ipqc_pdf
+    day_ipqc_pdf = db.Column(db.String(500), nullable=True)  # IPQC PDF for day shift
+    night_ipqc_pdf = db.Column(db.String(500), nullable=True)  # IPQC PDF for night shift
     ftr_document = db.Column(db.String(500), nullable=True)
     ftr_uploaded = db.Column(db.Boolean, default=False)  # Track if FTR has been uploaded
     is_closed = db.Column(db.Boolean, default=False)
@@ -93,7 +95,9 @@ class ProductionRecord(db.Model):
             'cocMaterials': coc_materials_list,  # COC linking data (separate from BOM)
             'cellRejectionPercent': self.cell_rejection_percent,
             'moduleRejectionPercent': self.module_rejection_percent,
-            'ipqcPdf': self.ipqc_pdf,
+            'ipqcPdf': self.ipqc_pdf,  # Deprecated - kept for backward compatibility
+            'dayIpqcPdf': self.day_ipqc_pdf,
+            'nightIpqcPdf': self.night_ipqc_pdf,
             'ftrDocument': self.ftr_document,
             'ftrUploaded': self.ftr_uploaded,
             'isClosed': self.is_closed,
