@@ -5159,10 +5159,29 @@ function DailyReport() {
                 // Get records for current PDI
                 const pdiRecords = (selectedCompany?.productionRecords || []).filter(r => r.pdi === selectedPdiForDetails);
                 
+                // Calculate qty per unit based on material (BOM doesn't store qty, so calculate from production)
+                const getQtyMultiplier = (materialName) => {
+                  const mat = (materialName || '').toLowerCase();
+                  if (mat.includes('cell')) return 66;
+                  if (mat.includes('glass')) return 2;
+                  if (mat.includes('ribbon') && !mat.includes('busbar')) return 0.268;
+                  if (mat.includes('busbar')) return 0.08;
+                  if (mat.includes('flux')) return 0.02;
+                  if (mat.includes('epe')) return 5.2;
+                  if (mat.includes('frame') || mat.includes('aluminium')) return 1;
+                  if (mat.includes('sealent') || mat.includes('sealant')) return 0.35;
+                  if (mat.includes('potting')) return 0.021;
+                  if (mat.includes('junction') || mat.includes('jb')) return 1;
+                  if (mat.includes('rfid')) return 1;
+                  if (mat.includes('eva')) return 2;
+                  return 1;
+                };
+                
                 // Get companies used in Daily BOM for each material in this PDI (with detailed usage)
                 const getBomCompaniesForMaterial = (materialName, includeDetails = false) => {
                   const companies = new Map(); // company -> {qty, brand, details: []}
                   const matLower = materialName.toLowerCase();
+                  const qtyMultiplier = getQtyMultiplier(materialName);
                   
                   pdiRecords.forEach(record => {
                     if (record.bomMaterials && Array.isArray(record.bomMaterials)) {
@@ -5182,17 +5201,27 @@ function DailyReport() {
                         
                         if (isMatch && bom.company) {
                           const existing = companies.get(bom.company) || { qty: 0, brand: bom.company, details: [] };
-                          const usedQty = parseFloat(bom.usedQty || bom.qty || 0);
-                          existing.qty += usedQty;
+                          
+                          // Calculate qty from production (Day + Night) for this record
+                          const dayProd = record.dayProduction || 0;
+                          const nightProd = record.nightProduction || 0;
+                          // Use shift-specific production if available
+                          const shiftProd = bom.shift === 'day' ? dayProd : (bom.shift === 'night' ? nightProd : (dayProd + nightProd));
+                          const calculatedQty = Math.round(shiftProd * qtyMultiplier * 100) / 100;
+                          
+                          existing.qty += calculatedQty;
+                          
                           // Add detail record
                           if (includeDetails) {
                             existing.details.push({
                               date: record.date,
-                              pdiNo: record.pdiNumber,
+                              pdiNo: record.pdi || record.pdiNumber,
                               materialName: bom.materialName,
-                              qty: usedQty,
-                              lotNo: bom.lotNo || bom.lot_no || '-',
-                              invoiceNo: bom.invoiceNo || bom.invoice_no || '-'
+                              qty: calculatedQty,
+                              shift: bom.shift || 'both',
+                              production: shiftProd,
+                              lotNo: bom.lotBatchNo || bom.lotNo || '-',
+                              invoiceNo: bom.invoiceNo || '-'
                             });
                           }
                           companies.set(bom.company, existing);
@@ -5332,10 +5361,14 @@ function DailyReport() {
                         let reason = '';
                         let reasonType = 'bom'; // bom, fifo, none
                         if (matchingBom && matchingBom.details && matchingBom.details.length > 0) {
-                          const usageDetails = matchingBom.details.map(d => 
-                            `${d.date}: ${d.qty} ${material.includes('Cell') ? 'pcs' : 'units'}`
-                          ).slice(0, 3).join(' | ');
-                          reason = `✅ BOM MATCH: ${matchingBom.company} - Total ${Math.round(matchingBom.usedQty * 100) / 100} used (${usageDetails})`;
+                          const usageDetails = matchingBom.details.map(d => {
+                            const unit = material.toLowerCase().includes('cell') ? 'pcs' : 
+                                        (material.toLowerCase().includes('glass') || material.toLowerCase().includes('frame') || material.toLowerCase().includes('junction') || material.toLowerCase().includes('rfid')) ? 'pcs' : 'kg';
+                            return `${d.date} (${d.shift || 'both'}): ${d.production} modules → ${d.qty} ${unit}`;
+                          }).slice(0, 5).join(' | ');
+                          const totalUnit = material.toLowerCase().includes('cell') ? 'pcs' : 
+                                           (material.toLowerCase().includes('glass') || material.toLowerCase().includes('frame') || material.toLowerCase().includes('junction') || material.toLowerCase().includes('rfid')) ? 'pcs' : 'kg';
+                          reason = `✅ BOM MATCH: ${matchingBom.company} - Total ${Math.round(matchingBom.usedQty * 100) / 100} ${totalUnit} used [${usageDetails}]`;
                         } else if (suggestion.bomCompany) {
                           reason = `📦 Brand Match: ${suggestion.bomCompany} used ${suggestion.bomUsedQty || '-'} qty`;
                         } else {
