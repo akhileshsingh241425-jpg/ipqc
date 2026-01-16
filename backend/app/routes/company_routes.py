@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from app.models.database import db, Company, ProductionRecord, RejectedModule, BomMaterial
+from app.models.coc_tracking import COCUsageTracking
 
 company_bp = Blueprint('company', __name__)
 
@@ -623,6 +624,37 @@ def upload_bom_material(company_id, record_id):
                     existing_paths.append(new_image)
             
             bom_material.image_paths = json.dumps(existing_paths)
+        
+        # Track COC usage (if COC data is provided)
+        coc_invoice = request.form.get('cocInvoice', '')
+        coc_batch = request.form.get('cocBatch', '')
+        coc_qty_used = request.form.get('cocQtyUsed', '')
+        
+        if coc_invoice and coc_batch:
+            # Check if this COC usage already exists
+            existing_tracking = COCUsageTracking.query.filter_by(
+                company_id=company_id,
+                pdi_number=record.pdi_number,
+                shift=shift,
+                material_name=material_name,
+                coc_invoice_number=coc_invoice
+            ).first()
+            
+            if not existing_tracking:
+                # Create new COC tracking entry
+                coc_tracking = COCUsageTracking(
+                    company_id=company_id,
+                    pdi_number=record.pdi_number,
+                    shift=shift,
+                    material_name=material_name,
+                    coc_invoice_number=coc_invoice,
+                    coc_brand=coc_batch,  # Using batch as brand identifier
+                    coc_qty_used=float(coc_qty_used) if coc_qty_used else 0.0,
+                    coc_remaining_gap=0.0,  # Can be calculated from API
+                    usage_date=datetime.now()
+                )
+                db.session.add(coc_tracking)
+                print(f"[COC TRACKING] Added: {material_name} - Invoice: {coc_invoice} - PDI: {record.pdi_number}")
         
         db.session.commit()
         

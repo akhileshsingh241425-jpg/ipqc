@@ -10,6 +10,7 @@ const COCManagementDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [selectedPDI, setSelectedPDI] = useState(null);
   const [searchMaterial, setSearchMaterial] = useState('');
+  const [searchPDI, setSearchPDI] = useState('');  // For PDI-specific search
   const [companies, setCompanies] = useState([]);
   const [selectedCompany, setSelectedCompany] = useState(null);
 
@@ -77,12 +78,13 @@ const COCManagementDashboard = () => {
     }
   };
 
-  const loadFIFOSuggestions = async (materialNames) => {
+  const loadFIFOSuggestions = async (materialNames, pdiNumber = '') => {
     try {
       setLoading(true);
       const API_BASE = getAPIBase();
       const response = await axios.post(`${API_BASE}/coc-management/fifo-suggestions`, {
         company_id: selectedCompany.id,
+        pdi_number: pdiNumber,  // Add PDI filter
         material_names: materialNames,
         shift: 'day'
       });
@@ -97,7 +99,7 @@ const COCManagementDashboard = () => {
 
   const handleSearchFIFO = () => {
     if (searchMaterial.trim()) {
-      loadFIFOSuggestions([searchMaterial.trim()]);
+      loadFIFOSuggestions([searchMaterial.trim()], searchPDI.trim());
     }
   };
 
@@ -262,10 +264,24 @@ const COCManagementDashboard = () => {
               Get next available COC based on First-In-First-Out (FIFO) principle
             </p>
 
-            <div className="search-box" style={{marginBottom: '20px'}}>
+            <div className="search-box" style={{marginBottom: '20px', display: 'flex', gap: '10px'}}>
               <input
                 type="text"
-                placeholder="Enter material name (e.g., Solar Cell, EVA, Glass)"
+                placeholder="PDI Number (e.g., Lot 1, Lot 2)"
+                value={searchPDI}
+                onChange={(e) => setSearchPDI(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearchFIFO()}
+                style={{
+                  padding: '12px',
+                  fontSize: '14px',
+                  border: '2px solid #28a745',
+                  borderRadius: '5px',
+                  width: '250px'
+                }}
+              />
+              <input
+                type="text"
+                placeholder="Material name (e.g., Solar Cell, Glass)"
                 value={searchMaterial}
                 onChange={(e) => setSearchMaterial(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSearchFIFO()}
@@ -274,8 +290,7 @@ const COCManagementDashboard = () => {
                   fontSize: '14px',
                   border: '2px solid #007bff',
                   borderRadius: '5px',
-                  width: '400px',
-                  marginRight: '10px'
+                  width: '300px'
                 }}
               />
               <button 

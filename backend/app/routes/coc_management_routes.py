@@ -58,6 +58,7 @@ def get_fifo_suggestions():
     Get FIFO-based COC suggestions for materials
     Request body: {
         "company_id": 1,
+        "pdi_number": "PDI-2025-001", 
         "material_names": ["Solar Cell", "EVA", "Glass"],
         "shift": "day"
     }
@@ -65,6 +66,7 @@ def get_fifo_suggestions():
     try:
         data = request.get_json()
         company_id = data.get('company_id')
+        pdi_number = data.get('pdi_number', '')  # PDI number for filtering
         material_names = data.get('material_names', [])
         shift = data.get('shift', 'day')
         
@@ -106,13 +108,19 @@ def get_fifo_suggestions():
         # API returns array directly
         coc_documents = coc_data if isinstance(coc_data, list) else coc_data.get('data', [])
         
-        # Filter COC documents for this company only (using assigned_to field)
+        # Filter COC documents for this company AND PDI
         company_coc_documents = []
         for doc in coc_documents:
             if not isinstance(doc, dict):
                 continue
             doc_company = (doc.get('assigned_to', '') or '').strip()
-            if doc_company == api_company_name:
+            doc_pdi = (doc.get('pdi_no', '') or '').strip()
+            
+            # Match both company AND PDI
+            company_match = doc_company == api_company_name
+            pdi_match = (not pdi_number) or (doc_pdi == pdi_number)  # If no PDI provided, show all
+            
+            if company_match and pdi_match:
                 company_coc_documents.append(doc)
         
         suggestions = {}
