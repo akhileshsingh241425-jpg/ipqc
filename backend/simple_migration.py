@@ -37,7 +37,7 @@ def migrate():
                 AND column_name IN ('day_ipqc_pdf', 'night_ipqc_pdf')
             """, (DB_CONFIG['database'],))
             
-            existing_columns = [row['column_name'] for row in cursor.fetchall()]
+            existing_columns = [row['column_name'] if isinstance(row, dict) else row[0] for row in cursor.fetchall()]
             
             # Add day_ipqc_pdf if not exists
             if 'day_ipqc_pdf' not in existing_columns:
