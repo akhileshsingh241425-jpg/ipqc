@@ -5303,98 +5303,271 @@ function DailyReport() {
                   if (mat.includes('eva')) return actualProduction * 2;
                   return actualProduction * 1;
                 };
-                // Export COC Suggestion Report to Excel with detailed reasons
+                // Export COC Suggestion Report to Excel with detailed reasons - COLORFUL VERSION
                 const exportCocSuggestionReport = () => {
+                  // Import xlsx-js-style for colorful Excel
+                  const XLSXStyle = require('xlsx-js-style');
+                  
                   const reportData = [];
+                  const statusColors = []; // Track status for coloring
                   
                   MRP_MATERIALS.forEach(material => {
                     const assignedCocs = getAssignedCocs(material);
                     const fifoSuggestions = getFifoSuggestions(material);
-                    const bomCompanies = getBomCompaniesForMaterial(material, true); // Get with details
+                    const bomCompanies = getBomCompaniesForMaterial(material, true);
                     const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
                     const totalAssignedQty = assignedCocs.reduce((sum, coc) => sum + (parseFloat(coc.remaining_qty) || 0), 0);
                     const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
                     
-                    // If multiple suggestions, create row for each
                     if (fifoSuggestions.length > 0) {
                       fifoSuggestions.forEach((suggestion, idx) => {
-                        // Find matching BOM usage for this suggestion's brand
                         const matchingBom = bomCompanies.find(bc => 
                           (suggestion.brand || '').toLowerCase().includes(bc.company.toLowerCase()) ||
                           bc.company.toLowerCase().includes((suggestion.brand || '').toLowerCase().substring(0, 10))
                         );
                         
-                        // Build detailed reason
                         let reason = '';
+                        let reasonType = 'bom'; // bom, fifo, none
                         if (matchingBom && matchingBom.details && matchingBom.details.length > 0) {
                           const usageDetails = matchingBom.details.map(d => 
-                            `${d.date}: ${d.qty} ${material.includes('Cell') ? 'pcs' : 'kg/pcs'}`
-                          ).slice(0, 3).join(' | '); // Show max 3 records
-                          reason = `Daily BOM: ${matchingBom.company} - Total ${Math.round(matchingBom.usedQty * 100) / 100} used (${usageDetails})`;
+                            `${d.date}: ${d.qty} ${material.includes('Cell') ? 'pcs' : 'units'}`
+                          ).slice(0, 3).join(' | ');
+                          reason = `✅ BOM MATCH: ${matchingBom.company} - Total ${Math.round(matchingBom.usedQty * 100) / 100} used (${usageDetails})`;
                         } else if (suggestion.bomCompany) {
-                          reason = `BOM Brand Match: ${suggestion.bomCompany} used ${suggestion.bomUsedQty || '-'} qty`;
+                          reason = `📦 Brand Match: ${suggestion.bomCompany} used ${suggestion.bomUsedQty || '-'} qty`;
                         } else {
-                          reason = 'FIFO: Oldest available stock (no specific BOM match)';
+                          reason = '📅 FIFO: Oldest available stock (no specific BOM match)';
+                          reasonType = 'fifo';
                         }
                         
-                        reportData.push({
-                          'PDI No': selectedPdiForDetails,
-                          'Company': mrpCompanyName,
-                          'Material': material,
-                          'Suggestion #': idx + 1,
-                          'COC Invoice': suggestion.invoice_no || '-',
-                          'COC Lot/Batch': suggestion.lot_batch_no || '-',
-                          'COC Invoice Date': suggestion.invoice_date || '-',
-                          'COC Qty Available': suggestion.coc_qty || 0,
-                          'Brand/Company': suggestion.brand || '-',
-                          'Reason for Suggestion': reason,
-                          'BOM Brand Used': matchingBom?.company || suggestion.bomCompany || '-',
-                          'BOM Qty Used': matchingBom ? Math.round(matchingBom.usedQty * 100) / 100 : (suggestion.bomUsedQty || '-'),
-                          'Currently Assigned COC': assignedCocs.map(c => c.invoice_no).join(', ') || 'Not Assigned',
-                          'Assigned Remaining Qty': totalAssignedQty,
-                          'Production Used Qty': usedQty,
-                          'Gap (+ Surplus / - Shortage)': gap,
-                          'Status': gap >= 0 ? '✓ Sufficient' : '⚠ Need More'
-                        });
+                        reportData.push([
+                          selectedPdiForDetails,
+                          mrpCompanyName,
+                          material,
+                          idx + 1,
+                          suggestion.invoice_no || '-',
+                          suggestion.lot_batch_no || '-',
+                          suggestion.invoice_date || '-',
+                          suggestion.coc_qty || 0,
+                          suggestion.brand?.substring(0, 35) || '-',
+                          reason,
+                          matchingBom?.company || suggestion.bomCompany || '-',
+                          matchingBom ? Math.round(matchingBom.usedQty * 100) / 100 : (suggestion.bomUsedQty || 0),
+                          assignedCocs.map(c => c.invoice_no).join(', ') || 'Not Assigned',
+                          totalAssignedQty,
+                          usedQty,
+                          gap,
+                          gap >= 0 ? '✅ SUFFICIENT' : '⚠️ NEED MORE'
+                        ]);
+                        statusColors.push({ gap, reasonType, hasSuggestion: true });
                       });
                     } else {
-                      // No suggestions available
-                      reportData.push({
-                        'PDI No': selectedPdiForDetails,
-                        'Company': mrpCompanyName,
-                        'Material': material,
-                        'Suggestion #': '-',
-                        'COC Invoice': 'No suggestion available',
-                        'COC Lot/Batch': '-',
-                        'COC Invoice Date': '-',
-                        'COC Qty Available': 0,
-                        'Brand/Company': '-',
-                        'Reason for Suggestion': bomCompanies.length > 0 ? 
-                          `No matching COC found for brands: ${bomCompanies.map(b => b.company).join(', ')}` : 
-                          'No BOM data found, click "Load FIFO Suggestions" first',
-                        'BOM Brand Used': bomCompanies.map(b => b.company).join(', ') || '-',
-                        'BOM Qty Used': bomCompanies.reduce((sum, b) => sum + b.usedQty, 0) || '-',
-                        'Currently Assigned COC': assignedCocs.map(c => c.invoice_no).join(', ') || 'Not Assigned',
-                        'Assigned Remaining Qty': totalAssignedQty,
-                        'Production Used Qty': usedQty,
-                        'Gap (+ Surplus / - Shortage)': gap,
-                        'Status': gap >= 0 ? '✓ Sufficient' : '⚠ Need More'
-                      });
+                      reportData.push([
+                        selectedPdiForDetails,
+                        mrpCompanyName,
+                        material,
+                        '-',
+                        '❌ No suggestion',
+                        '-',
+                        '-',
+                        0,
+                        '-',
+                        bomCompanies.length > 0 ? 
+                          `⚠️ No matching COC for: ${bomCompanies.map(b => b.company).join(', ')}` : 
+                          '❌ No BOM data - Load FIFO Suggestions first',
+                        bomCompanies.map(b => b.company).join(', ') || '-',
+                        bomCompanies.reduce((sum, b) => sum + b.usedQty, 0) || 0,
+                        assignedCocs.map(c => c.invoice_no).join(', ') || 'Not Assigned',
+                        totalAssignedQty,
+                        usedQty,
+                        gap,
+                        gap >= 0 ? '✅ SUFFICIENT' : '⚠️ NEED MORE'
+                      ]);
+                      statusColors.push({ gap, reasonType: 'none', hasSuggestion: false });
                     }
                   });
                   
-                  const ws = XLSX.utils.json_to_sheet(reportData);
-                  const wb = XLSX.utils.book_new();
-                  XLSX.utils.book_append_sheet(wb, ws, 'COC Suggestions');
+                  // Create workbook with styling
+                  const wb = XLSXStyle.utils.book_new();
                   
-                  // Set column widths for all columns
-                  ws['!cols'] = [
-                    {wch: 10}, {wch: 15}, {wch: 15}, {wch: 12}, {wch: 18}, {wch: 18}, {wch: 14},
-                    {wch: 15}, {wch: 25}, {wch: 60}, {wch: 20}, {wch: 12}, {wch: 25}, {wch: 15},
-                    {wch: 15}, {wch: 20}, {wch: 15}
+                  // Headers
+                  const headers = [
+                    'PDI No', 'Company', 'Material', 'Suggestion #', 'COC Invoice', 
+                    'Lot/Batch', 'Invoice Date', 'Available Qty', 'Brand/Company',
+                    'REASON FOR SUGGESTION', 'BOM Brand', 'BOM Qty Used',
+                    'Currently Assigned', 'Assigned Qty', 'Production Used', 'Gap', 'Status'
                   ];
                   
-                  XLSX.writeFile(wb, `COC_Suggestions_${mrpCompanyName}_${selectedPdiForDetails}_${new Date().toISOString().split('T')[0]}.xlsx`);
+                  // Title row
+                  const titleRow = [`COC SUGGESTION REPORT - ${mrpCompanyName} - ${selectedPdiForDetails} - Generated: ${new Date().toLocaleDateString()}`];
+                  const emptyRow = [''];
+                  
+                  // Build worksheet data
+                  const wsData = [titleRow, emptyRow, headers, ...reportData];
+                  const ws = XLSXStyle.utils.aoa_to_sheet(wsData);
+                  
+                  // Merge title cell
+                  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 16 } }];
+                  
+                  // Style definitions
+                  const titleStyle = {
+                    font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } },
+                    fill: { fgColor: { rgb: '1976D2' } },
+                    alignment: { horizontal: 'center', vertical: 'center' }
+                  };
+                  
+                  const headerStyle = {
+                    font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
+                    fill: { fgColor: { rgb: '2E7D32' } },
+                    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                    border: {
+                      top: { style: 'thin', color: { rgb: '000000' } },
+                      bottom: { style: 'thin', color: { rgb: '000000' } },
+                      left: { style: 'thin', color: { rgb: '000000' } },
+                      right: { style: 'thin', color: { rgb: '000000' } }
+                    }
+                  };
+                  
+                  const reasonHeaderStyle = {
+                    font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
+                    fill: { fgColor: { rgb: 'FF6F00' } },
+                    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                    border: {
+                      top: { style: 'thin', color: { rgb: '000000' } },
+                      bottom: { style: 'thin', color: { rgb: '000000' } },
+                      left: { style: 'thin', color: { rgb: '000000' } },
+                      right: { style: 'thin', color: { rgb: '000000' } }
+                    }
+                  };
+                  
+                  // Apply title style
+                  if (ws['A1']) ws['A1'].s = titleStyle;
+                  
+                  // Apply header styles (row 3, index 2)
+                  const colLetters = 'ABCDEFGHIJKLMNOPQ'.split('');
+                  colLetters.forEach((col, idx) => {
+                    const cell = ws[`${col}3`];
+                    if (cell) {
+                      cell.s = idx === 9 ? reasonHeaderStyle : headerStyle; // Reason column orange
+                    }
+                  });
+                  
+                  // Apply data row styles
+                  reportData.forEach((row, rowIdx) => {
+                    const excelRow = rowIdx + 4; // Data starts at row 4
+                    const statusInfo = statusColors[rowIdx];
+                    
+                    // Base cell style
+                    const baseStyle = {
+                      alignment: { vertical: 'center', wrapText: true },
+                      border: {
+                        top: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                        bottom: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                        left: { style: 'thin', color: { rgb: 'CCCCCC' } },
+                        right: { style: 'thin', color: { rgb: 'CCCCCC' } }
+                      }
+                    };
+                    
+                    // Alternating row colors
+                    const rowBg = rowIdx % 2 === 0 ? 'F5F5F5' : 'FFFFFF';
+                    
+                    colLetters.forEach((col, colIdx) => {
+                      const cellRef = `${col}${excelRow}`;
+                      if (ws[cellRef]) {
+                        let cellStyle = { 
+                          ...baseStyle,
+                          fill: { fgColor: { rgb: rowBg } }
+                        };
+                        
+                        // Special styling for specific columns
+                        if (colIdx === 9) { // Reason column - highlight
+                          if (statusInfo.hasSuggestion) {
+                            cellStyle.fill = { fgColor: { rgb: 'E8F5E9' } }; // Light green
+                            cellStyle.font = { sz: 10, color: { rgb: '1B5E20' } };
+                          } else {
+                            cellStyle.fill = { fgColor: { rgb: 'FFEBEE' } }; // Light red
+                            cellStyle.font = { sz: 10, color: { rgb: 'B71C1C' } };
+                          }
+                        }
+                        
+                        if (colIdx === 15) { // Gap column
+                          if (statusInfo.gap >= 0) {
+                            cellStyle.fill = { fgColor: { rgb: 'C8E6C9' } }; // Green
+                            cellStyle.font = { bold: true, color: { rgb: '1B5E20' } };
+                          } else {
+                            cellStyle.fill = { fgColor: { rgb: 'FFCDD2' } }; // Red
+                            cellStyle.font = { bold: true, color: { rgb: 'B71C1C' } };
+                          }
+                        }
+                        
+                        if (colIdx === 16) { // Status column
+                          if (statusInfo.gap >= 0) {
+                            cellStyle.fill = { fgColor: { rgb: '4CAF50' } }; // Green
+                            cellStyle.font = { bold: true, color: { rgb: 'FFFFFF' } };
+                          } else {
+                            cellStyle.fill = { fgColor: { rgb: 'F44336' } }; // Red
+                            cellStyle.font = { bold: true, color: { rgb: 'FFFFFF' } };
+                          }
+                          cellStyle.alignment = { horizontal: 'center', vertical: 'center' };
+                        }
+                        
+                        if (colIdx === 4) { // Invoice column - blue
+                          cellStyle.font = { color: { rgb: '1565C0' }, bold: true };
+                        }
+                        
+                        if (colIdx === 2) { // Material column - bold
+                          cellStyle.font = { bold: true };
+                        }
+                        
+                        ws[cellRef].s = cellStyle;
+                      }
+                    });
+                  });
+                  
+                  // Column widths
+                  ws['!cols'] = [
+                    {wch: 10}, {wch: 12}, {wch: 14}, {wch: 10}, {wch: 16}, 
+                    {wch: 14}, {wch: 12}, {wch: 12}, {wch: 25},
+                    {wch: 55}, {wch: 18}, {wch: 10},
+                    {wch: 18}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 14}
+                  ];
+                  
+                  // Row height for header
+                  ws['!rows'] = [{ hpt: 30 }, { hpt: 15 }, { hpt: 35 }];
+                  
+                  XLSXStyle.utils.book_append_sheet(wb, ws, 'COC Suggestions');
+                  
+                  // Summary sheet
+                  const summaryData = [
+                    ['📊 SUMMARY REPORT'],
+                    [''],
+                    ['Category', 'Count', 'Status'],
+                    ['Total Materials', MRP_MATERIALS.length, ''],
+                    ['With Suggestions', statusColors.filter(s => s.hasSuggestion).length, '✅'],
+                    ['Without Suggestions', statusColors.filter(s => !s.hasSuggestion).length, '⚠️'],
+                    ['Sufficient Stock', statusColors.filter(s => s.gap >= 0).length, '✅'],
+                    ['Need More Stock', statusColors.filter(s => s.gap < 0).length, '❌'],
+                    [''],
+                    ['Legend:'],
+                    ['✅ BOM MATCH', 'COC suggested based on Daily BOM brand usage', ''],
+                    ['📅 FIFO', 'Oldest available COC (no specific brand match)', ''],
+                    ['❌ No suggestion', 'No matching COC found in system', '']
+                  ];
+                  
+                  const wsSummary = XLSXStyle.utils.aoa_to_sheet(summaryData);
+                  wsSummary['!cols'] = [{wch: 25}, {wch: 45}, {wch: 10}];
+                  
+                  // Style summary
+                  if (wsSummary['A1']) wsSummary['A1'].s = { 
+                    font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } },
+                    fill: { fgColor: { rgb: '673AB7' } },
+                    alignment: { horizontal: 'center' }
+                  };
+                  wsSummary['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
+                  
+                  XLSXStyle.utils.book_append_sheet(wb, wsSummary, 'Summary');
+                  
+                  XLSXStyle.writeFile(wb, `COC_Report_${mrpCompanyName}_${selectedPdiForDetails}_${new Date().toISOString().split('T')[0]}.xlsx`);
                 };
                 
                 return (
