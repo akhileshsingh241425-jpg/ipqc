@@ -2823,7 +2823,7 @@ function DailyReport() {
                             e.stopPropagation();
                             setSelectedPdiForDetails(pdiNumber);
                             setShowPdiDetailsModal(true);
-                            loadAssignedCocData(selectedCompany?.name);
+                            loadAssignedCocData(selectedCompany?.companyName);
                           }}
                           style={{
                             flex: '1 1 45%',
@@ -2928,7 +2928,7 @@ function DailyReport() {
                             e.stopPropagation();
                             setSelectedPdiForDetails(pdiNumber);
                             setShowPdiDetailsModal(true);
-                            loadAssignedCocData(selectedCompany?.name);
+                            loadAssignedCocData(selectedCompany?.companyName);
                           }}
                           style={{
                             flex: 1,
@@ -5093,7 +5093,7 @@ function DailyReport() {
                   'Larsen & Toubro': 'L&T',
                   'Rays Power': 'Rays Power'
                 };
-                const mrpCompanyName = companyMap[selectedCompany?.name] || selectedCompany?.name;
+                const mrpCompanyName = companyMap[selectedCompany?.companyName] || selectedCompany?.companyName;
                 
                 // Extract PDI number for matching (PDI-1 -> 1, PDI-2.2 -> 2.2)
                 const extractPdiNum = (pdi) => {
