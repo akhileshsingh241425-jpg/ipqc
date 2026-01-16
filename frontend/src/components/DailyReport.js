@@ -4887,7 +4887,8 @@ function DailyReport() {
               )}
 
               {/* OLD BOM Table - Hidden, using new MRP table below */}
-              {/* <h4 style={{marginTop: '20px', marginBottom: '15px'}}>📦 BOM Materials for Complete PDI:</h4>
+              {false && (
+                <><h4 style={{marginTop: '20px', marginBottom: '15px'}}>📦 BOM Materials for Complete PDI:</h4>
               {consolidatedBom.length > 0 ? (
                 <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px', border: '1px solid #dee2e6'}}>
                   <table style={{width: '100%', fontSize: '11px'}}>
@@ -5128,8 +5129,8 @@ function DailyReport() {
                 <p style={{color: '#999', fontStyle: 'italic', fontSize: '12px', padding: '20px', textAlign: 'center', backgroundColor: '#f8f9fa', borderRadius: '5px'}}>
                   No BOM materials uploaded yet. Use the "COC Link" button in the production table to add materials.
                 </p>
+              )}</>
               )}
-              */}
 
               {/* NEW: MRP Assigned COC Table - Shows ALL materials with FIFO suggestions */}
               <h4 style={{marginTop: '30px', marginBottom: '15px', color: '#1976d2'}}>📋 COC Status & FIFO Suggestions (MRP Data)</h4>
