@@ -5203,11 +5203,24 @@ function DailyReport() {
                           const existing = companies.get(bom.company) || { qty: 0, brand: bom.company, details: [] };
                           
                           // Calculate qty from production (Day + Night) for this record
-                          const dayProd = record.dayProduction || 0;
-                          const nightProd = record.nightProduction || 0;
-                          // Use shift-specific production if available
-                          const shiftProd = bom.shift === 'day' ? dayProd : (bom.shift === 'night' ? nightProd : (dayProd + nightProd));
+                          const dayProd = parseInt(record.dayProduction) || 0;
+                          const nightProd = parseInt(record.nightProduction) || 0;
+                          const totalProd = dayProd + nightProd;
+                          
+                          // Use shift-specific production if shift is specified, else use total
+                          let shiftProd = totalProd;
+                          let shiftName = 'total';
+                          if (bom.shift === 'day' && dayProd > 0) {
+                            shiftProd = dayProd;
+                            shiftName = 'day';
+                          } else if (bom.shift === 'night' && nightProd > 0) {
+                            shiftProd = nightProd;
+                            shiftName = 'night';
+                          }
+                          
                           const calculatedQty = Math.round(shiftProd * qtyMultiplier * 100) / 100;
+                          
+                          console.log(`[BOM DEBUG] Material: ${bom.materialName}, Company: ${bom.company}, Date: ${record.date}, Shift: ${bom.shift}, DayProd: ${dayProd}, NightProd: ${nightProd}, UsedProd: ${shiftProd}, Multiplier: ${qtyMultiplier}, CalcQty: ${calculatedQty}`);
                           
                           existing.qty += calculatedQty;
                           
@@ -5218,7 +5231,7 @@ function DailyReport() {
                               pdiNo: record.pdi || record.pdiNumber,
                               materialName: bom.materialName,
                               qty: calculatedQty,
-                              shift: bom.shift || 'both',
+                              shift: shiftName,
                               production: shiftProd,
                               lotNo: bom.lotBatchNo || bom.lotNo || '-',
                               invoiceNo: bom.invoiceNo || '-'
