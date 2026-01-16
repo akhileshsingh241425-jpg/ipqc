@@ -5084,6 +5084,128 @@ function DailyReport() {
                 </p>
               )}
 
+              {/* NEW: MRP Assigned COC Table - Shows data directly from MRP API */}
+              <h4 style={{marginTop: '30px', marginBottom: '15px', color: '#1976d2'}}>📋 Assigned COCs from MRP (Original Names)</h4>
+              {(() => {
+                // Map company name for MRP API matching
+                const companyMap = {
+                  'Sterlin and Wilson': 'S&W',
+                  'Larsen & Toubro': 'L&T',
+                  'Rays Power': 'Rays Power'
+                };
+                const mrpCompanyName = companyMap[selectedCompany?.name] || selectedCompany?.name;
+                
+                // Extract PDI number for matching (PDI-1 -> 1, PDI-2.2 -> 2.2)
+                const extractPdiNum = (pdi) => {
+                  const match = (pdi || '').match(/(\d+\.?\d*)/);
+                  return match ? match[1] : pdi;
+                };
+                const targetPdiNum = extractPdiNum(selectedPdiForDetails);
+                
+                // Filter COCs for this company and PDI from MRP data
+                const mrpCocsForThisPdi = assignedCocData.filter(coc => {
+                  const cocPdiNum = extractPdiNum(coc.pdi_no);
+                  const companyMatch = coc.assigned_to === mrpCompanyName;
+                  const pdiMatch = cocPdiNum === targetPdiNum;
+                  return companyMatch && pdiMatch;
+                });
+                
+                // Calculate used qty based on production for each material
+                const actualProduction = pdiProductionOverrides[selectedPdiForDetails] || totalProduction;
+                const getUsedQtyForMaterial = (materialName) => {
+                  const mat = (materialName || '').toLowerCase();
+                  if (mat.includes('solar cell') || mat.includes('cell')) return actualProduction * 66;
+                  if (mat.includes('glass')) return actualProduction * 2; // FRONT + BACK combined
+                  if (mat.includes('ribbon')) return actualProduction * (0.212 + 0.038 + 0.018); // All ribbon types combined
+                  if (mat.includes('flux')) return actualProduction * 0.02;
+                  if (mat.includes('epe')) return actualProduction * 5.2;
+                  if (mat.includes('aluminium') || mat.includes('frame')) return actualProduction * 1;
+                  if (mat.includes('sealent') || mat.includes('sealant')) return actualProduction * 0.35;
+                  if (mat.includes('jb potting') || mat.includes('potting')) return actualProduction * 0.021;
+                  if (mat.includes('junction') || mat.includes('box')) return actualProduction * 1;
+                  if (mat.includes('rfid')) return actualProduction * 1;
+                  if (mat.includes('eva')) return actualProduction * 2;
+                  return actualProduction * 1;
+                };
+                
+                if (mrpCocsForThisPdi.length === 0) {
+                  return (
+                    <p style={{color: '#999', fontStyle: 'italic', fontSize: '12px', padding: '20px', textAlign: 'center', backgroundColor: '#f8f9fa', borderRadius: '5px'}}>
+                      No COCs assigned for {mrpCompanyName} - {selectedPdiForDetails} (Lot {targetPdiNum}) in MRP system.
+                    </p>
+                  );
+                }
+                
+                return (
+                  <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '5px', border: '1px solid #2196F3'}}>
+                    <p style={{fontSize: '11px', color: '#666', marginBottom: '10px'}}>
+                      Showing {mrpCocsForThisPdi.length} COCs for <strong>{mrpCompanyName}</strong> - <strong>Lot {targetPdiNum}</strong> (matching {selectedPdiForDetails})
+                    </p>
+                    <table style={{width: '100%', fontSize: '11px'}}>
+                      <thead>
+                        <tr style={{backgroundColor: '#1976d2', color: 'white'}}>
+                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Material (MRP Name)</th>
+                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Invoice No</th>
+                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Lot/Batch</th>
+                          <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>COC Qty</th>
+                          <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>Used Qty</th>
+                          <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>Gap</th>
+                          <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>PDI</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mrpCocsForThisPdi.map((coc, idx) => {
+                          const usedQty = Math.round(getUsedQtyForMaterial(coc.material_name) * 100) / 100;
+                          const cocQty = parseFloat(coc.remaining_qty) || 0;
+                          const gap = Math.round((cocQty - usedQty) * 100) / 100;
+                          
+                          return (
+                            <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f5f5f5'}}>
+                              <td style={{padding: '8px', border: '1px solid #dee2e6', fontWeight: '500'}}>
+                                {coc.material_name}
+                              </td>
+                              <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
+                                {coc.invoice_no || '-'}
+                              </td>
+                              <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
+                                {coc.lot_batch_no || '-'}
+                              </td>
+                              <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500', color: '#1976d2'}}>
+                                {cocQty.toLocaleString()}
+                              </td>
+                              <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
+                                {usedQty.toLocaleString()}
+                              </td>
+                              <td style={{
+                                padding: '8px', 
+                                textAlign: 'center', 
+                                border: '1px solid #dee2e6',
+                                fontWeight: '500',
+                                color: gap >= 0 ? '#28a745' : '#dc3545'
+                              }}>
+                                {gap >= 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()}
+                              </td>
+                              <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
+                                <span style={{
+                                  padding: '3px 8px',
+                                  backgroundColor: '#28a745',
+                                  color: 'white',
+                                  borderRadius: '4px',
+                                  fontSize: '9px',
+                                  fontWeight: '500'
+                                }}>
+                                  {coc.pdi_no}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+
               <div style={{marginTop: '30px', padding: '20px', backgroundColor: '#e3f2fd', borderRadius: '5px', border: '2px solid #2196F3'}}>
                 <h4 style={{marginTop: 0}}>📑 Generate COC Report with PDFs</h4>
                 <p style={{fontSize: '13px', color: '#666'}}>Generate consolidated COC report with all PDF documents indexed</p>
