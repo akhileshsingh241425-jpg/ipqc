@@ -12,8 +12,8 @@ load_dotenv()
 # Database configuration
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', 'localhost'),
-    'user': os.getenv('DB_USER', 'root'),
-    'password': os.getenv('DB_PASSWORD', ''),
+    'user': os.getenv('DB_USER', 'rohit'),
+    'password': os.getenv('DB_PASSWORD', 'rohit0101'),
     'database': os.getenv('DB_NAME', 'pdi_database'),
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor

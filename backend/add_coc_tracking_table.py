@@ -10,8 +10,8 @@ load_dotenv()
 
 DB_CONFIG = {
     'host': os.getenv('MYSQL_HOST', 'localhost'),
-    'user': os.getenv('MYSQL_USER', 'root'),
-    'password': os.getenv('MYSQL_PASSWORD', ''),
+    'user': os.getenv('MYSQL_USER', 'rohit'),
+    'password': os.getenv('MYSQL_PASSWORD', 'rohit0101'),
     'database': os.getenv('MYSQL_DB', 'pdi_database'),
     'charset': 'utf8mb4',
     'cursorclass': pymysql.cursors.DictCursor
