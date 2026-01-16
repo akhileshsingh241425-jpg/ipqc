@@ -5153,6 +5153,42 @@ function DailyReport() {
                   'Aluminium Frame', 'Sealent', 'JB Potting', 'Junction Box', 'RFID', 'EVA'
                 ];
                 
+                // Get companies used in Daily BOM for each material in this PDI
+                const getBomCompaniesForMaterial = (materialName) => {
+                  const companies = new Map(); // company -> {qty, brand}
+                  const matLower = materialName.toLowerCase();
+                  
+                  pdiRecords.forEach(record => {
+                    if (record.bomMaterials && Array.isArray(record.bomMaterials)) {
+                      record.bomMaterials.forEach(bom => {
+                        const bomMatLower = (bom.materialName || '').toLowerCase();
+                        // Match material names
+                        const isMatch = bomMatLower.includes(matLower) || matLower.includes(bomMatLower) ||
+                          (matLower.includes('cell') && bomMatLower.includes('cell')) ||
+                          (matLower.includes('glass') && bomMatLower.includes('glass')) ||
+                          (matLower.includes('ribbon') && (bomMatLower.includes('ribbon') || bomMatLower.includes('busbar'))) ||
+                          (matLower.includes('flux') && bomMatLower.includes('flux')) ||
+                          (matLower.includes('epe') && bomMatLower.includes('epe')) ||
+                          (matLower.includes('frame') && (bomMatLower.includes('frame') || bomMatLower.includes('aluminium'))) ||
+                          (matLower.includes('sealent') && (bomMatLower.includes('sealent') || bomMatLower.includes('sealant'))) ||
+                          (matLower.includes('potting') && bomMatLower.includes('potting')) ||
+                          (matLower.includes('junction') && (bomMatLower.includes('junction') || bomMatLower.includes('jb')));
+                        
+                        if (isMatch && bom.company) {
+                          const existing = companies.get(bom.company) || { qty: 0, brand: bom.company };
+                          existing.qty += parseFloat(bom.usedQty || bom.qty || 0);
+                          companies.set(bom.company, existing);
+                        }
+                      });
+                    }
+                  });
+                  
+                  return Array.from(companies.entries()).map(([company, data]) => ({
+                    company,
+                    usedQty: data.qty
+                  }));
+                };
+                
                 // Filter assigned COCs for this company and PDI
                 const getAssignedCocs = (materialName) => {
                   return assignedCocData.filter(coc => {
@@ -5164,32 +5200,74 @@ function DailyReport() {
                   });
                 };
                 
-                // Get FIFO suggestion from Master COC data (oldest first, not already assigned)
-                const getFifoSuggestion = (materialName) => {
+                // Get FIFO suggestions from Master COC data (oldest first by invoice_date, matched by BOM company/brand)
+                const getFifoSuggestions = (materialName) => {
                   if (!masterCocData || masterCocData.length === 0) {
                     console.log('⚠️ No master COC data loaded');
-                    return null;
+                    return [];
                   }
+                  
+                  // Get companies used in BOM for this material
+                  const bomCompanies = getBomCompaniesForMaterial(materialName);
                   
                   // Get all assigned invoice numbers to exclude
                   const assignedInvoices = assignedCocData.map(c => c.invoice_no);
                   
-                  // Find first available COC for this material (FIFO - sorted by ID)
-                  const suggestion = masterCocData.find(coc => {
-                    const cocMaterial = (coc.material_name || '').toLowerCase();
-                    const targetMaterial = materialName.toLowerCase();
-                    const materialMatch = cocMaterial === targetMaterial || 
-                                         cocMaterial.includes(targetMaterial) ||
-                                         targetMaterial.includes(cocMaterial);
-                    const notAssigned = !assignedInvoices.includes(coc.invoice_no);
-                    const hasQty = parseFloat(coc.coc_qty || 0) > 0;  // Use coc_qty field
-                    return materialMatch && notAssigned && hasQty;
+                  // Sort master data by invoice_date (FIFO - oldest first)
+                  const sortedMasterData = [...masterCocData].sort((a, b) => {
+                    const dateA = new Date(a.invoice_date || a.entry_date || '2099-01-01');
+                    const dateB = new Date(b.invoice_date || b.entry_date || '2099-01-01');
+                    return dateA - dateB;
                   });
                   
-                  if (suggestion) {
-                    console.log(`✅ FIFO suggestion for ${materialName}:`, suggestion.invoice_no, 'Qty:', suggestion.coc_qty);
+                  const suggestions = [];
+                  
+                  // If BOM companies found, get suggestion for each company
+                  if (bomCompanies.length > 0) {
+                    bomCompanies.forEach(({ company, usedQty }) => {
+                      const suggestion = sortedMasterData.find(coc => {
+                        const cocMaterial = (coc.material_name || '').toLowerCase();
+                        const targetMaterial = materialName.toLowerCase();
+                        const materialMatch = cocMaterial === targetMaterial || 
+                                             cocMaterial.includes(targetMaterial) ||
+                                             targetMaterial.includes(cocMaterial);
+                        const notAssigned = !assignedInvoices.includes(coc.invoice_no);
+                        const hasQty = parseFloat(coc.coc_qty || 0) > 0;
+                        // Match brand/company from BOM
+                        const brandMatch = (coc.brand || '').toLowerCase().includes(company.toLowerCase()) ||
+                                          company.toLowerCase().includes((coc.brand || '').toLowerCase().substring(0, 10));
+                        return materialMatch && notAssigned && hasQty && brandMatch;
+                      });
+                      
+                      if (suggestion) {
+                        suggestions.push({
+                          ...suggestion,
+                          bomCompany: company,
+                          bomUsedQty: usedQty
+                        });
+                      }
+                    });
                   }
-                  return suggestion;
+                  
+                  // If no BOM-matched suggestions, get general FIFO suggestion
+                  if (suggestions.length === 0) {
+                    const generalSuggestion = sortedMasterData.find(coc => {
+                      const cocMaterial = (coc.material_name || '').toLowerCase();
+                      const targetMaterial = materialName.toLowerCase();
+                      const materialMatch = cocMaterial === targetMaterial || 
+                                           cocMaterial.includes(targetMaterial) ||
+                                           targetMaterial.includes(cocMaterial);
+                      const notAssigned = !assignedInvoices.includes(coc.invoice_no);
+                      const hasQty = parseFloat(coc.coc_qty || 0) > 0;
+                      return materialMatch && notAssigned && hasQty;
+                    });
+                    
+                    if (generalSuggestion) {
+                      suggestions.push(generalSuggestion);
+                    }
+                  }
+                  
+                  return suggestions;
                 };
                 
                 // Calculate used qty based on production for each material
@@ -5237,23 +5315,29 @@ function DailyReport() {
                       <tbody>
                         {MRP_MATERIALS.map((material, idx) => {
                           const assignedCocs = getAssignedCocs(material);
-                          const fifoSuggestion = getFifoSuggestion(material);
+                          const fifoSuggestions = getFifoSuggestions(material); // Now returns array
+                          const bomCompanies = getBomCompaniesForMaterial(material);
                           const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
                           
                           // Calculate total assigned qty - use coc_qty for assigned data
                           const totalAssignedQty = assignedCocs.reduce((sum, coc) => 
                             sum + (parseFloat(coc.coc_qty || coc.remaining_qty) || 0), 0);
-                          // Gap = Used - COC (positive means need more)
-                          const gap = Math.round((usedQty - totalAssignedQty) * 100) / 100;
+                          // Gap = COC - Used (positive = surplus, negative = shortage)
+                          const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
                           
                           const hasAssigned = assignedCocs.length > 0;
-                          const needsMore = gap > 0;
+                          const needsMore = gap < 0; // Negative gap means need more
                           
                           return (
                             <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f5f5f5'}}>
                               <td style={{padding: '8px', border: '1px solid #dee2e6', fontWeight: '500'}}>
                                 {material}
-                                {!hasAssigned && <span style={{color: '#dc3545', marginLeft: '5px'}}>⚠️</span>}
+                                {(!hasAssigned || needsMore) && <span style={{color: '#dc3545', marginLeft: '5px'}}>⚠️</span>}
+                                {bomCompanies.length > 0 && (
+                                  <div style={{fontSize: '8px', color: '#666', marginTop: '3px'}}>
+                                    BOM: {bomCompanies.map(c => c.company).join(', ')}
+                                  </div>
+                                )}
                               </td>
                               <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
                                 {hasAssigned ? (
@@ -5279,21 +5363,36 @@ function DailyReport() {
                                 textAlign: 'center', 
                                 border: '1px solid #dee2e6',
                                 fontWeight: '500',
-                                color: !hasAssigned ? '#999' : (gap <= 0 ? '#28a745' : '#dc3545')
+                                color: !hasAssigned ? '#999' : (gap >= 0 ? '#28a745' : '#dc3545')
                               }}>
-                                {hasAssigned ? (gap <= 0 ? `+${Math.abs(gap).toLocaleString()}` : `-${gap.toLocaleString()}`) : '-'}
+                                {hasAssigned ? gap.toLocaleString() : '-'}
                               </td>
                               <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
                                 {needsMore || !hasAssigned ? (
-                                  fifoSuggestion ? (
-                                    <div style={{backgroundColor: '#fff3cd', padding: '4px', borderRadius: '3px'}}>
-                                      <strong style={{color: '#856404'}}>💡 {fifoSuggestion.invoice_no}</strong>
-                                      <div style={{fontSize: '9px', color: '#666'}}>
-                                        Qty: {parseFloat(fifoSuggestion.coc_qty || 0).toLocaleString()}
-                                      </div>
-                                      <div style={{fontSize: '8px', color: '#999'}}>
-                                        {fifoSuggestion.lot_batch_no}
-                                      </div>
+                                  fifoSuggestions.length > 0 ? (
+                                    <div style={{maxHeight: '150px', overflowY: 'auto'}}>
+                                      {fifoSuggestions.map((suggestion, sIdx) => (
+                                        <div key={sIdx} style={{backgroundColor: '#fff3cd', padding: '6px', borderRadius: '3px', marginBottom: sIdx < fifoSuggestions.length - 1 ? '5px' : 0}}>
+                                          <strong style={{color: '#856404'}}>💡 {suggestion.invoice_no}</strong>
+                                          {suggestion.bomCompany && (
+                                            <span style={{fontSize: '8px', color: '#28a745', marginLeft: '5px'}}>
+                                              (for {suggestion.bomCompany})
+                                            </span>
+                                          )}
+                                          <div style={{fontSize: '9px', color: '#333', marginTop: '3px'}}>
+                                            <strong>Qty:</strong> {parseFloat(suggestion.coc_qty || 0).toLocaleString()}
+                                          </div>
+                                          <div style={{fontSize: '8px', color: '#666'}}>
+                                            <strong>Lot:</strong> {suggestion.lot_batch_no}
+                                          </div>
+                                          <div style={{fontSize: '8px', color: '#666'}}>
+                                            <strong>Date:</strong> {suggestion.invoice_date || suggestion.entry_date || '-'}
+                                          </div>
+                                          <div style={{fontSize: '8px', color: '#999', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={suggestion.brand}>
+                                            <strong>Brand:</strong> {suggestion.brand ? suggestion.brand.substring(0, 20) + (suggestion.brand.length > 20 ? '...' : '') : '-'}
+                                          </div>
+                                        </div>
+                                      ))}
                                     </div>
                                   ) : (
                                     <span style={{color: '#999', fontSize: '9px'}}>Click "Load FIFO" to see suggestions</span>
