@@ -1919,19 +1919,42 @@ function DailyReport() {
           
           // Find matching COCs for this material
           const matchingCocs = response.data.coc_data.filter(coc => {
-            const cocMaterial = (coc.material_name || '').toLowerCase();
+            const cocMaterial = (coc.material_name || '').toLowerCase().trim();
             
-            // Simple matching logic
+            // Improved matching logic with better aliases
             if (reqMaterial.includes('cell') && cocMaterial.includes('cell')) return true;
             if (reqMaterial.includes('eva') && cocMaterial.includes('eva')) return true;
-            if (reqMaterial.includes('glass') && cocMaterial.includes('glass')) return true;
-            if (reqMaterial.includes('ribbon') && (cocMaterial.includes('ribbon') || cocMaterial.includes('busbar'))) return true;
+            
+            // Glass: Handle FRONT/BACK variants
+            if ((reqMaterial.includes('glass') || reqMaterial.includes('front glass') || reqMaterial.includes('back glass')) 
+                && cocMaterial.includes('glass')) return true;
+            
+            // Ribbon: Handle all ribbon variants (0.26mm, 4.0x0.4, 6.0x0.4, BUSBAR)
+            if ((reqMaterial.includes('ribbon') || reqMaterial.includes('busbar')) 
+                && (cocMaterial.includes('ribbon') || cocMaterial.includes('busbar'))) return true;
+            
             if (reqMaterial.includes('flux') && cocMaterial.includes('flux')) return true;
-            if (reqMaterial.includes('epe') && cocMaterial.includes('epe')) return true;
-            if (reqMaterial.includes('frame') && cocMaterial.includes('frame')) return true;
-            if (reqMaterial.includes('sealent') && cocMaterial.includes('sealant')) return true;
-            if (reqMaterial.includes('potting') && cocMaterial.includes('potting')) return true;
-            if (reqMaterial.includes('junction') && cocMaterial.includes('junction')) return true;
+            
+            // EPE: Handle EPE FRONT variant
+            if ((reqMaterial.includes('epe') || reqMaterial.includes('epe front')) 
+                && cocMaterial.includes('epe')) return true;
+            
+            // Aluminium Frame: Handle LONG/SHORT variants
+            if ((reqMaterial.includes('frame') || reqMaterial.includes('aluminium') || reqMaterial.includes('aluminum')) 
+                && (cocMaterial.includes('frame') || cocMaterial.includes('aluminium') || cocMaterial.includes('aluminum'))) return true;
+            
+            // Sealent/Sealant spelling variants
+            if ((reqMaterial.includes('sealent') || reqMaterial.includes('sealant')) 
+                && (cocMaterial.includes('sealent') || cocMaterial.includes('sealant'))) return true;
+            
+            // JB Potting: Handle A/B/both variants
+            if ((reqMaterial.includes('potting') || reqMaterial.includes('jb')) 
+                && (cocMaterial.includes('potting') || cocMaterial.includes('jb'))) return true;
+            
+            // Junction Box
+            if ((reqMaterial.includes('junction') || reqMaterial.includes('box')) 
+                && (cocMaterial.includes('junction') || cocMaterial.includes('box'))) return true;
+            
             if (reqMaterial.includes('rfid') && cocMaterial.includes('rfid')) return true;
             
             return false;
