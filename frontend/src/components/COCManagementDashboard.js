@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import '../styles/COCManagement.css';
 
-const COCManagementDashboard = ({ selectedCompany }) => {
+const COCManagementDashboard = () => {
   const [activeTab, setActiveTab] = useState('pdi-usage'); // 'pdi-usage' | 'fifo-suggestions' | 'stats'
   const [pdiUsageData, setPdiUsageData] = useState([]);
   const [materialStats, setMaterialStats] = useState([]);
@@ -10,6 +10,8 @@ const COCManagementDashboard = ({ selectedCompany }) => {
   const [loading, setLoading] = useState(false);
   const [selectedPDI, setSelectedPDI] = useState(null);
   const [searchMaterial, setSearchMaterial] = useState('');
+  const [companies, setCompanies] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState(null);
 
   const getAPIBase = () => {
     if (window.location.hostname === 'pdi.gspl.cloud') {
@@ -19,12 +21,29 @@ const COCManagementDashboard = ({ selectedCompany }) => {
   };
 
   useEffect(() => {
+    loadCompanies();
+  }, []);
+
+  useEffect(() => {
     if (selectedCompany && activeTab === 'pdi-usage') {
       loadPDIUsage();
     } else if (selectedCompany && activeTab === 'stats') {
       loadMaterialStats();
     }
   }, [selectedCompany, activeTab]);
+
+  const loadCompanies = async () => {
+    try {
+      const API_BASE = getAPIBase();
+      const response = await axios.get(`${API_BASE}/companies`);
+      setCompanies(response.data || []);
+      if (response.data && response.data.length > 0) {
+        setSelectedCompany(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Failed to load companies:', error);
+    }
+  };
 
   const loadPDIUsage = async () => {
     try {
@@ -86,7 +105,7 @@ const COCManagementDashboard = ({ selectedCompany }) => {
     return (
       <div style={{padding: '40px', textAlign: 'center', color: '#999'}}>
         <h3>📋 COC Management Dashboard</h3>
-        <p>Please select a company to view COC usage and tracking</p>
+        <p>Loading companies...</p>
       </div>
     );
   }
@@ -94,8 +113,35 @@ const COCManagementDashboard = ({ selectedCompany }) => {
   return (
     <div className="coc-management-dashboard">
       <div className="dashboard-header">
-        <h2>📋 COC Management & Tracking</h2>
-        <p>{selectedCompany.companyName}</p>
+        <div>
+          <h2>📋 COC Management & Tracking</h2>
+          <p style={{fontSize: '14px', color: '#666', marginTop: '5px'}}>
+            Track COC usage and get FIFO suggestions for raw materials
+          </p>
+        </div>
+        <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+          <label style={{fontSize: '14px', color: '#666'}}>Company:</label>
+          <select 
+            value={selectedCompany?.id || ''} 
+            onChange={(e) => {
+              const company = companies.find(c => c.id === parseInt(e.target.value));
+              setSelectedCompany(company);
+            }}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '6px',
+              border: '1px solid #ddd',
+              fontSize: '14px',
+              minWidth: '150px'
+            }}
+          >
+            {companies.map(company => (
+              <option key={company.id} value={company.id}>
+                {company.companyName}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Tabs */}
