@@ -5156,6 +5156,9 @@ function DailyReport() {
                   'Aluminium Frame', 'Sealent', 'JB Potting', 'Junction Box', 'RFID', 'EVA'
                 ];
                 
+                // Get records for current PDI
+                const pdiRecords = (selectedCompany?.productionRecords || []).filter(r => r.pdi === selectedPdiForDetails);
+                
                 // Get companies used in Daily BOM for each material in this PDI (with detailed usage)
                 const getBomCompaniesForMaterial = (materialName, includeDetails = false) => {
                   const companies = new Map(); // company -> {qty, brand, details: []}
