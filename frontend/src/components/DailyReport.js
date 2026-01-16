@@ -222,27 +222,41 @@ function DailyReport() {
       const toDate = new Date().toISOString().split('T')[0];
       const fromDate = new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0]; // Last 180 days
       
-      console.log('📡 Fetching Master COC data from MRP API...');
+      console.log('📡 Fetching Master COC data from MRP API...', { from: fromDate, to: toDate });
       const response = await axios.post('https://umanmrp.in/api/coc_api.php', {
         from: fromDate,
         to: toDate
       });
       
+      console.log('📦 Master COC API Response:', response.data);
+      
+      // Handle different response formats
+      let cocData = [];
       if (response.data && Array.isArray(response.data)) {
+        cocData = response.data;
+      } else if (response.data && response.data.data && Array.isArray(response.data.data)) {
+        cocData = response.data.data;
+      } else if (response.data && response.data.status === 'success' && response.data.data) {
+        cocData = response.data.data;
+      }
+      
+      if (cocData.length > 0) {
+        // Log first record to see structure
+        console.log('📋 Sample COC record:', cocData[0]);
         // Sort by ID (FIFO - oldest first)
-        const sortedData = response.data.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+        const sortedData = cocData.sort((a, b) => parseInt(a.id || 0) - parseInt(b.id || 0));
         setMasterCocData(sortedData);
         console.log('✅ Loaded Master COC records:', sortedData.length);
-      } else if (response.data && response.data.data) {
-        const sortedData = response.data.data.sort((a, b) => parseInt(a.id) - parseInt(b.id));
-        setMasterCocData(sortedData);
-        console.log('✅ Loaded Master COC records:', sortedData.length);
+        alert(`✅ Loaded ${sortedData.length} COC records for suggestions!`);
       } else {
+        console.log('⚠️ No COC data found in response');
         setMasterCocData([]);
+        alert('⚠️ No COC data found from Master API');
       }
     } catch (error) {
-      console.error('Failed to load Master COC data:', error);
+      console.error('❌ Failed to load Master COC data:', error);
       setMasterCocData([]);
+      alert('❌ Failed to load Master COC data: ' + error.message);
     }
   };
 
@@ -5152,19 +5166,30 @@ function DailyReport() {
                 
                 // Get FIFO suggestion from Master COC data (oldest first, not already assigned)
                 const getFifoSuggestion = (materialName) => {
-                  if (!masterCocData || masterCocData.length === 0) return null;
+                  if (!masterCocData || masterCocData.length === 0) {
+                    console.log('⚠️ No master COC data loaded');
+                    return null;
+                  }
                   
                   // Get all assigned invoice numbers to exclude
                   const assignedInvoices = assignedCocData.map(c => c.invoice_no);
                   
                   // Find first available COC for this material (FIFO - sorted by ID)
-                  return masterCocData.find(coc => {
-                    const materialMatch = coc.material_name?.toLowerCase() === materialName.toLowerCase() ||
-                                         coc.product_name?.toLowerCase().includes(materialName.toLowerCase());
+                  const suggestion = masterCocData.find(coc => {
+                    const cocMaterial = (coc.material_name || '').toLowerCase();
+                    const targetMaterial = materialName.toLowerCase();
+                    const materialMatch = cocMaterial === targetMaterial || 
+                                         cocMaterial.includes(targetMaterial) ||
+                                         targetMaterial.includes(cocMaterial);
                     const notAssigned = !assignedInvoices.includes(coc.invoice_no);
-                    const hasQty = parseFloat(coc.quantity || coc.remaining_qty || 0) > 0;
+                    const hasQty = parseFloat(coc.coc_qty || 0) > 0;  // Use coc_qty field
                     return materialMatch && notAssigned && hasQty;
                   });
+                  
+                  if (suggestion) {
+                    console.log(`✅ FIFO suggestion for ${materialName}:`, suggestion.invoice_no, 'Qty:', suggestion.coc_qty);
+                  }
+                  return suggestion;
                 };
                 
                 // Calculate used qty based on production for each material
@@ -5215,13 +5240,14 @@ function DailyReport() {
                           const fifoSuggestion = getFifoSuggestion(material);
                           const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
                           
-                          // Calculate total assigned qty
+                          // Calculate total assigned qty - use coc_qty for assigned data
                           const totalAssignedQty = assignedCocs.reduce((sum, coc) => 
-                            sum + (parseFloat(coc.remaining_qty) || 0), 0);
-                          const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
+                            sum + (parseFloat(coc.coc_qty || coc.remaining_qty) || 0), 0);
+                          // Gap = Used - COC (positive means need more)
+                          const gap = Math.round((usedQty - totalAssignedQty) * 100) / 100;
                           
                           const hasAssigned = assignedCocs.length > 0;
-                          const needsMore = gap < 0;
+                          const needsMore = gap > 0;
                           
                           return (
                             <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f5f5f5'}}>
@@ -5253,17 +5279,20 @@ function DailyReport() {
                                 textAlign: 'center', 
                                 border: '1px solid #dee2e6',
                                 fontWeight: '500',
-                                color: !hasAssigned ? '#999' : (gap >= 0 ? '#28a745' : '#dc3545')
+                                color: !hasAssigned ? '#999' : (gap <= 0 ? '#28a745' : '#dc3545')
                               }}>
-                                {hasAssigned ? (gap >= 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()) : '-'}
+                                {hasAssigned ? (gap <= 0 ? `+${Math.abs(gap).toLocaleString()}` : `-${gap.toLocaleString()}`) : '-'}
                               </td>
                               <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
                                 {needsMore || !hasAssigned ? (
                                   fifoSuggestion ? (
                                     <div style={{backgroundColor: '#fff3cd', padding: '4px', borderRadius: '3px'}}>
-                                      <strong style={{color: '#856404'}}>💡 {fifoSuggestion.invoice_no || fifoSuggestion.invoice}</strong>
+                                      <strong style={{color: '#856404'}}>💡 {fifoSuggestion.invoice_no}</strong>
                                       <div style={{fontSize: '9px', color: '#666'}}>
-                                        Qty: {(fifoSuggestion.quantity || fifoSuggestion.remaining_qty || 0).toLocaleString()}
+                                        Qty: {parseFloat(fifoSuggestion.coc_qty || 0).toLocaleString()}
+                                      </div>
+                                      <div style={{fontSize: '8px', color: '#999'}}>
+                                        {fifoSuggestion.lot_batch_no}
                                       </div>
                                     </div>
                                   ) : (
