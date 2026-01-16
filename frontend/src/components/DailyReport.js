@@ -5155,9 +5155,9 @@ function DailyReport() {
                   'Aluminium Frame', 'Sealent', 'JB Potting', 'Junction Box', 'RFID', 'EVA'
                 ];
                 
-                // Get companies used in Daily BOM for each material in this PDI
-                const getBomCompaniesForMaterial = (materialName) => {
-                  const companies = new Map(); // company -> {qty, brand}
+                // Get companies used in Daily BOM for each material in this PDI (with detailed usage)
+                const getBomCompaniesForMaterial = (materialName, includeDetails = false) => {
+                  const companies = new Map(); // company -> {qty, brand, details: []}
                   const matLower = materialName.toLowerCase();
                   
                   pdiRecords.forEach(record => {
@@ -5177,8 +5177,20 @@ function DailyReport() {
                           (matLower.includes('junction') && (bomMatLower.includes('junction') || bomMatLower.includes('jb')));
                         
                         if (isMatch && bom.company) {
-                          const existing = companies.get(bom.company) || { qty: 0, brand: bom.company };
-                          existing.qty += parseFloat(bom.usedQty || bom.qty || 0);
+                          const existing = companies.get(bom.company) || { qty: 0, brand: bom.company, details: [] };
+                          const usedQty = parseFloat(bom.usedQty || bom.qty || 0);
+                          existing.qty += usedQty;
+                          // Add detail record
+                          if (includeDetails) {
+                            existing.details.push({
+                              date: record.date,
+                              pdiNo: record.pdiNumber,
+                              materialName: bom.materialName,
+                              qty: usedQty,
+                              lotNo: bom.lotNo || bom.lot_no || '-',
+                              invoiceNo: bom.invoiceNo || bom.invoice_no || '-'
+                            });
+                          }
                           companies.set(bom.company, existing);
                         }
                       });
@@ -5187,7 +5199,8 @@ function DailyReport() {
                   
                   return Array.from(companies.entries()).map(([company, data]) => ({
                     company,
-                    usedQty: data.qty
+                    usedQty: data.qty,
+                    details: data.details || []
                   }));
                 };
                 
@@ -5289,39 +5302,95 @@ function DailyReport() {
                   if (mat.includes('eva')) return actualProduction * 2;
                   return actualProduction * 1;
                 };
-                // Export COC Suggestion Report to Excel
+                // Export COC Suggestion Report to Excel with detailed reasons
                 const exportCocSuggestionReport = () => {
-                  const reportData = MRP_MATERIALS.map(material => {
+                  const reportData = [];
+                  
+                  MRP_MATERIALS.forEach(material => {
                     const assignedCocs = getAssignedCocs(material);
                     const fifoSuggestions = getFifoSuggestions(material);
-                    const bomCompanies = getBomCompaniesForMaterial(material);
+                    const bomCompanies = getBomCompaniesForMaterial(material, true); // Get with details
                     const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
                     const totalAssignedQty = assignedCocs.reduce((sum, coc) => sum + (parseFloat(coc.remaining_qty) || 0), 0);
                     const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
                     
-                    return {
-                      'Material': material,
-                      'BOM Companies': bomCompanies.map(c => c.company).join(', ') || '-',
-                      'Assigned COC': assignedCocs.map(c => `${c.invoice_no} (${c.lot_batch_no})`).join(', ') || 'Not Assigned',
-                      'COC Qty (Remaining)': totalAssignedQty || 0,
-                      'Used Qty': usedQty,
-                      'Gap': gap,
-                      'Status': gap >= 0 ? 'Sufficient' : 'Need More',
-                      'FIFO Suggestion Invoice': fifoSuggestions.map(s => s.invoice_no).join(', ') || '-',
-                      'FIFO Suggestion Qty': fifoSuggestions.map(s => s.coc_qty).join(', ') || '-',
-                      'FIFO Suggestion Brand': fifoSuggestions.map(s => s.brand?.substring(0, 30)).join(', ') || '-',
-                      'FIFO Suggestion Date': fifoSuggestions.map(s => s.invoice_date).join(', ') || '-'
-                    };
+                    // If multiple suggestions, create row for each
+                    if (fifoSuggestions.length > 0) {
+                      fifoSuggestions.forEach((suggestion, idx) => {
+                        // Find matching BOM usage for this suggestion's brand
+                        const matchingBom = bomCompanies.find(bc => 
+                          (suggestion.brand || '').toLowerCase().includes(bc.company.toLowerCase()) ||
+                          bc.company.toLowerCase().includes((suggestion.brand || '').toLowerCase().substring(0, 10))
+                        );
+                        
+                        // Build detailed reason
+                        let reason = '';
+                        if (matchingBom && matchingBom.details && matchingBom.details.length > 0) {
+                          const usageDetails = matchingBom.details.map(d => 
+                            `${d.date}: ${d.qty} ${material.includes('Cell') ? 'pcs' : 'kg/pcs'}`
+                          ).slice(0, 3).join(' | '); // Show max 3 records
+                          reason = `Daily BOM: ${matchingBom.company} - Total ${Math.round(matchingBom.usedQty * 100) / 100} used (${usageDetails})`;
+                        } else if (suggestion.bomCompany) {
+                          reason = `BOM Brand Match: ${suggestion.bomCompany} used ${suggestion.bomUsedQty || '-'} qty`;
+                        } else {
+                          reason = 'FIFO: Oldest available stock (no specific BOM match)';
+                        }
+                        
+                        reportData.push({
+                          'PDI No': selectedPdiForDetails,
+                          'Company': mrpCompanyName,
+                          'Material': material,
+                          'Suggestion #': idx + 1,
+                          'COC Invoice': suggestion.invoice_no || '-',
+                          'COC Lot/Batch': suggestion.lot_batch_no || '-',
+                          'COC Invoice Date': suggestion.invoice_date || '-',
+                          'COC Qty Available': suggestion.coc_qty || 0,
+                          'Brand/Company': suggestion.brand || '-',
+                          'Reason for Suggestion': reason,
+                          'BOM Brand Used': matchingBom?.company || suggestion.bomCompany || '-',
+                          'BOM Qty Used': matchingBom ? Math.round(matchingBom.usedQty * 100) / 100 : (suggestion.bomUsedQty || '-'),
+                          'Currently Assigned COC': assignedCocs.map(c => c.invoice_no).join(', ') || 'Not Assigned',
+                          'Assigned Remaining Qty': totalAssignedQty,
+                          'Production Used Qty': usedQty,
+                          'Gap (+ Surplus / - Shortage)': gap,
+                          'Status': gap >= 0 ? '✓ Sufficient' : '⚠ Need More'
+                        });
+                      });
+                    } else {
+                      // No suggestions available
+                      reportData.push({
+                        'PDI No': selectedPdiForDetails,
+                        'Company': mrpCompanyName,
+                        'Material': material,
+                        'Suggestion #': '-',
+                        'COC Invoice': 'No suggestion available',
+                        'COC Lot/Batch': '-',
+                        'COC Invoice Date': '-',
+                        'COC Qty Available': 0,
+                        'Brand/Company': '-',
+                        'Reason for Suggestion': bomCompanies.length > 0 ? 
+                          `No matching COC found for brands: ${bomCompanies.map(b => b.company).join(', ')}` : 
+                          'No BOM data found, click "Load FIFO Suggestions" first',
+                        'BOM Brand Used': bomCompanies.map(b => b.company).join(', ') || '-',
+                        'BOM Qty Used': bomCompanies.reduce((sum, b) => sum + b.usedQty, 0) || '-',
+                        'Currently Assigned COC': assignedCocs.map(c => c.invoice_no).join(', ') || 'Not Assigned',
+                        'Assigned Remaining Qty': totalAssignedQty,
+                        'Production Used Qty': usedQty,
+                        'Gap (+ Surplus / - Shortage)': gap,
+                        'Status': gap >= 0 ? '✓ Sufficient' : '⚠ Need More'
+                      });
+                    }
                   });
                   
                   const ws = XLSX.utils.json_to_sheet(reportData);
                   const wb = XLSX.utils.book_new();
                   XLSX.utils.book_append_sheet(wb, ws, 'COC Suggestions');
                   
-                  // Set column widths
+                  // Set column widths for all columns
                   ws['!cols'] = [
-                    {wch: 15}, {wch: 25}, {wch: 35}, {wch: 15}, {wch: 12}, {wch: 12}, {wch: 12},
-                    {wch: 25}, {wch: 15}, {wch: 30}, {wch: 12}
+                    {wch: 10}, {wch: 15}, {wch: 15}, {wch: 12}, {wch: 18}, {wch: 18}, {wch: 14},
+                    {wch: 15}, {wch: 25}, {wch: 60}, {wch: 20}, {wch: 12}, {wch: 25}, {wch: 15},
+                    {wch: 15}, {wch: 20}, {wch: 15}
                   ];
                   
                   XLSX.writeFile(wb, `COC_Suggestions_${mrpCompanyName}_${selectedPdiForDetails}_${new Date().toISOString().split('T')[0]}.xlsx`);
