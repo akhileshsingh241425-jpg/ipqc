@@ -134,6 +134,7 @@ function DailyReport() {
   const [showPdiDetailsModal, setShowPdiDetailsModal] = useState(false);
   const [selectedPdiForDetails, setSelectedPdiForDetails] = useState(null);
   const [assignedCocData, setAssignedCocData] = useState([]); // COC data from MRP assigned API
+  const [masterCocData, setMasterCocData] = useState([]); // All available COCs from Master API
   const [loadingAssignedCoc, setLoadingAssignedCoc] = useState(false);
   const [showMaterialCocModal, setShowMaterialCocModal] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
@@ -212,6 +213,36 @@ function DailyReport() {
       alert('Failed to load COC data from API');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Load Master COC data from MRP API (all available COCs for suggestion - FIFO)
+  const loadMasterCocData = async () => {
+    try {
+      const toDate = new Date().toISOString().split('T')[0];
+      const fromDate = new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0]; // Last 180 days
+      
+      console.log('📡 Fetching Master COC data from MRP API...');
+      const response = await axios.post('https://umanmrp.in/api/coc_api.php', {
+        from: fromDate,
+        to: toDate
+      });
+      
+      if (response.data && Array.isArray(response.data)) {
+        // Sort by ID (FIFO - oldest first)
+        const sortedData = response.data.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+        setMasterCocData(sortedData);
+        console.log('✅ Loaded Master COC records:', sortedData.length);
+      } else if (response.data && response.data.data) {
+        const sortedData = response.data.data.sort((a, b) => parseInt(a.id) - parseInt(b.id));
+        setMasterCocData(sortedData);
+        console.log('✅ Loaded Master COC records:', sortedData.length);
+      } else {
+        setMasterCocData([]);
+      }
+    } catch (error) {
+      console.error('Failed to load Master COC data:', error);
+      setMasterCocData([]);
     }
   };
 
@@ -5084,8 +5115,8 @@ function DailyReport() {
                 </p>
               )}
 
-              {/* NEW: MRP Assigned COC Table - Shows data directly from MRP API */}
-              <h4 style={{marginTop: '30px', marginBottom: '15px', color: '#1976d2'}}>📋 Assigned COCs from MRP (Original Names)</h4>
+              {/* NEW: MRP Assigned COC Table - Shows ALL materials with FIFO suggestions */}
+              <h4 style={{marginTop: '30px', marginBottom: '15px', color: '#1976d2'}}>📋 COC Status & FIFO Suggestions (MRP Data)</h4>
               {(() => {
                 // Map company name for MRP API matching
                 const companyMap = {
@@ -5102,21 +5133,47 @@ function DailyReport() {
                 };
                 const targetPdiNum = extractPdiNum(selectedPdiForDetails);
                 
-                // Filter COCs for this company and PDI from MRP data
-                const mrpCocsForThisPdi = assignedCocData.filter(coc => {
-                  const cocPdiNum = extractPdiNum(coc.pdi_no);
-                  const companyMatch = coc.assigned_to === mrpCompanyName;
-                  const pdiMatch = cocPdiNum === targetPdiNum;
-                  return companyMatch && pdiMatch;
-                });
+                // All MRP material names
+                const MRP_MATERIALS = [
+                  'Solar Cell', 'Glass', 'Ribbon', 'Flux', 'EPE', 
+                  'Aluminium Frame', 'Sealent', 'JB Potting', 'Junction Box', 'RFID', 'EVA'
+                ];
+                
+                // Filter assigned COCs for this company and PDI
+                const getAssignedCocs = (materialName) => {
+                  return assignedCocData.filter(coc => {
+                    const cocPdiNum = extractPdiNum(coc.pdi_no);
+                    const companyMatch = coc.assigned_to === mrpCompanyName;
+                    const pdiMatch = cocPdiNum === targetPdiNum;
+                    const materialMatch = coc.material_name?.toLowerCase() === materialName.toLowerCase();
+                    return companyMatch && pdiMatch && materialMatch;
+                  });
+                };
+                
+                // Get FIFO suggestion from Master COC data (oldest first, not already assigned)
+                const getFifoSuggestion = (materialName) => {
+                  if (!masterCocData || masterCocData.length === 0) return null;
+                  
+                  // Get all assigned invoice numbers to exclude
+                  const assignedInvoices = assignedCocData.map(c => c.invoice_no);
+                  
+                  // Find first available COC for this material (FIFO - sorted by ID)
+                  return masterCocData.find(coc => {
+                    const materialMatch = coc.material_name?.toLowerCase() === materialName.toLowerCase() ||
+                                         coc.product_name?.toLowerCase().includes(materialName.toLowerCase());
+                    const notAssigned = !assignedInvoices.includes(coc.invoice_no);
+                    const hasQty = parseFloat(coc.quantity || coc.remaining_qty || 0) > 0;
+                    return materialMatch && notAssigned && hasQty;
+                  });
+                };
                 
                 // Calculate used qty based on production for each material
                 const actualProduction = pdiProductionOverrides[selectedPdiForDetails] || totalProduction;
                 const getUsedQtyForMaterial = (materialName) => {
                   const mat = (materialName || '').toLowerCase();
                   if (mat.includes('solar cell') || mat.includes('cell')) return actualProduction * 66;
-                  if (mat.includes('glass')) return actualProduction * 2; // FRONT + BACK combined
-                  if (mat.includes('ribbon')) return actualProduction * (0.212 + 0.038 + 0.018); // All ribbon types combined
+                  if (mat.includes('glass')) return actualProduction * 2;
+                  if (mat.includes('ribbon')) return actualProduction * 0.268;
                   if (mat.includes('flux')) return actualProduction * 0.02;
                   if (mat.includes('epe')) return actualProduction * 5.2;
                   if (mat.includes('aluminium') || mat.includes('frame')) return actualProduction * 1;
@@ -5128,50 +5185,65 @@ function DailyReport() {
                   return actualProduction * 1;
                 };
                 
-                if (mrpCocsForThisPdi.length === 0) {
-                  return (
-                    <p style={{color: '#999', fontStyle: 'italic', fontSize: '12px', padding: '20px', textAlign: 'center', backgroundColor: '#f8f9fa', borderRadius: '5px'}}>
-                      No COCs assigned for {mrpCompanyName} - {selectedPdiForDetails} (Lot {targetPdiNum}) in MRP system.
-                    </p>
-                  );
-                }
-                
                 return (
                   <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '5px', border: '1px solid #2196F3'}}>
-                    <p style={{fontSize: '11px', color: '#666', marginBottom: '10px'}}>
-                      Showing {mrpCocsForThisPdi.length} COCs for <strong>{mrpCompanyName}</strong> - <strong>Lot {targetPdiNum}</strong> (matching {selectedPdiForDetails})
-                    </p>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                      <p style={{fontSize: '11px', color: '#666', margin: 0}}>
+                        <strong>{mrpCompanyName}</strong> - <strong>Lot {targetPdiNum}</strong> | Production: {actualProduction} modules
+                      </p>
+                      <button
+                        onClick={loadMasterCocData}
+                        style={{padding: '5px 10px', fontSize: '10px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                      >
+                        🔄 Load FIFO Suggestions
+                      </button>
+                    </div>
                     <table style={{width: '100%', fontSize: '11px'}}>
                       <thead>
                         <tr style={{backgroundColor: '#1976d2', color: 'white'}}>
-                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Material (MRP Name)</th>
-                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Invoice No</th>
-                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Lot/Batch</th>
+                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Material</th>
+                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Assigned COC</th>
                           <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>COC Qty</th>
                           <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>Used Qty</th>
                           <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>Gap</th>
-                          <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>PDI</th>
+                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>FIFO Suggestion</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {mrpCocsForThisPdi.map((coc, idx) => {
-                          const usedQty = Math.round(getUsedQtyForMaterial(coc.material_name) * 100) / 100;
-                          const cocQty = parseFloat(coc.remaining_qty) || 0;
-                          const gap = Math.round((cocQty - usedQty) * 100) / 100;
+                        {MRP_MATERIALS.map((material, idx) => {
+                          const assignedCocs = getAssignedCocs(material);
+                          const fifoSuggestion = getFifoSuggestion(material);
+                          const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
+                          
+                          // Calculate total assigned qty
+                          const totalAssignedQty = assignedCocs.reduce((sum, coc) => 
+                            sum + (parseFloat(coc.remaining_qty) || 0), 0);
+                          const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
+                          
+                          const hasAssigned = assignedCocs.length > 0;
+                          const needsMore = gap < 0;
                           
                           return (
                             <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f5f5f5'}}>
                               <td style={{padding: '8px', border: '1px solid #dee2e6', fontWeight: '500'}}>
-                                {coc.material_name}
+                                {material}
+                                {!hasAssigned && <span style={{color: '#dc3545', marginLeft: '5px'}}>⚠️</span>}
                               </td>
                               <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
-                                {coc.invoice_no || '-'}
+                                {hasAssigned ? (
+                                  <div>
+                                    {assignedCocs.map((coc, i) => (
+                                      <div key={i} style={{marginBottom: i < assignedCocs.length - 1 ? '3px' : 0}}>
+                                        {coc.invoice_no} <span style={{color: '#666'}}>({coc.lot_batch_no})</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span style={{color: '#999'}}>Not Assigned</span>
+                                )}
                               </td>
-                              <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
-                                {coc.lot_batch_no || '-'}
-                              </td>
-                              <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500', color: '#1976d2'}}>
-                                {cocQty.toLocaleString()}
+                              <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500', color: hasAssigned ? '#1976d2' : '#999'}}>
+                                {hasAssigned ? totalAssignedQty.toLocaleString() : '-'}
                               </td>
                               <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
                                 {usedQty.toLocaleString()}
@@ -5181,21 +5253,25 @@ function DailyReport() {
                                 textAlign: 'center', 
                                 border: '1px solid #dee2e6',
                                 fontWeight: '500',
-                                color: gap >= 0 ? '#28a745' : '#dc3545'
+                                color: !hasAssigned ? '#999' : (gap >= 0 ? '#28a745' : '#dc3545')
                               }}>
-                                {gap >= 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()}
+                                {hasAssigned ? (gap >= 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()) : '-'}
                               </td>
-                              <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                                <span style={{
-                                  padding: '3px 8px',
-                                  backgroundColor: '#28a745',
-                                  color: 'white',
-                                  borderRadius: '4px',
-                                  fontSize: '9px',
-                                  fontWeight: '500'
-                                }}>
-                                  {coc.pdi_no}
-                                </span>
+                              <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
+                                {needsMore || !hasAssigned ? (
+                                  fifoSuggestion ? (
+                                    <div style={{backgroundColor: '#fff3cd', padding: '4px', borderRadius: '3px'}}>
+                                      <strong style={{color: '#856404'}}>💡 {fifoSuggestion.invoice_no || fifoSuggestion.invoice}</strong>
+                                      <div style={{fontSize: '9px', color: '#666'}}>
+                                        Qty: {(fifoSuggestion.quantity || fifoSuggestion.remaining_qty || 0).toLocaleString()}
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <span style={{color: '#999', fontSize: '9px'}}>Click "Load FIFO" to see suggestions</span>
+                                  )
+                                ) : (
+                                  <span style={{color: '#28a745'}}>✅ Sufficient</span>
+                                )}
                               </td>
                             </tr>
                           );
