@@ -219,27 +219,40 @@ function DailyReport() {
   const loadAssignedCocData = async (companyName = '') => {
     try {
       setLoadingAssignedCoc(true);
-      const API_BASE_URL = getAPIBaseURL();
       
-      // Build query params
-      let url = `${API_BASE_URL}/api/coc/assigned`;
-      if (companyName) {
-        // Map company name for API filter
+      // Use MRP API directly for assigned COC data
+      const toDate = new Date().toISOString().split('T')[0];
+      const fromDate = new Date(Date.now() - 365*24*60*60*1000).toISOString().split('T')[0];
+      
+      console.log('📡 Fetching assigned COC data from MRP API...');
+      const response = await axios.post('https://umanmrp.in/a/get_assigned_coc_records.php', {
+        from: fromDate,
+        to: toDate
+      });
+      
+      if (response.data && response.data.status === 'success') {
+        // Map company name for filtering
         const companyMap = {
-          'Sterlin and Wilson': 's&w',
-          'Larsen & Toubro': 'l&t',
-          'Rays Power': 'rays'
+          'Sterlin and Wilson': 'S&W',
+          'Larsen & Toubro': 'L&T',
+          'Rays Power': 'Rays Power'
         };
-        const shortCompany = companyMap[companyName] || companyName.toLowerCase();
-        url += `?company=${shortCompany}`;
-      }
-      
-      console.log('📡 Fetching assigned COC data:', url);
-      const response = await axios.get(url);
-      
-      if (response.data && response.data.success) {
-        setAssignedCocData(response.data.data || []);
-        console.log('✅ Loaded assigned COC records:', response.data.count);
+        const mrpCompanyName = companyMap[companyName] || companyName;
+        
+        // Filter by company if provided
+        let filteredData = response.data.data || [];
+        if (companyName && mrpCompanyName) {
+          filteredData = filteredData.filter(coc => coc.assigned_to === mrpCompanyName);
+        }
+        
+        // Add company_short field for easier matching
+        filteredData = filteredData.map(coc => ({
+          ...coc,
+          company_short: coc.assigned_to?.toLowerCase() || ''
+        }));
+        
+        setAssignedCocData(filteredData);
+        console.log('✅ Loaded assigned COC records from MRP:', filteredData.length);
       } else {
         console.error('❌ Failed to load assigned COC data:', response.data?.error);
         setAssignedCocData([]);
@@ -1878,12 +1891,35 @@ function DailyReport() {
         };
       });
       
-      // Fetch available COCs from database
+      // Fetch available COCs from MRP API (correct endpoint with full data)
       const toDate = new Date().toISOString().split('T')[0];
       const fromDate = new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0];
-      const response = await axios.get(`${API_BASE}/coc/list?from_date=${fromDate}&to_date=${toDate}`);
       
-      if (response.data.success) {
+      const response = await axios.post('https://umanmrp.in/a/get_assigned_coc_records.php', {
+        from: fromDate,
+        to: toDate
+      });
+      
+      if (response.data && response.data.status === 'success') {
+        const cocData = response.data.data || [];
+        
+        // Map company name to MRP API format
+        const COMPANY_NAME_MAPPING = {
+          'Rays Power': 'Rays Power',
+          'Larsen & Toubro': 'L&T',
+          'Sterlin and Wilson': 'S&W'
+        };
+        const mrpCompanyName = COMPANY_NAME_MAPPING[selectedCompany.name] || selectedCompany.name;
+        
+        // Filter COCs by company (assigned_to) AND PDI number
+        const filteredCocData = cocData.filter(coc => {
+          const matchesCompany = coc.assigned_to === mrpCompanyName;
+          const matchesPdi = coc.pdi_no === pdiNumber || coc.pdi_no?.toString() === pdiNumber?.toString();
+          return matchesCompany && matchesPdi;
+        });
+        
+        console.log(`Filtered COCs for ${mrpCompanyName} PDI ${pdiNumber}:`, filteredCocData.length);
+        
         // Get actual BOM materials used in production (priority: production BOM > COC API)
         const actualBomMaterials = {};
         pdiRecords.forEach(record => {
@@ -1917,8 +1953,8 @@ function DailyReport() {
             }
           }
           
-          // Find matching COCs for this material
-          const matchingCocs = response.data.coc_data.filter(coc => {
+          // Find matching COCs for this material from FILTERED MRP API data
+          const matchingCocs = filteredCocData.filter(coc => {
             const cocMaterial = (coc.material_name || '').toLowerCase().trim();
             
             // Improved matching logic with better aliases
@@ -1960,21 +1996,18 @@ function DailyReport() {
             return false;
           });
           
-          // Group by company/brand - PRIORITIZE production BOM companies
+          // Group by company/brand using MRP API fields
           const cocsByCompany = {};
           matchingCocs.forEach(coc => {
-            const company = coc.brand || 'Unknown';
+            const company = coc.assigned_to || 'Unknown';  // Use assigned_to from MRP API
             if (!cocsByCompany[company]) {
               cocsByCompany[company] = [];
             }
             cocsByCompany[company].push({
               invoiceNo: coc.invoice_no,
-              cocQty: parseFloat(coc.coc_qty) || 0,
-              invoiceQty: parseFloat(coc.invoice_qty) || 0,
+              cocQty: parseFloat(coc.remaining_qty) || 0,  // Use remaining_qty from MRP API
               lotBatchNo: coc.lot_batch_no,
-              invoiceDate: coc.invoice_date,
-              cocDocUrl: coc.coc_document_url,
-              iqcDocUrl: coc.iqc_document_url,
+              pdiNo: coc.pdi_no,
               usedInProduction: companiesUsedInProduction && companiesUsedInProduction.has(company) ? '✅ USED' : ''
             });
           });
@@ -4461,22 +4494,20 @@ function DailyReport() {
         
         // Helper function to find assigned COC data from MRP API
         const getAssignedCocForMaterial = (materialName, pdiNumber) => {
-          // Normalize material name for matching
+          // Normalize material name for matching with MRP API material_name
           const normalizeMatName = (name) => {
             if (!name) return '';
             const lower = name.toLowerCase().trim();
-            // Map variations
+            // Map BOM table names to MRP API material names
             if (lower.includes('cell')) return 'solar cell';
-            if (lower.includes('front glass')) return 'glass';
-            if (lower.includes('back glass')) return 'glass';
-            if (lower.includes('ribbon') && lower.includes('busbar')) return 'ribbon';
-            if (lower.includes('ribbon')) return 'ribbon';
+            if (lower.includes('front glass') || lower.includes('back glass') || lower === 'glass') return 'glass';
+            if (lower.includes('ribbon') || lower.includes('busbar')) return 'ribbon';
             if (lower.includes('flux')) return 'flux';
             if (lower.includes('epe')) return 'epe';
             if (lower.includes('frame') || lower.includes('aluminium')) return 'aluminium frame';
             if (lower.includes('sealent') || lower.includes('sealant')) return 'sealent';
-            if (lower.includes('potting') || lower.includes('jb potting')) return 'jb potting';
-            if (lower.includes('junction') || lower.includes('jb')) return 'junction box';
+            if (lower.includes('potting')) return 'jb potting';
+            if (lower.includes('junction') || (lower.includes('jb') && !lower.includes('potting'))) return 'junction box';
             if (lower.includes('rfid')) return 'rfid';
             if (lower.includes('eva')) return 'eva';
             return lower;
@@ -4484,26 +4515,38 @@ function DailyReport() {
           
           const normalizedMaterial = normalizeMatName(materialName);
           
-          // Find matching records from assigned COC data - filter by company AND material AND PDI
+          // Map company name for MRP API matching
+          const companyMap = {
+            'Sterlin and Wilson': 'S&W',
+            'Larsen & Toubro': 'L&T',
+            'Rays Power': 'Rays Power'
+          };
+          const mrpCompanyName = companyMap[selectedCompany?.name] || selectedCompany?.name;
+          
+          // Filter by company, material, and PDI
           return assignedCocData.filter(rec => {
             const recMaterial = normalizeMatName(rec.material_name);
-            const recPdi = rec.pdi_no?.toLowerCase() || '';
-            const targetPdi = pdiNumber?.toLowerCase() || '';
-            const recCompany = (rec.company_short || rec.company || '').toLowerCase();
+            const recPdi = (rec.pdi_no || '').toLowerCase();
+            const targetPdi = (pdiNumber || '').toLowerCase();
             
-            // Match company
-            const companyMatch = currentCompanyShort && (
-              recCompany.includes(currentCompanyShort) || 
-              currentCompanyShort.includes(recCompany) ||
-              recCompany === currentCompanyShort
-            );
+            // Match company (assigned_to field from MRP API)
+            const companyMatch = rec.assigned_to === mrpCompanyName;
             
             // Match material
             const materialMatch = recMaterial === normalizedMaterial;
             
-            // Match PDI (Lot 1 = PDI-1, etc.)
-            const pdiNum = targetPdi.replace('pdi-', '');
-            const pdiMatch = recPdi.includes(pdiNum) || recPdi.includes(`lot ${pdiNum}`) || recPdi === `pdi-${pdiNum}`;
+            // Match PDI - flexible matching for Lot 1 = PDI-1, etc.
+            // Extract number from PDI format: "PDI-1" -> "1", "Lot 1" -> "1", "Lot 2.2" -> "2.2"
+            const extractPdiNum = (pdi) => {
+              const match = pdi.match(/(\d+\.?\d*)/);
+              return match ? match[1] : pdi;
+            };
+            const targetNum = extractPdiNum(targetPdi);
+            const recNum = extractPdiNum(recPdi);
+            const pdiMatch = targetNum === recNum || 
+                            recPdi.includes(`lot ${targetNum}`) || 
+                            recPdi.includes(`pdi-${targetNum}`) ||
+                            targetPdi.includes(`lot ${recNum}`);
             
             return companyMatch && materialMatch && pdiMatch;
           });
@@ -4918,26 +4961,6 @@ function DailyReport() {
                                 <span style={{fontWeight: '500', fontSize: '11px'}}>
                                   {bm.materialName}
                                 </span>
-                                {/* Show Add COC button if no COC assigned OR gap is negative */}
-                                {(!hasCocAssigned || gap < 0) && (
-                                  <button
-                                    onClick={() => handleMaterialClick(bm.materialName)}
-                                    style={{
-                                      padding: '3px 8px',
-                                      background: '#28a745',
-                                      color: 'white',
-                                      border: 'none',
-                                      borderRadius: '3px',
-                                      cursor: 'pointer',
-                                      fontSize: '9px',
-                                      fontWeight: 'bold',
-                                      whiteSpace: 'nowrap'
-                                    }}
-                                    title="Add COC for this material"
-                                  >
-                                    + Add COC
-                                  </button>
-                                )}
                               </div>
                             </td>
                             <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px', color: '#666'}}>
