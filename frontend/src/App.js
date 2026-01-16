@@ -356,7 +356,7 @@ function App() {
       case 'coc-dashboard':
         return <COCDashboard />;
       case 'coc-management':
-        return <COCManagementDashboard />;
+        return <COCManagementDashboard selectedCompany={selectedCompany} />;
       default:
         return <IPQCForm />;
     }
