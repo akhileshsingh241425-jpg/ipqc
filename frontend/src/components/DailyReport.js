@@ -4717,19 +4717,23 @@ function DailyReport() {
                           
                           // Track daily usage per efficiency
                           const dailyEffUsage = {};
-                          // Helper to normalize efficiency
-                          const normEff = (e) => e ? parseFloat(e).toFixed(1) : null;
+                          // Use already defined normEff from above
                           records.forEach(r => {
                             if (!dailyEffUsage[r.date]) {
                               dailyEffUsage[r.date] = {'25.4': 0, '25.5': 0, '25.6': 0, '25.7': 0, '25.8': 0};
                             }
-                            const dayEff = normEff(r.dayCellEfficiency);
-                            const nightEff = normEff(r.nightCellEfficiency);
-                            if (dayEff && dailyEffUsage[r.date].hasOwnProperty(dayEff)) {
-                              dailyEffUsage[r.date][dayEff] += (r.dayProduction || 0) * 66;
-                            }
-                            if (nightEff && dailyEffUsage[r.date].hasOwnProperty(nightEff)) {
-                              dailyEffUsage[r.date][nightEff] += (r.nightProduction || 0) * 66;
+                            const dayEff2 = normEff(r.dayCellEfficiency);
+                            const nightEff2 = normEff(r.nightCellEfficiency);
+                            const totalProd2 = (r.dayProduction || 0) + (r.nightProduction || 0);
+                            
+                            // Smart logic: if only one efficiency set, count total production
+                            if (dayEff2 && nightEff2) {
+                              if (dailyEffUsage[r.date].hasOwnProperty(dayEff2)) dailyEffUsage[r.date][dayEff2] += (r.dayProduction || 0) * 66;
+                              if (dailyEffUsage[r.date].hasOwnProperty(nightEff2)) dailyEffUsage[r.date][nightEff2] += (r.nightProduction || 0) * 66;
+                            } else if (dayEff2 && !nightEff2) {
+                              if (dailyEffUsage[r.date].hasOwnProperty(dayEff2)) dailyEffUsage[r.date][dayEff2] += totalProd2 * 66;
+                            } else if (!dayEff2 && nightEff2) {
+                              if (dailyEffUsage[r.date].hasOwnProperty(nightEff2)) dailyEffUsage[r.date][nightEff2] += totalProd2 * 66;
                             }
                           });
                           
