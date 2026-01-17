@@ -1321,26 +1321,26 @@ const FTRManagement = () => {
                     </tbody>
                   </table>
                 </div>
+                
+                <button 
+                  onClick={() => setShowMasterViewModal(false)}
+                  style={{
+                    marginTop: '15px',
+                    width: '100%',
+                    padding: '12px',
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Close
+                </button>
               </>
             )}
-
-            <button 
-              onClick={() => setShowMasterViewModal(false)}
-              style={{
-                marginTop: '15px',
-                width: '100%',
-                padding: '12px',
-                background: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600'
-              }}
-            >
-              Close
-            </button>
           </div>
         </div>
       )}
@@ -1442,26 +1442,26 @@ const FTRManagement = () => {
                     </tbody>
                   </table>
                 </div>
+                
+                <button 
+                  onClick={() => setShowRejectionViewModal(false)}
+                  style={{
+                    marginTop: '15px',
+                    width: '100%',
+                    padding: '12px',
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Close
+                </button>
               </>
             )}
-
-            <button 
-              onClick={() => setShowRejectionViewModal(false)}
-              style={{
-                marginTop: '15px',
-                width: '100%',
-                padding: '12px',
-                background: '#6c757d',
-                color: 'white',
-                border: 'none',
-                borderRadius: '8px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '600'
-              }}
-            >
-              Close
-            </button>
           </div>
         </div>
       )}
