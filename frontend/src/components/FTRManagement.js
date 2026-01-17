@@ -1290,7 +1290,7 @@ const FTRManagement = () => {
                   </div>
                 </div>
                 
-                <div style={{maxHeight: 'calc(85vh - 280px)', overflowY: 'auto', border: '2px solid #ddd', borderRadius: '8px'}>
+                <div style={{maxHeight: 'calc(85vh - 280px)', overflowY: 'auto', border: '2px solid #ddd', borderRadius: '8px'}}>
                   <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
                     <thead style={{position: 'sticky', top: 0, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', zIndex: 1}}>
                       <tr>
@@ -1428,7 +1428,7 @@ const FTRManagement = () => {
                   </div>
                 </div>
                 
-                <div style={{maxHeight: 'calc(85vh - 280px)', overflowY: 'auto', border: '2px solid #dc3545', borderRadius: '8px'}>
+                <div style={{maxHeight: 'calc(85vh - 280px)', overflowY: 'auto', border: '2px solid #dc3545', borderRadius: '8px'}}>
                   <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
                     <thead style={{position: 'sticky', top: 0, background: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', zIndex: 1}}>
                       <tr>
