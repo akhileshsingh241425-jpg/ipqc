@@ -3206,7 +3206,121 @@ function DailyReport() {
                     <span style={{fontSize: '11px', color: '#666', fontWeight: 'normal'}}>(Solar Cell Grade Wise Stock - Company Wise)</span>
                   </div>
                   <button
-                    onClick={() => exportCellEfficiencyReport()}
+                    onClick={() => {
+                      // Export Cell Efficiency Inventory Report to Excel
+                      const XLSXStyle = require('xlsx-js-style');
+                      
+                      const efficiencyGrades = ['25.0', '25.1', '25.2', '25.3', '25.4', '25.5', '25.6', '25.7', '25.8', '25.9', '26.0'];
+                      const cellEfficiencyReceived = selectedCompany?.cellEfficiencyReceived || {};
+                      const records = selectedCompany?.productionRecords || [];
+                      
+                      // Calculate used cells per efficiency from production records
+                      const usedByEfficiency = {};
+                      efficiencyGrades.forEach(eff => { usedByEfficiency[eff] = 0; });
+                      
+                      let totalRejectionPercent = 0;
+                      let recordsWithRejection = 0;
+                      
+                      records.forEach(record => {
+                        const dayEff = record.dayCellEfficiency ? String(record.dayCellEfficiency) : null;
+                        const nightEff = record.nightCellEfficiency ? String(record.nightCellEfficiency) : null;
+                        const dayProd = record.dayProduction || 0;
+                        const nightProd = record.nightProduction || 0;
+                        
+                        if (dayEff && usedByEfficiency.hasOwnProperty(dayEff)) {
+                          usedByEfficiency[dayEff] += dayProd * 66;
+                        }
+                        if (nightEff && usedByEfficiency.hasOwnProperty(nightEff)) {
+                          usedByEfficiency[nightEff] += nightProd * 66;
+                        }
+                        
+                        if (record.cellRejectionPercent > 0) {
+                          totalRejectionPercent += record.cellRejectionPercent;
+                          recordsWithRejection++;
+                        }
+                      });
+                      
+                      const avgRejectionPercent = recordsWithRejection > 0 
+                        ? (totalRejectionPercent / recordsWithRejection) 
+                        : 0;
+                      
+                      const wb = XLSXStyle.utils.book_new();
+                      const summaryData = [];
+                      
+                      summaryData.push(['CELL EFFICIENCY INVENTORY REPORT']);
+                      summaryData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
+                      summaryData.push([`Report Date: ${new Date().toLocaleDateString()}`]);
+                      summaryData.push([`Total Production Records: ${records.length}`]);
+                      summaryData.push([`Average Cell Rejection: ${avgRejectionPercent.toFixed(2)}%`]);
+                      summaryData.push([]);
+                      summaryData.push(['EFFICIENCY', 'TOTAL RECEIVED', 'TOTAL USED', 'REMAINING', 'AFTER REJECTION', 'EST. MODULES', 'STATUS']);
+                      
+                      let grandTotalReceived = 0, grandTotalUsed = 0, grandRemaining = 0, grandAfterRej = 0, grandEstModules = 0;
+                      
+                      efficiencyGrades.forEach(eff => {
+                        const effData = cellEfficiencyReceived[eff] || {};
+                        const totalReceived = typeof effData === 'object' 
+                          ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0) : (effData || 0);
+                        const used = usedByEfficiency[eff] || 0;
+                        const remaining = totalReceived - used;
+                        const afterRej = Math.floor(remaining * (1 - avgRejectionPercent / 100));
+                        const estModules = Math.floor(afterRej / 66);
+                        const status = remaining < 0 ? 'SHORTAGE' : remaining === 0 ? 'ZERO' : 'OK';
+                        
+                        grandTotalReceived += totalReceived;
+                        grandTotalUsed += used;
+                        grandRemaining += remaining;
+                        grandAfterRej += afterRej;
+                        grandEstModules += estModules;
+                        
+                        summaryData.push([`${eff}%`, totalReceived, used, remaining, afterRej, estModules, status]);
+                      });
+                      
+                      summaryData.push(['GRAND TOTAL', grandTotalReceived, grandTotalUsed, grandRemaining, grandAfterRej, grandEstModules, '']);
+                      
+                      const ws1 = XLSXStyle.utils.aoa_to_sheet(summaryData);
+                      const titleStyle = { font: { bold: true, sz: 18, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1565C0' } }, alignment: { horizontal: 'center' } };
+                      const headerStyle = { font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1976D2' } }, alignment: { horizontal: 'center' }, border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} } };
+                      
+                      if (ws1['A1']) ws1['A1'].s = titleStyle;
+                      ws1['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
+                      ['A7', 'B7', 'C7', 'D7', 'E7', 'F7', 'G7'].forEach(cell => { if (ws1[cell]) ws1[cell].s = headerStyle; });
+                      ws1['!cols'] = [{ wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 10 }];
+                      
+                      XLSXStyle.utils.book_append_sheet(wb, ws1, 'Summary');
+                      
+                      // Sheet 2: Company Details
+                      const detailData = [['COMPANY-WISE CELL RECEIVED'], [], ['EFFICIENCY', 'SUPPLIER', 'QTY RECEIVED']];
+                      efficiencyGrades.forEach(eff => {
+                        const effData = cellEfficiencyReceived[eff] || {};
+                        if (typeof effData === 'object' && Object.keys(effData).length > 0) {
+                          Object.entries(effData).forEach(([company, qty]) => { detailData.push([`${eff}%`, company, qty || 0]); });
+                        } else { detailData.push([`${eff}%`, '-', effData || 0]); }
+                      });
+                      const ws2 = XLSXStyle.utils.aoa_to_sheet(detailData);
+                      if (ws2['A1']) ws2['A1'].s = titleStyle;
+                      ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
+                      ['A3', 'B3', 'C3'].forEach(cell => { if (ws2[cell]) ws2[cell].s = headerStyle; });
+                      ws2['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 15 }];
+                      XLSXStyle.utils.book_append_sheet(wb, ws2, 'Company Details');
+                      
+                      // Sheet 3: Daily Usage
+                      const usageData = [['DAILY CELL USAGE'], [], ['DATE', 'DAY PROD', 'DAY EFF', 'DAY CELLS', 'NIGHT PROD', 'NIGHT EFF', 'NIGHT CELLS', 'TOTAL']];
+                      records.forEach(r => {
+                        const dayCells = (r.dayProduction || 0) * 66;
+                        const nightCells = (r.nightProduction || 0) * 66;
+                        usageData.push([r.date, r.dayProduction || 0, r.dayCellEfficiency || '-', dayCells, r.nightProduction || 0, r.nightCellEfficiency || '-', nightCells, dayCells + nightCells]);
+                      });
+                      const ws3 = XLSXStyle.utils.aoa_to_sheet(usageData);
+                      if (ws3['A1']) ws3['A1'].s = titleStyle;
+                      ws3['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+                      ['A3', 'B3', 'C3', 'D3', 'E3', 'F3', 'G3', 'H3'].forEach(cell => { if (ws3[cell]) ws3[cell].s = headerStyle; });
+                      ws3['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }];
+                      XLSXStyle.utils.book_append_sheet(wb, ws3, 'Daily Usage');
+                      
+                      const fileName = `Cell_Efficiency_Report_${selectedCompany?.companyName || 'Company'}_${new Date().toISOString().split('T')[0]}.xlsx`;
+                      XLSXStyle.writeFile(wb, fileName);
+                    }}
                     style={{
                       padding: '6px 12px',
                       backgroundColor: '#4caf50',
@@ -5726,237 +5840,6 @@ function DailyReport() {
                   if (mat.includes('rfid')) return actualProduction * 1;
                   if (mat.includes('eva')) return actualProduction * 2;
                   return actualProduction * 1;
-                };
-
-                // Export Cell Efficiency Inventory Report to Excel - COLORFUL VERSION
-                const exportCellEfficiencyReport = () => {
-                  const XLSXStyle = require('xlsx-js-style');
-                  
-                  const efficiencyGrades = ['25.0', '25.1', '25.2', '25.3', '25.4', '25.5', '25.6', '25.7', '25.8', '25.9', '26.0'];
-                  const cellEfficiencyReceived = selectedCompany?.cellEfficiencyReceived || {};
-                  
-                  // Calculate used cells per efficiency from production records
-                  const usedByEfficiency = {};
-                  efficiencyGrades.forEach(eff => { usedByEfficiency[eff] = 0; });
-                  
-                  let totalRejectionPercent = 0;
-                  let recordsWithRejection = 0;
-                  
-                  dateRecords.forEach(record => {
-                    const dayEff = record.dayCellEfficiency ? String(record.dayCellEfficiency) : null;
-                    const nightEff = record.nightCellEfficiency ? String(record.nightCellEfficiency) : null;
-                    const dayProd = record.dayProduction || 0;
-                    const nightProd = record.nightProduction || 0;
-                    
-                    if (dayEff && usedByEfficiency.hasOwnProperty(dayEff)) {
-                      usedByEfficiency[dayEff] += dayProd * 66;
-                    }
-                    if (nightEff && usedByEfficiency.hasOwnProperty(nightEff)) {
-                      usedByEfficiency[nightEff] += nightProd * 66;
-                    }
-                    
-                    if (record.cellRejectionPercent > 0) {
-                      totalRejectionPercent += record.cellRejectionPercent;
-                      recordsWithRejection++;
-                    }
-                  });
-                  
-                  const avgRejectionPercent = recordsWithRejection > 0 
-                    ? (totalRejectionPercent / recordsWithRejection) 
-                    : 0;
-                  
-                  // Build report data
-                  const wb = XLSXStyle.utils.book_new();
-                  
-                  // ===== SHEET 1: SUMMARY =====
-                  const summaryData = [];
-                  
-                  // Title
-                  summaryData.push(['CELL EFFICIENCY INVENTORY REPORT']);
-                  summaryData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
-                  summaryData.push([`Report Date: ${new Date().toLocaleDateString()}`]);
-                  summaryData.push([`Total Production Records: ${dateRecords.length}`]);
-                  summaryData.push([`Average Cell Rejection: ${avgRejectionPercent.toFixed(2)}%`]);
-                  summaryData.push([]);
-                  
-                  // Summary headers
-                  summaryData.push(['EFFICIENCY', 'TOTAL RECEIVED', 'TOTAL USED', 'REMAINING', 'AFTER REJECTION', 'EST. MODULES', 'STATUS']);
-                  
-                  let grandTotalReceived = 0;
-                  let grandTotalUsed = 0;
-                  let grandRemaining = 0;
-                  let grandAfterRej = 0;
-                  let grandEstModules = 0;
-                  
-                  efficiencyGrades.forEach(eff => {
-                    const effData = cellEfficiencyReceived[eff] || {};
-                    const totalReceived = typeof effData === 'object' 
-                      ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0)
-                      : (effData || 0);
-                    const used = usedByEfficiency[eff] || 0;
-                    const remaining = totalReceived - used;
-                    const afterRej = Math.floor(remaining * (1 - avgRejectionPercent / 100));
-                    const estModules = Math.floor(afterRej / 66);
-                    const status = remaining < 0 ? 'SHORTAGE' : remaining === 0 ? 'ZERO' : 'OK';
-                    
-                    grandTotalReceived += totalReceived;
-                    grandTotalUsed += used;
-                    grandRemaining += remaining;
-                    grandAfterRej += afterRej;
-                    grandEstModules += estModules;
-                    
-                    summaryData.push([`${eff}%`, totalReceived, used, remaining, afterRej, estModules, status]);
-                  });
-                  
-                  // Grand Total row
-                  summaryData.push(['GRAND TOTAL', grandTotalReceived, grandTotalUsed, grandRemaining, grandAfterRej, grandEstModules, '']);
-                  
-                  const ws1 = XLSXStyle.utils.aoa_to_sheet(summaryData);
-                  
-                  // Style for Summary Sheet
-                  const titleStyle = {
-                    font: { bold: true, sz: 18, color: { rgb: 'FFFFFF' } },
-                    fill: { fgColor: { rgb: '1565C0' } },
-                    alignment: { horizontal: 'center' }
-                  };
-                  const headerStyle = {
-                    font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' } },
-                    fill: { fgColor: { rgb: '1976D2' } },
-                    alignment: { horizontal: 'center' },
-                    border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
-                  };
-                  const dataStyle = {
-                    alignment: { horizontal: 'right' },
-                    border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
-                  };
-                  const totalStyle = {
-                    font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' } },
-                    fill: { fgColor: { rgb: '4CAF50' } },
-                    alignment: { horizontal: 'right' },
-                    border: { top: {style: 'medium'}, bottom: {style: 'medium'}, left: {style: 'thin'}, right: {style: 'thin'} }
-                  };
-                  
-                  // Apply styles
-                  if (ws1['A1']) ws1['A1'].s = titleStyle;
-                  ws1['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
-                  
-                  // Header row (row 7, index 6)
-                  ['A7', 'B7', 'C7', 'D7', 'E7', 'F7', 'G7'].forEach(cell => {
-                    if (ws1[cell]) ws1[cell].s = headerStyle;
-                  });
-                  
-                  // Data rows styling
-                  for (let i = 8; i <= 18; i++) {
-                    ['A', 'B', 'C', 'D', 'E', 'F'].forEach(col => {
-                      const cell = `${col}${i}`;
-                      if (ws1[cell]) {
-                        ws1[cell].s = dataStyle;
-                        // Color the remaining column based on value
-                        if (col === 'D') {
-                          const val = ws1[cell].v;
-                          if (val < 0) {
-                            ws1[cell].s = { ...dataStyle, fill: { fgColor: { rgb: 'FFCDD2' } }, font: { color: { rgb: 'D32F2F' }, bold: true } };
-                          } else if (val > 0) {
-                            ws1[cell].s = { ...dataStyle, fill: { fgColor: { rgb: 'C8E6C9' } }, font: { color: { rgb: '2E7D32' } } };
-                          }
-                        }
-                      }
-                    });
-                    // Status column coloring
-                    const statusCell = `G${i}`;
-                    if (ws1[statusCell]) {
-                      const status = ws1[statusCell].v;
-                      if (status === 'SHORTAGE') {
-                        ws1[statusCell].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: 'F44336' } }, alignment: { horizontal: 'center' } };
-                      } else if (status === 'OK') {
-                        ws1[statusCell].s = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '4CAF50' } }, alignment: { horizontal: 'center' } };
-                      } else {
-                        ws1[statusCell].s = { font: { bold: true }, fill: { fgColor: { rgb: 'FFC107' } }, alignment: { horizontal: 'center' } };
-                      }
-                    }
-                  }
-                  
-                  // Total row styling
-                  ['A19', 'B19', 'C19', 'D19', 'E19', 'F19', 'G19'].forEach(cell => {
-                    if (ws1[cell]) ws1[cell].s = totalStyle;
-                  });
-                  
-                  // Column widths
-                  ws1['!cols'] = [
-                    { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
-                  ];
-                  
-                  XLSXStyle.utils.book_append_sheet(wb, ws1, 'Summary');
-                  
-                  // ===== SHEET 2: COMPANY-WISE DETAILS =====
-                  const detailData = [];
-                  detailData.push(['COMPANY-WISE CELL EFFICIENCY RECEIVED DETAILS']);
-                  detailData.push([]);
-                  detailData.push(['EFFICIENCY', 'SUPPLIER/COMPANY', 'QTY RECEIVED', 'DATE ADDED']);
-                  
-                  efficiencyGrades.forEach(eff => {
-                    const effData = cellEfficiencyReceived[eff] || {};
-                    if (typeof effData === 'object' && Object.keys(effData).length > 0) {
-                      Object.entries(effData).forEach(([company, qty]) => {
-                        detailData.push([`${eff}%`, company, qty || 0, '-']);
-                      });
-                    } else {
-                      detailData.push([`${eff}%`, '-', effData || 0, '-']);
-                    }
-                  });
-                  
-                  const ws2 = XLSXStyle.utils.aoa_to_sheet(detailData);
-                  
-                  // Style detail sheet
-                  if (ws2['A1']) ws2['A1'].s = titleStyle;
-                  ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }];
-                  ['A3', 'B3', 'C3', 'D3'].forEach(cell => {
-                    if (ws2[cell]) ws2[cell].s = headerStyle;
-                  });
-                  ws2['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 15 }, { wch: 12 }];
-                  
-                  XLSXStyle.utils.book_append_sheet(wb, ws2, 'Company Details');
-                  
-                  // ===== SHEET 3: DAILY USAGE =====
-                  const usageData = [];
-                  usageData.push(['DAILY CELL USAGE BY EFFICIENCY']);
-                  usageData.push([]);
-                  usageData.push(['DATE', 'DAY PROD', 'DAY EFF %', 'DAY CELLS', 'NIGHT PROD', 'NIGHT EFF %', 'NIGHT CELLS', 'TOTAL CELLS']);
-                  
-                  dateRecords.forEach(record => {
-                    const dayProd = record.dayProduction || 0;
-                    const nightProd = record.nightProduction || 0;
-                    const dayEff = record.dayCellEfficiency || '-';
-                    const nightEff = record.nightCellEfficiency || '-';
-                    const dayCells = dayProd * 66;
-                    const nightCells = nightProd * 66;
-                    const totalCells = dayCells + nightCells;
-                    
-                    usageData.push([
-                      record.date,
-                      dayProd,
-                      dayEff !== '-' ? `${dayEff}%` : '-',
-                      dayCells,
-                      nightProd,
-                      nightEff !== '-' ? `${nightEff}%` : '-',
-                      nightCells,
-                      totalCells
-                    ]);
-                  });
-                  
-                  const ws3 = XLSXStyle.utils.aoa_to_sheet(usageData);
-                  if (ws3['A1']) ws3['A1'].s = titleStyle;
-                  ws3['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
-                  ['A3', 'B3', 'C3', 'D3', 'E3', 'F3', 'G3', 'H3'].forEach(cell => {
-                    if (ws3[cell]) ws3[cell].s = headerStyle;
-                  });
-                  ws3['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
-                  
-                  XLSXStyle.utils.book_append_sheet(wb, ws3, 'Daily Usage');
-                  
-                  // Download
-                  const fileName = `Cell_Efficiency_Report_${selectedCompany?.companyName || 'Company'}_${new Date().toISOString().split('T')[0]}.xlsx`;
-                  XLSXStyle.writeFile(wb, fileName);
                 };
 
                 // Export COC Suggestion Report to Excel with detailed reasons - COLORFUL VERSION
