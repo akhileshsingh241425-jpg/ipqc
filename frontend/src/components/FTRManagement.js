@@ -14,10 +14,22 @@ const FTRManagement = () => {
   const [showMasterFTRModal, setShowMasterFTRModal] = useState(false);
   const [selectedMasterFile, setSelectedMasterFile] = useState(null);
   
+  // View Master FTR Serials
+  const [showMasterViewModal, setShowMasterViewModal] = useState(false);
+  const [masterSerials, setMasterSerials] = useState([]);
+  const [masterSearchTerm, setMasterSearchTerm] = useState('');
+  const [loadingMasterView, setLoadingMasterView] = useState(false);
+  
   // Rejection upload (NEW)
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [uploadingRejection, setUploadingRejection] = useState(false);
   const [selectedRejectionFile, setSelectedRejectionFile] = useState(null);
+  
+  // View Rejection Serials
+  const [showRejectionViewModal, setShowRejectionViewModal] = useState(false);
+  const [rejectionSerials, setRejectionSerials] = useState([]);
+  const [rejectionSearchTerm, setRejectionSearchTerm] = useState('');
+  const [loadingRejectionView, setLoadingRejectionView] = useState(false);
   
   // PDI serial assignment
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -242,6 +254,50 @@ const FTRManagement = () => {
       alert('❌ Failed to upload Rejection data');
     } finally {
       setUploadingRejection(false);
+    }
+  };
+
+  // Load Master FTR Serials
+  const loadMasterSerials = async (search = '') => {
+    if (!selectedCompany) return;
+    
+    try {
+      setLoadingMasterView(true);
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.get(
+        `${API_BASE_URL}/api/ftr/master-serials/${selectedCompany.id}?search=${encodeURIComponent(search)}`
+      );
+      
+      if (response.data.success) {
+        setMasterSerials(response.data.serials);
+      }
+    } catch (error) {
+      console.error('Failed to load master serials:', error);
+      alert('❌ Failed to load master serials');
+    } finally {
+      setLoadingMasterView(false);
+    }
+  };
+
+  // Load Rejection Serials
+  const loadRejectionSerials = async (search = '') => {
+    if (!selectedCompany) return;
+    
+    try {
+      setLoadingRejectionView(true);
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.get(
+        `${API_BASE_URL}/api/ftr/rejection-serials/${selectedCompany.id}?search=${encodeURIComponent(search)}`
+      );
+      
+      if (response.data.success) {
+        setRejectionSerials(response.data.serials);
+      }
+    } catch (error) {
+      console.error('Failed to load rejection serials:', error);
+      alert('❌ Failed to load rejection serials');
+    } finally {
+      setLoadingRejectionView(false);
     }
   };
 
@@ -534,11 +590,33 @@ const FTRManagement = () => {
             </button>
             
             <button 
+              className="btn-view-master"
+              onClick={() => {
+                setShowMasterViewModal(true);
+                loadMasterSerials();
+              }}
+              style={{ background: 'linear-gradient(135deg, #17a2b8, #138496)' }}
+            >
+              👁️ View Master Serials
+            </button>
+            
+            <button 
               className="btn-rejection"
               onClick={() => setShowRejectionModal(true)}
               style={{ background: 'linear-gradient(135deg, #dc3545, #c82333)' }}
             >
               ❌ Upload Rejection
+            </button>
+            
+            <button 
+              className="btn-view-rejection"
+              onClick={() => {
+                setShowRejectionViewModal(true);
+                loadRejectionSerials();
+              }}
+              style={{ background: 'linear-gradient(135deg, #fd7e14, #e66a00)' }}
+            >
+              🔍 View Rejections
             </button>
             
             <button 
@@ -1140,6 +1218,219 @@ const FTRManagement = () => {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Master Serials Modal */}
+      {showMasterViewModal && (
+        <div className="modal-overlay" onClick={() => setShowMasterViewModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '80vh'}}>
+            <h2>👁️ Master FTR Serial Numbers - {selectedCompany?.companyName}</h2>
+            
+            {/* Search Bar */}
+            <div style={{marginBottom: '15px'}}>
+              <input 
+                type="text"
+                placeholder="🔍 Search serial number..."
+                value={masterSearchTerm}
+                onChange={(e) => {
+                  setMasterSearchTerm(e.target.value);
+                  loadMasterSerials(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #ddd',
+                  borderRadius: '8px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            {loadingMasterView ? (
+              <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
+            ) : (
+              <>
+                <p style={{marginBottom: '10px', fontWeight: 'bold'}}>
+                  Total: {masterSerials.length} serial numbers
+                </p>
+                
+                <div style={{maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '8px'}}>
+                  <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                    <thead style={{position: 'sticky', top: 0, background: '#f8f9fa', zIndex: 1}}>
+                      <tr>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>#</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Serial Number</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Pmax</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Binning</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Status</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Class</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>PDI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {masterSerials.map((serial, idx) => (
+                        <tr key={idx} style={{borderBottom: '1px solid #eee'}}>
+                          <td style={{padding: '8px'}}>{idx + 1}</td>
+                          <td style={{padding: '8px', fontFamily: 'monospace'}}>{serial.serial_number}</td>
+                          <td style={{padding: '8px'}}>{serial.pmax ? serial.pmax.toFixed(2) : '-'}</td>
+                          <td style={{padding: '8px'}}>{serial.binning || '-'}</td>
+                          <td style={{padding: '8px'}}>
+                            <span style={{
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              background: serial.status === 'available' ? '#d4edda' : serial.status === 'assigned' ? '#fff3cd' : '#f8d7da',
+                              color: serial.status === 'available' ? '#155724' : serial.status === 'assigned' ? '#856404' : '#721c24'
+                            }}>
+                              {serial.status}
+                            </span>
+                          </td>
+                          <td style={{padding: '8px'}}>
+                            <span style={{
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              background: serial.class_status === 'OK' ? '#d4edda' : '#f8d7da',
+                              color: serial.class_status === 'OK' ? '#155724' : '#721c24'
+                            }}>
+                              {serial.class_status}
+                            </span>
+                          </td>
+                          <td style={{padding: '8px'}}>{serial.pdi_number || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            <button 
+              onClick={() => setShowMasterViewModal(false)}
+              style={{
+                marginTop: '15px',
+                width: '100%',
+                padding: '12px',
+                background: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* View Rejection Serials Modal */}
+      {showRejectionViewModal && (
+        <div className="modal-overlay" onClick={() => setShowRejectionViewModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '80vh'}}>
+            <h2>🔍 Rejected Serial Numbers - {selectedCompany?.companyName}</h2>
+            
+            {/* Search Bar */}
+            <div style={{marginBottom: '15px'}}>
+              <input 
+                type="text"
+                placeholder="🔍 Search rejected serial number..."
+                value={rejectionSearchTerm}
+                onChange={(e) => {
+                  setRejectionSearchTerm(e.target.value);
+                  loadRejectionSerials(e.target.value);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #dc3545',
+                  borderRadius: '8px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            {loadingRejectionView ? (
+              <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
+            ) : (
+              <>
+                <p style={{marginBottom: '10px', fontWeight: 'bold', color: '#dc3545'}}>
+                  Total Rejections: {rejectionSerials.length}
+                </p>
+                
+                <div style={{maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '8px'}}>
+                  <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                    <thead style={{position: 'sticky', top: 0, background: '#f8f9fa', zIndex: 1}}>
+                      <tr>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>#</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Serial Number</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Pmax</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Binning</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Status</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Class</th>
+                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Upload Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rejectionSerials.map((serial, idx) => (
+                        <tr key={idx} style={{borderBottom: '1px solid #eee', background: '#fff5f5'}}>
+                          <td style={{padding: '8px'}}>{idx + 1}</td>
+                          <td style={{padding: '8px', fontFamily: 'monospace'}}>{serial.serial_number}</td>
+                          <td style={{padding: '8px'}}>{serial.pmax ? serial.pmax.toFixed(2) : '-'}</td>
+                          <td style={{padding: '8px'}}>{serial.binning || '-'}</td>
+                          <td style={{padding: '8px'}}>
+                            <span style={{
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              background: '#f8d7da',
+                              color: '#721c24'
+                            }}>
+                              {serial.status}
+                            </span>
+                          </td>
+                          <td style={{padding: '8px'}}>
+                            <span style={{
+                              padding: '3px 8px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              background: '#f8d7da',
+                              color: '#721c24',
+                              fontWeight: 'bold'
+                            }}>
+                              {serial.class_status}
+                            </span>
+                          </td>
+                          <td style={{padding: '8px', fontSize: '12px'}}>{serial.upload_date || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
+            <button 
+              onClick={() => setShowRejectionViewModal(false)}
+              style={{
+                marginTop: '15px',
+                width: '100%',
+                padding: '12px',
+                background: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '600'
+              }}
+            >
+              Close
+            </button>
           </div>
         </div>
       )}

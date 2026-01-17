@@ -425,3 +425,102 @@ def upload_packed_modules():
         db.session.rollback()
         print(f"Error uploading packed modules: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@ftr_management_bp.route('/ftr/master-serials/<int:company_id>', methods=['GET'])
+def get_master_serials(company_id):
+    """Get all master FTR serial numbers for a company with search"""
+    try:
+        search = request.args.get('search', '').strip()
+        
+        query = """
+            SELECT serial_number, pmax, binning, class_status, status, 
+                   pdi_number, upload_date, file_name
+            FROM ftr_master_serials
+            WHERE company_id = :company_id
+        """
+        
+        if search:
+            query += " AND serial_number LIKE :search"
+            result = db.session.execute(
+                text(query + " ORDER BY upload_date DESC LIMIT 1000"),
+                {'company_id': company_id, 'search': f'%{search}%'}
+            ).fetchall()
+        else:
+            result = db.session.execute(
+                text(query + " ORDER BY upload_date DESC LIMIT 1000"),
+                {'company_id': company_id}
+            ).fetchall()
+        
+        serials = []
+        for row in result:
+            serials.append({
+                'serial_number': row[0],
+                'pmax': float(row[1]) if row[1] else None,
+                'binning': row[2],
+                'class_status': row[3],
+                'status': row[4],
+                'pdi_number': row[5],
+                'upload_date': row[6].strftime('%Y-%m-%d %H:%M:%S') if row[6] else None,
+                'file_name': row[7]
+            })
+        
+        return jsonify({
+            'success': True,
+            'serials': serials,
+            'total': len(serials)
+        })
+        
+    except Exception as e:
+        print(f"Error fetching master serials: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@ftr_management_bp.route('/ftr/rejection-serials/<int:company_id>', methods=['GET'])
+def get_rejection_serials(company_id):
+    """Get all rejection serial numbers for a company with search"""
+    try:
+        search = request.args.get('search', '').strip()
+        
+        query = """
+            SELECT serial_number, pmax, binning, class_status, status, 
+                   pdi_number, upload_date, file_name
+            FROM ftr_master_serials
+            WHERE company_id = :company_id
+            AND class_status IN ('REJECTED', 'REJECT', 'REJ', 'NG', 'FAIL')
+        """
+        
+        if search:
+            query += " AND serial_number LIKE :search"
+            result = db.session.execute(
+                text(query + " ORDER BY upload_date DESC LIMIT 1000"),
+                {'company_id': company_id, 'search': f'%{search}%'}
+            ).fetchall()
+        else:
+            result = db.session.execute(
+                text(query + " ORDER BY upload_date DESC LIMIT 1000"),
+                {'company_id': company_id}
+            ).fetchall()
+        
+        serials = []
+        for row in result:
+            serials.append({
+                'serial_number': row[0],
+                'pmax': float(row[1]) if row[1] else None,
+                'binning': row[2],
+                'class_status': row[3],
+                'status': row[4],
+                'pdi_number': row[5],
+                'upload_date': row[6].strftime('%Y-%m-%d %H:%M:%S') if row[6] else None,
+                'file_name': row[7]
+            })
+        
+        return jsonify({
+            'success': True,
+            'serials': serials,
+            'total': len(serials)
+        })
+        
+    except Exception as e:
+        print(f"Error fetching rejection serials: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
