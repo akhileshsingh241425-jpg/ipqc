@@ -6744,7 +6744,7 @@ function DailyReport() {
                   alert(`✅ SUCCESS!\n\n${qty.toLocaleString()} Cells Added!\n\nEfficiency: ${eff}%\nSupplier: ${company}\nDate: ${cellReceivedForm.receiveDate}`);
                   
                   // Refresh data
-                  fetchCompanies();
+                  loadCompanies();
                   
                   // Reset form for next entry
                   setCellReceivedForm({
