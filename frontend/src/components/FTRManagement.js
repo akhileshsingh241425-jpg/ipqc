@@ -1225,8 +1225,8 @@ const FTRManagement = () => {
       {/* View Master Serials Modal */}
       {showMasterViewModal && (
         <div className="modal-overlay" onClick={() => setShowMasterViewModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '80vh'}}>
-            <h2>👁️ Master FTR Serial Numbers - {selectedCompany?.companyName}</h2>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '95%', width: '1400px', maxHeight: '90vh', height: '85vh'}}>
+            <h2 style={{marginBottom: '20px', fontSize: '24px'}}>👁️ Master FTR Serial Numbers - {selectedCompany?.companyName}</h2>
             
             {/* Search Bar */}
             <div style={{marginBottom: '15px'}}>
@@ -1252,53 +1252,70 @@ const FTRManagement = () => {
               <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
             ) : (
               <>
-                <p style={{marginBottom: '10px', fontWeight: 'bold'}}>
-                  Total: {masterSerials.length} serial numbers
-                </p>
+                <div style={{display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap'}}>
+                  <div style={{flex: 1, padding: '12px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#2e7d32'}}>{masterSerials.length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Total Serials</div>
+                  </div>
+                  <div style={{flex: 1, padding: '12px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#1565c0'}}>{masterSerials.filter(s => s.status === 'available').length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Available</div>
+                  </div>
+                  <div style={{flex: 1, padding: '12px', background: '#fff3e0', borderRadius: '8px', textAlign: 'center'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#e65100'}}>{masterSerials.filter(s => s.status === 'assigned').length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Assigned</div>
+                  </div>
+                  <div style={{flex: 1, padding: '12px', background: '#ffebee', borderRadius: '8px', textAlign: 'center'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#c62828'}}>{masterSerials.filter(s => s.status === 'used').length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Used</div>
+                  </div>
+                </div>
                 
-                <div style={{maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '8px'}}>
-                  <table style={{width: '100%', borderCollapse: 'collapse'}}>
-                    <thead style={{position: 'sticky', top: 0, background: '#f8f9fa', zIndex: 1}}>
+                <div style={{maxHeight: 'calc(85vh - 280px)', overflowY: 'auto', border: '2px solid #ddd', borderRadius: '8px'}>
+                  <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
+                    <thead style={{position: 'sticky', top: 0, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', zIndex: 1}}>
                       <tr>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>#</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Serial Number</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Pmax</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Binning</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Status</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Class</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>PDI</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>#</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Serial Number</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Pmax (W)</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Binning</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Status</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Class</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>PDI</th>
                       </tr>
                     </thead>
                     <tbody>
                       {masterSerials.map((serial, idx) => (
-                        <tr key={idx} style={{borderBottom: '1px solid #eee'}}>
-                          <td style={{padding: '8px'}}>{idx + 1}</td>
-                          <td style={{padding: '8px', fontFamily: 'monospace'}}>{serial.serial_number}</td>
-                          <td style={{padding: '8px'}}>{serial.pmax ? serial.pmax.toFixed(2) : '-'}</td>
-                          <td style={{padding: '8px'}}>{serial.binning || '-'}</td>
-                          <td style={{padding: '8px'}}>
+                        <tr key={idx} style={{borderBottom: '1px solid #eee', background: idx % 2 === 0 ? '#f8f9fa' : 'white'}}>
+                          <td style={{padding: '10px'}}>{idx + 1}</td>
+                          <td style={{padding: '10px', fontFamily: 'monospace', fontWeight: '500'}}>{serial.serial_number}</td>
+                          <td style={{padding: '10px'}}>{serial.pmax ? serial.pmax.toFixed(2) : '-'}</td>
+                          <td style={{padding: '10px', fontWeight: '500'}}>{serial.binning || '-'}</td>
+                          <td style={{padding: '10px'}}>
                             <span style={{
-                              padding: '3px 8px',
+                              padding: '4px 10px',
                               borderRadius: '4px',
                               fontSize: '11px',
+                              fontWeight: '600',
                               background: serial.status === 'available' ? '#d4edda' : serial.status === 'assigned' ? '#fff3cd' : '#f8d7da',
                               color: serial.status === 'available' ? '#155724' : serial.status === 'assigned' ? '#856404' : '#721c24'
                             }}>
                               {serial.status}
                             </span>
                           </td>
-                          <td style={{padding: '8px'}}>
+                          <td style={{padding: '10px'}}>
                             <span style={{
-                              padding: '3px 8px',
+                              padding: '4px 10px',
                               borderRadius: '4px',
                               fontSize: '11px',
+                              fontWeight: '600',
                               background: serial.class_status === 'OK' ? '#d4edda' : '#f8d7da',
                               color: serial.class_status === 'OK' ? '#155724' : '#721c24'
                             }}>
                               {serial.class_status}
                             </span>
                           </td>
-                          <td style={{padding: '8px'}}>{serial.pdi_number || '-'}</td>
+                          <td style={{padding: '10px', fontWeight: '500'}}>{serial.pdi_number || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1331,8 +1348,8 @@ const FTRManagement = () => {
       {/* View Rejection Serials Modal */}
       {showRejectionViewModal && (
         <div className="modal-overlay" onClick={() => setShowRejectionViewModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '80vh'}}>
-            <h2>🔍 Rejected Serial Numbers - {selectedCompany?.companyName}</h2>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '95%', width: '1400px', maxHeight: '90vh', height: '85vh'}}>
+            <h2 style={{marginBottom: '20px', fontSize: '24px', color: '#dc3545'}}>🔍 Rejected Serial Numbers - {selectedCompany?.companyName}</h2>
             
             {/* Search Bar */}
             <div style={{marginBottom: '15px'}}>
@@ -1358,44 +1375,57 @@ const FTRManagement = () => {
               <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
             ) : (
               <>
-                <p style={{marginBottom: '10px', fontWeight: 'bold', color: '#dc3545'}}>
-                  Total Rejections: {rejectionSerials.length}
-                </p>
+                <div style={{display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap'}}>
+                  <div style={{flex: 1, padding: '12px', background: '#ffebee', borderRadius: '8px', textAlign: 'center', border: '2px solid #dc3545'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#c62828'}}>{rejectionSerials.length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Total Rejections</div>
+                  </div>
+                  <div style={{flex: 1, padding: '12px', background: '#fff3e0', borderRadius: '8px', textAlign: 'center'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#e65100'}}>{[...new Set(rejectionSerials.map(s => s.pdi_number).filter(p => p && p !== '-'))].length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Assigned to PDIs</div>
+                  </div>
+                  <div style={{flex: 1, padding: '12px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#1565c0'}}>{rejectionSerials.filter(s => !s.pdi_number || s.pdi_number === '-').length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Not Assigned</div>
+                  </div>
+                </div>
                 
-                <div style={{maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '8px'}}>
-                  <table style={{width: '100%', borderCollapse: 'collapse'}}>
-                    <thead style={{position: 'sticky', top: 0, background: '#f8f9fa', zIndex: 1}}>
+                <div style={{maxHeight: 'calc(85vh - 280px)', overflowY: 'auto', border: '2px solid #dc3545', borderRadius: '8px'}>
+                  <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
+                    <thead style={{position: 'sticky', top: 0, background: 'linear-gradient(135deg, #dc3545 0%, #c82333 100%)', zIndex: 1}}>
                       <tr>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>#</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Serial Number</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Pmax</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Binning</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Status</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Class</th>
-                        <th style={{padding: '10px', borderBottom: '2px solid #ddd', textAlign: 'left'}}>Upload Date</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>#</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Serial Number</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Pmax (W)</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Binning</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Status</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Class</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>PDI</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Upload Date</th>
                       </tr>
                     </thead>
                     <tbody>
                       {rejectionSerials.map((serial, idx) => (
-                        <tr key={idx} style={{borderBottom: '1px solid #eee', background: '#fff5f5'}}>
-                          <td style={{padding: '8px'}}>{idx + 1}</td>
-                          <td style={{padding: '8px', fontFamily: 'monospace'}}>{serial.serial_number}</td>
-                          <td style={{padding: '8px'}}>{serial.pmax ? serial.pmax.toFixed(2) : '-'}</td>
-                          <td style={{padding: '8px'}}>{serial.binning || '-'}</td>
-                          <td style={{padding: '8px'}}>
+                        <tr key={idx} style={{borderBottom: '1px solid #eee', background: idx % 2 === 0 ? '#fff5f5' : 'white'}}>
+                          <td style={{padding: '10px'}}>{idx + 1}</td>
+                          <td style={{padding: '10px', fontFamily: 'monospace', fontWeight: '500'}}>{serial.serial_number}</td>
+                          <td style={{padding: '10px'}}>{serial.pmax ? serial.pmax.toFixed(2) : '-'}</td>
+                          <td style={{padding: '10px'}}>{serial.binning || '-'}</td>
+                          <td style={{padding: '10px'}}>
                             <span style={{
-                              padding: '3px 8px',
+                              padding: '4px 10px',
                               borderRadius: '4px',
                               fontSize: '11px',
                               background: '#f8d7da',
-                              color: '#721c24'
+                              color: '#721c24',
+                              fontWeight: '600'
                             }}>
                               {serial.status}
                             </span>
                           </td>
-                          <td style={{padding: '8px'}}>
+                          <td style={{padding: '10px'}}>
                             <span style={{
-                              padding: '3px 8px',
+                              padding: '4px 10px',
                               borderRadius: '4px',
                               fontSize: '11px',
                               background: '#f8d7da',
@@ -1405,7 +1435,8 @@ const FTRManagement = () => {
                               {serial.class_status}
                             </span>
                           </td>
-                          <td style={{padding: '8px', fontSize: '12px'}}>{serial.upload_date || '-'}</td>
+                          <td style={{padding: '10px'}}>{serial.pdi_number || '-'}</td>
+                          <td style={{padding: '10px', fontSize: '11px', color: '#666'}}>{serial.upload_date || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
