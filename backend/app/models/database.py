@@ -114,6 +114,7 @@ class BomMaterial(db.Model):
     shift = db.Column(db.String(10), nullable=False)  # 'day' or 'night'
     company = db.Column(db.String(200), nullable=True)  # Supplier/Brand name
     lot_batch_no = db.Column(db.String(200), nullable=True)  # Lot/Batch number
+    cell_efficiency = db.Column(db.Float, nullable=True)  # Cell efficiency % (for Solar Cell only)
     image_paths = db.Column(db.Text, nullable=True)  # JSON array of image paths
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -133,6 +134,7 @@ class BomMaterial(db.Model):
             'shift': self.shift,
             'company': self.company,
             'lotBatchNo': self.lot_batch_no,
+            'cellEfficiency': self.cell_efficiency,  # Cell efficiency for Solar Cell
             'imagePaths': images  # Array of image paths
         }
 

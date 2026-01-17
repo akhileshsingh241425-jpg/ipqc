@@ -1836,16 +1836,22 @@ function DailyReport() {
         const hasNewLotBatchNo = materialData.lotBatchNo && materialData.lotBatchNo.trim() !== '';
         const hasNewCompany = materialData.company && materialData.company.trim() !== '';
         const hasNewImages = materialData.images && materialData.images.length > 0;
+        const hasNewEfficiency = material.name === 'Solar Cell' && materialData.cellEfficiency;
         
-        console.log(`[BOM DEBUG] Material: ${material.name}, lotBatchNo: '${materialData?.lotBatchNo}', company: '${materialData?.company}', hasImages: ${hasNewImages}, will send: ${hasNewLotBatchNo || hasNewCompany || hasNewImages}`);
+        console.log(`[BOM DEBUG] Material: ${material.name}, lotBatchNo: '${materialData?.lotBatchNo}', company: '${materialData?.company}', efficiency: '${materialData?.cellEfficiency}', hasImages: ${hasNewImages}, will send: ${hasNewLotBatchNo || hasNewCompany || hasNewImages || hasNewEfficiency}`);
         
         // Only send request if there's actual new data to save
-        if (materialData && (hasNewLotBatchNo || hasNewCompany || hasNewImages)) {
+        if (materialData && (hasNewLotBatchNo || hasNewCompany || hasNewImages || hasNewEfficiency)) {
           const formData = new FormData();
           formData.append('materialName', material.name);
           formData.append('lotBatchNo', materialData.lotBatchNo || '');
           formData.append('company', materialData.company || '');
           formData.append('shift', selectedShift);  // day or night
+          
+          // Add cell efficiency for Solar Cell
+          if (material.name === 'Solar Cell' && materialData.cellEfficiency) {
+            formData.append('cellEfficiency', materialData.cellEfficiency);
+          }
           
           // Append multiple images (only new ones)
           if (hasNewImages) {
@@ -3989,6 +3995,33 @@ function DailyReport() {
                       style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #ccc'}}
                     />
                     
+                    {/* Cell Efficiency - Only for Solar Cell */}
+                    {material.name === 'Solar Cell' && (
+                      <div style={{marginBottom: '5px'}}>
+                        <label style={{fontSize: '11px', color: '#1976d2', display: 'block', marginBottom: '2px'}}>
+                          ⚡ Cell Efficiency (%):
+                        </label>
+                        <select
+                          value={bomMaterials[material.name]?.cellEfficiency || ''}
+                          onChange={(e) => handleBomMaterialChange(material.name, 'cellEfficiency', e.target.value)}
+                          style={{width: '100%', padding: '5px', border: '2px solid #FF9800', borderRadius: '4px', backgroundColor: '#FFF8E1'}}
+                        >
+                          <option value="">Select Efficiency</option>
+                          <option value="25.0">25.0%</option>
+                          <option value="25.1">25.1%</option>
+                          <option value="25.2">25.2%</option>
+                          <option value="25.3">25.3%</option>
+                          <option value="25.4">25.4%</option>
+                          <option value="25.5">25.5%</option>
+                          <option value="25.6">25.6%</option>
+                          <option value="25.7">25.7%</option>
+                          <option value="25.8">25.8%</option>
+                          <option value="25.9">25.9%</option>
+                          <option value="26.0">26.0%</option>
+                        </select>
+                      </div>
+                    )}
+                    
                     {/* Multiple Images Upload */}
                     <input
                       type="file"
@@ -5220,7 +5253,7 @@ function DailyReport() {
                           
                           const calculatedQty = Math.round(shiftProd * qtyMultiplier * 100) / 100;
                           
-                          console.log(`[BOM DEBUG] Material: ${bom.materialName}, Company: ${bom.company}, Date: ${record.date}, Shift: ${bom.shift}, DayProd: ${dayProd}, NightProd: ${nightProd}, UsedProd: ${shiftProd}, Multiplier: ${qtyMultiplier}, CalcQty: ${calculatedQty}`);
+                          console.log(`[BOM DEBUG] Material: ${bom.materialName}, Company: ${bom.company}, Date: ${record.date}, Shift: ${bom.shift}, DayProd: ${dayProd}, NightProd: ${nightProd}, UsedProd: ${shiftProd}, Multiplier: ${qtyMultiplier}, CalcQty: ${calculatedQty}, Efficiency: ${bom.cellEfficiency || '-'}`);
                           
                           existing.qty += calculatedQty;
                           
@@ -5233,6 +5266,7 @@ function DailyReport() {
                               qty: calculatedQty,
                               shift: shiftName,
                               production: shiftProd,
+                              cellEfficiency: bom.cellEfficiency || null,  // Cell efficiency if Solar Cell
                               lotNo: bom.lotBatchNo || bom.lotNo || '-',
                               invoiceNo: bom.invoiceNo || '-'
                             });
@@ -5373,15 +5407,26 @@ function DailyReport() {
                         
                         let reason = '';
                         let reasonType = 'bom'; // bom, fifo, none
+                        let efficiencyInfo = '';
+                        
                         if (matchingBom && matchingBom.details && matchingBom.details.length > 0) {
                           const usageDetails = matchingBom.details.map(d => {
                             const unit = material.toLowerCase().includes('cell') ? 'pcs' : 
                                         (material.toLowerCase().includes('glass') || material.toLowerCase().includes('frame') || material.toLowerCase().includes('junction') || material.toLowerCase().includes('rfid')) ? 'pcs' : 'kg';
-                            return `${d.date} (${d.shift || 'both'}): ${d.production} modules → ${d.qty} ${unit}`;
+                            const effStr = d.cellEfficiency ? ` [Eff: ${d.cellEfficiency}%]` : '';
+                            return `${d.date} (${d.shift || 'both'}): ${d.production} modules → ${d.qty} ${unit}${effStr}`;
                           }).slice(0, 5).join(' | ');
                           const totalUnit = material.toLowerCase().includes('cell') ? 'pcs' : 
                                            (material.toLowerCase().includes('glass') || material.toLowerCase().includes('frame') || material.toLowerCase().includes('junction') || material.toLowerCase().includes('rfid')) ? 'pcs' : 'kg';
                           reason = `✅ BOM MATCH: ${matchingBom.company} - Total ${Math.round(matchingBom.usedQty * 100) / 100} ${totalUnit} used [${usageDetails}]`;
+                          
+                          // Extract efficiency info for Solar Cell
+                          if (material === 'Solar Cell') {
+                            const efficiencies = matchingBom.details
+                              .filter(d => d.cellEfficiency)
+                              .map(d => `${d.date}: ${d.cellEfficiency}%`);
+                            efficiencyInfo = efficiencies.length > 0 ? efficiencies.join(' | ') : '-';
+                          }
                         } else if (suggestion.bomCompany) {
                           reason = `📦 Brand Match: ${suggestion.bomCompany} used ${suggestion.bomUsedQty || '-'} qty`;
                         } else {
@@ -5399,6 +5444,7 @@ function DailyReport() {
                           suggestion.invoice_date || '-',
                           suggestion.coc_qty || 0,
                           suggestion.brand?.substring(0, 35) || '-',
+                          material === 'Solar Cell' ? efficiencyInfo : '-',  // Cell Efficiency column
                           reason,
                           matchingBom?.company || suggestion.bomCompany || '-',
                           matchingBom ? Math.round(matchingBom.usedQty * 100) / 100 : (suggestion.bomUsedQty || 0),
@@ -5421,6 +5467,7 @@ function DailyReport() {
                         '-',
                         0,
                         '-',
+                        '-',  // Cell Efficiency column (empty for no suggestion)
                         bomCompanies.length > 0 ? 
                           `⚠️ No matching COC for: ${bomCompanies.map(b => b.company).join(', ')}` : 
                           '❌ No BOM data - Load FIFO Suggestions first',
@@ -5443,7 +5490,7 @@ function DailyReport() {
                   const headers = [
                     'PDI No', 'Company', 'Material', 'Suggestion #', 'COC Invoice', 
                     'Lot/Batch', 'Invoice Date', 'Available Qty', 'Brand/Company',
-                    'REASON FOR SUGGESTION', 'BOM Brand', 'BOM Qty Used',
+                    'CELL EFFICIENCY', 'REASON FOR SUGGESTION', 'BOM Brand', 'BOM Qty Used',
                     'Currently Assigned', 'Assigned Qty', 'Production Used', 'Gap', 'Status'
                   ];
                   
@@ -5456,7 +5503,7 @@ function DailyReport() {
                   const ws = XLSXStyle.utils.aoa_to_sheet(wsData);
                   
                   // Merge title cell
-                  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 16 } }];
+                  ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 17 } }];
                   
                   // Style definitions
                   const titleStyle = {
@@ -5493,11 +5540,23 @@ function DailyReport() {
                   if (ws['A1']) ws['A1'].s = titleStyle;
                   
                   // Apply header styles (row 3, index 2)
-                  const colLetters = 'ABCDEFGHIJKLMNOPQ'.split('');
+                  const colLetters = 'ABCDEFGHIJKLMNOPQR'.split('');  // Added R for 18 columns
                   colLetters.forEach((col, idx) => {
                     const cell = ws[`${col}3`];
                     if (cell) {
-                      cell.s = idx === 9 ? reasonHeaderStyle : headerStyle; // Reason column orange
+                      // Efficiency column (9) yellow, Reason column (10) orange
+                      if (idx === 9) {
+                        cell.s = {
+                          font: { bold: true, sz: 11, color: { rgb: '000000' } },
+                          fill: { fgColor: { rgb: 'FFD600' } },  // Yellow for efficiency
+                          alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                          border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
+                        };
+                      } else if (idx === 10) {
+                        cell.s = reasonHeaderStyle;  // Orange for reason
+                      } else {
+                        cell.s = headerStyle;
+                      }
                     }
                   });
                   
@@ -5529,7 +5588,13 @@ function DailyReport() {
                         };
                         
                         // Special styling for specific columns
-                        if (colIdx === 9) { // Reason column - highlight
+                        if (colIdx === 9) { // Cell Efficiency column - yellow highlight
+                          cellStyle.fill = { fgColor: { rgb: 'FFF9C4' } }; // Light yellow
+                          cellStyle.font = { bold: true, color: { rgb: 'E65100' } };
+                          cellStyle.alignment = { horizontal: 'center', vertical: 'center' };
+                        }
+                        
+                        if (colIdx === 10) { // Reason column - highlight
                           if (statusInfo.hasSuggestion) {
                             cellStyle.fill = { fgColor: { rgb: 'E8F5E9' } }; // Light green
                             cellStyle.font = { sz: 10, color: { rgb: '1B5E20' } };
@@ -5539,7 +5604,7 @@ function DailyReport() {
                           }
                         }
                         
-                        if (colIdx === 15) { // Gap column
+                        if (colIdx === 16) { // Gap column
                           if (statusInfo.gap >= 0) {
                             cellStyle.fill = { fgColor: { rgb: 'C8E6C9' } }; // Green
                             cellStyle.font = { bold: true, color: { rgb: '1B5E20' } };
@@ -5549,7 +5614,7 @@ function DailyReport() {
                           }
                         }
                         
-                        if (colIdx === 16) { // Status column
+                        if (colIdx === 17) { // Status column
                           if (statusInfo.gap >= 0) {
                             cellStyle.fill = { fgColor: { rgb: '4CAF50' } }; // Green
                             cellStyle.font = { bold: true, color: { rgb: 'FFFFFF' } };
@@ -5573,10 +5638,10 @@ function DailyReport() {
                     });
                   });
                   
-                  // Column widths
+                  // Column widths (18 columns now)
                   ws['!cols'] = [
                     {wch: 10}, {wch: 12}, {wch: 14}, {wch: 10}, {wch: 16}, 
-                    {wch: 14}, {wch: 12}, {wch: 12}, {wch: 25},
+                    {wch: 14}, {wch: 12}, {wch: 12}, {wch: 25}, {wch: 25},
                     {wch: 55}, {wch: 18}, {wch: 10},
                     {wch: 18}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 14}
                   ];

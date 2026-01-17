@@ -549,9 +549,10 @@ def upload_bom_material(company_id, record_id):
         lot_batch_no = request.form.get('lotBatchNo', '')
         company = request.form.get('company', '')
         shift = request.form.get('shift', 'day')  # day or night
+        cell_efficiency = request.form.get('cellEfficiency', '')  # Cell efficiency for Solar Cell
         
         # Debug logging
-        print(f"[BOM DEBUG] Received material: '{material_name}', lot: '{lot_batch_no}', company: '{company}', shift: '{shift}'")
+        print(f"[BOM DEBUG] Received material: '{material_name}', lot: '{lot_batch_no}', company: '{company}', shift: '{shift}', efficiency: '{cell_efficiency}'")
         
         if not material_name or material_name not in BOM_MATERIALS:
             print(f"[BOM DEBUG] Material validation failed - material_name: '{material_name}', in list: {material_name in BOM_MATERIALS if material_name else 'N/A'}")
@@ -577,6 +578,13 @@ def upload_bom_material(company_id, record_id):
             bom_material.lot_batch_no = lot_batch_no
         if company and company.strip():
             bom_material.company = company
+        
+        # Update cell efficiency for Solar Cell
+        if cell_efficiency and cell_efficiency.strip():
+            try:
+                bom_material.cell_efficiency = float(cell_efficiency)
+            except ValueError:
+                pass  # Invalid efficiency value, skip
         
         # Handle multiple image uploads
         uploaded_images = []
