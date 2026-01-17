@@ -4704,31 +4704,45 @@ def update_packing_alert_numbers():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-@ai_assistant_bp.route('/ai/run-validation-now', methods=['POST'])
+@ai_assistant_bp.route('/ai/run-validation-now', methods=['POST', 'GET', 'OPTIONS'])
 def run_validation_now():
     """
     Manually trigger packing validation for all companies
     Use this to check immediately without waiting for scheduler
     """
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        return jsonify({'success': True}), 200
+        
     try:
         data = request.json or {}
-        companies = data.get('companies', ['Rays Power', 'Larsen & Toubro', 'Sterlin and Wilson'])
+        single_company = data.get('company')
         
-        results = {}
+        if single_company:
+            companies = [single_company]
+        else:
+            companies = ['Rays Power', 'Larsen & Toubro', 'Sterlin and Wilson']
+        
+        results = []
         total_issues = 0
+        whatsapp_alerts_sent = 0
         
         for company in companies:
             result = _do_validate_packing(company, send_alerts=True)
-            results[company] = {
-                'issues': result.get('total_issues', 0),
+            issues_list = result.get('issues', [])
+            results.append({
+                'company': company,
+                'issues': issues_list,
                 'is_valid': result.get('is_valid', True),
                 'message': result.get('message', '')
-            }
-            total_issues += result.get('total_issues', 0)
+            })
+            total_issues += len(issues_list)
+            whatsapp_alerts_sent += result.get('alerts_sent', 0)
         
         return jsonify({
             'success': True,
             'total_issues': total_issues,
+            'whatsapp_alerts_sent': whatsapp_alerts_sent,
             'companies_checked': len(companies),
             'results': results,
             'message': f'✅ All companies valid!' if total_issues == 0 else f'❌ Found {total_issues} total issues'
