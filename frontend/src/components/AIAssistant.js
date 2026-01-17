@@ -14,6 +14,7 @@ const AIAssistant = () => {
   const [exportLoading, setExportLoading] = useState(false);
   const [checkResults, setCheckResults] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [validationLoading, setValidationLoading] = useState(false);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -328,6 +329,99 @@ const AIAssistant = () => {
     }
   };
 
+  // Run Packing Validation - Check all issues
+  const handleRunValidation = async () => {
+    setValidationLoading(true);
+    
+    // Add user message
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: `🔍 Running Packing Validation${selectedCompany ? ` for ${selectedCompany}` : ' for all companies'}...`
+    }]);
+    
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.post(`${API_BASE_URL}/api/ai/run-validation-now`, {
+        company: selectedCompany || null
+      });
+      
+      if (response.data.success) {
+        const { results, total_issues, whatsapp_alerts_sent } = response.data;
+        
+        let resultMessage = `📊 **Packing Validation Complete!**\n\n`;
+        resultMessage += `🔔 WhatsApp Alerts Sent: ${whatsapp_alerts_sent}\n`;
+        resultMessage += `⚠️ Total Issues Found: ${total_issues}\n\n`;
+        
+        // Show results for each company
+        results.forEach(companyResult => {
+          const issues = companyResult.issues || [];
+          const issueCount = issues.length;
+          const status = issueCount === 0 ? '✅' : '⚠️';
+          
+          resultMessage += `${status} **${companyResult.company}**: ${issueCount} issues\n`;
+          
+          if (issueCount > 0) {
+            // Group by issue type
+            const rejected = issues.filter(i => i.issue_type === 'Rejected Module Packed');
+            const mixBinning = issues.filter(i => i.issue_type === 'Mix Binning');
+            const wrongParty = issues.filter(i => i.issue_type === 'Wrong Party');
+            const duplicates = issues.filter(i => i.issue_type === 'Duplicate Barcode');
+            
+            if (rejected.length > 0) {
+              resultMessage += `  ❌ Rejected Packed: ${rejected.length}\n`;
+              rejected.slice(0, 3).forEach(r => {
+                resultMessage += `     - ${r.module_no} | ${r.pallet_no}\n`;
+              });
+              if (rejected.length > 3) resultMessage += `     ... +${rejected.length - 3} more\n`;
+            }
+            if (mixBinning.length > 0) {
+              resultMessage += `  🔀 Mix Binning: ${mixBinning.length}\n`;
+              mixBinning.slice(0, 3).forEach(r => {
+                resultMessage += `     - ${r.module_no} | ${r.pallet_no} | ${r.details}\n`;
+              });
+              if (mixBinning.length > 3) resultMessage += `     ... +${mixBinning.length - 3} more\n`;
+            }
+            if (wrongParty.length > 0) {
+              resultMessage += `  🚫 Wrong Party Dispatch: ${wrongParty.length}\n`;
+              wrongParty.slice(0, 3).forEach(r => {
+                resultMessage += `     - ${r.module_no} | ${r.pallet_no} | ${r.details}\n`;
+              });
+              if (wrongParty.length > 3) resultMessage += `     ... +${wrongParty.length - 3} more\n`;
+            }
+            if (duplicates.length > 0) {
+              resultMessage += `  🔁 Duplicate Barcodes: ${duplicates.length}\n`;
+              duplicates.slice(0, 3).forEach(r => {
+                resultMessage += `     - ${r.module_no} | ${r.pallet_no}\n`;
+              });
+              if (duplicates.length > 3) resultMessage += `     ... +${duplicates.length - 3} more\n`;
+            }
+          }
+          resultMessage += '\n';
+        });
+        
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: resultMessage
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `❌ Validation Error: ${response.data.error}`,
+          isError: true
+        }]);
+      }
+    } catch (error) {
+      console.error('Validation error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ Validation failed: ${error.response?.data?.error || error.message}`,
+        isError: true
+      }]);
+    } finally {
+      setValidationLoading(false);
+    }
+  };
+
   return (
     <div className="ai-assistant-container">
       {/* Header */}
@@ -491,6 +585,34 @@ const AIAssistant = () => {
               {uploadingFile ? '⏳ Checking...' : '📤 Upload & Check Barcodes'}
             </button>
             {!selectedCompany && <p className="check-warning">⚠️ Select company first</p>}
+          </div>
+
+          {/* Packing Validation */}
+          <h4>⚠️ Packing Validation</h4>
+          <div className="validation-section">
+            <p className="check-help">Check for: Rejected packed, Mix binning, Wrong party dispatch, Duplicates</p>
+            <button 
+              className="btn-validation"
+              onClick={handleRunValidation}
+              disabled={validationLoading}
+              style={{
+                backgroundColor: '#e74c3c',
+                color: 'white',
+                padding: '12px 16px',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: validationLoading ? 'wait' : 'pointer',
+                width: '100%',
+                fontWeight: 'bold',
+                fontSize: '14px',
+                marginTop: '8px'
+              }}
+            >
+              {validationLoading ? '⏳ Validating...' : '🔍 Run Validation Now'}
+            </button>
+            <p style={{ fontSize: '11px', color: '#888', marginTop: '5px', textAlign: 'center' }}>
+              {selectedCompany ? `For: ${selectedCompany}` : 'All Companies: Rays, L&T, S&W'}
+            </p>
           </div>
         </div>
 
