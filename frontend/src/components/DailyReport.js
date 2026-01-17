@@ -6667,57 +6667,83 @@ function DailyReport() {
         </div>
       )}
 
-      {/* ========== CELL RECEIVED ENTRY MODAL ========== */}
+      {/* ========== CELL RECEIVED ENTRY MODAL - PROFESSIONAL ========== */}
       {showCellReceivedModal && (
-        <div className="modal-overlay" onClick={() => setShowCellReceivedModal(false)}>
+        <div className="modal-overlay" onClick={() => setShowCellReceivedModal(false)} style={{
+          backgroundColor: 'rgba(0,0,0,0.6)',
+          backdropFilter: 'blur(5px)'
+        }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{
-            maxWidth: '600px', 
-            maxHeight: '90vh', 
+            maxWidth: '700px', 
+            maxHeight: '95vh', 
             overflowY: 'auto',
-            padding: '25px',
-            backgroundColor: '#fff8e1'
+            padding: '0',
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+            border: 'none'
           }}>
-            <h2 style={{
-              margin: '0 0 20px 0', 
-              color: '#e65100', 
-              fontSize: '24px',
-              borderBottom: '3px solid #ff9800',
-              paddingBottom: '10px'
+            {/* Header */}
+            <div style={{
+              background: 'linear-gradient(135deg, #1a237e 0%, #3949ab 100%)',
+              padding: '25px 30px',
+              borderRadius: '16px 16px 0 0',
+              position: 'relative'
             }}>
-              ⚡ CELL RECEIVED ENTRY
-            </h2>
-            
-            <p style={{
-              fontSize: '16px', 
-              color: '#555', 
-              marginBottom: '25px',
-              backgroundColor: '#e3f2fd',
-              padding: '15px',
-              borderRadius: '8px',
-              lineHeight: '1.6'
-            }}>
-              <strong>📋 यहाँ आप Solar Cell Received Data Enter करेंगे:</strong><br/>
-              • Cell Efficiency Grade Select करें (25.4% - 25.8%)<br/>
-              • Supplier Company का नाम लिखें (जैसे: Longi, JA Solar, Trina)<br/>
-              • कितने Cells मिले (Quantity) डालें<br/>
-              • Invoice Number (Optional) डालें
-            </p>
+              <button
+                onClick={() => setShowCellReceivedModal(false)}
+                style={{
+                  position: 'absolute',
+                  right: '20px',
+                  top: '20px',
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >×</button>
+              <h2 style={{
+                margin: '0', 
+                color: 'white', 
+                fontSize: '26px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                <span style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  padding: '10px',
+                  borderRadius: '12px'
+                }}>⚡</span>
+                Cell Received Entry
+              </h2>
+              <p style={{margin: '10px 0 0 0', color: 'rgba(255,255,255,0.8)', fontSize: '14px'}}>
+                Enter solar cell inventory received from suppliers
+              </p>
+            </div>
 
             <form onSubmit={async (e) => {
               e.preventDefault();
               
               if (!cellReceivedForm.supplierCompany || !cellReceivedForm.quantity) {
-                alert('❌ Supplier Company और Quantity जरूरी है!');
+                alert('Please fill in Supplier Company and Quantity');
                 return;
               }
               
               const qty = parseInt(cellReceivedForm.quantity) || 0;
               if (qty <= 0) {
-                alert('❌ Quantity 0 से ज्यादा होनी चाहिए!');
+                alert('Quantity must be greater than 0');
                 return;
               }
               
-              // Update cell efficiency received in company
               const currentReceived = selectedCompany?.cellEfficiencyReceived || {};
               const eff = cellReceivedForm.efficiency;
               const company = cellReceivedForm.supplierCompany.trim();
@@ -6741,12 +6767,8 @@ function DailyReport() {
                 });
                 
                 if (response.ok) {
-                  alert(`✅ SUCCESS!\n\n${qty.toLocaleString()} Cells Added!\n\nEfficiency: ${eff}%\nSupplier: ${company}\nDate: ${cellReceivedForm.receiveDate}`);
-                  
-                  // Refresh data
+                  alert(`✅ Entry Saved Successfully!\n\n📦 ${qty.toLocaleString()} Cells\n⚡ Efficiency: ${eff}%\n🏭 Supplier: ${company}`);
                   loadCompanies();
-                  
-                  // Reset form for next entry
                   setCellReceivedForm({
                     efficiency: '25.5',
                     supplierCompany: '',
@@ -6755,41 +6777,44 @@ function DailyReport() {
                     receiveDate: new Date().toISOString().split('T')[0]
                   });
                 } else {
-                  alert('❌ Error saving data!');
+                  alert('Error saving data');
                 }
               } catch (error) {
                 console.error('Error:', error);
-                alert('❌ Server Error!');
+                alert('Server Error');
               }
-            }}>
+            }} style={{padding: '30px'}}>
               
-              {/* Efficiency Selection - BIG BUTTONS */}
-              <div style={{marginBottom: '25px'}}>
+              {/* Efficiency Grade Selection */}
+              <div style={{marginBottom: '28px'}}>
                 <label style={{
                   display: 'block', 
-                  fontWeight: 'bold', 
-                  marginBottom: '12px',
-                  fontSize: '18px',
-                  color: '#1976d2'
+                  fontWeight: '600', 
+                  marginBottom: '14px',
+                  fontSize: '15px',
+                  color: '#37474f',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
                 }}>
-                  ⚡ Cell Efficiency Grade Select करें:
+                  Cell Efficiency Grade
                 </label>
-                <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                <div style={{display: 'flex', gap: '12px', flexWrap: 'wrap'}}>
                   {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => (
                     <button
                       key={eff}
                       type="button"
                       onClick={() => setCellReceivedForm({...cellReceivedForm, efficiency: eff})}
                       style={{
-                        padding: '15px 25px',
-                        fontSize: '20px',
-                        fontWeight: 'bold',
-                        border: cellReceivedForm.efficiency === eff ? '4px solid #1976d2' : '2px solid #ccc',
+                        padding: '14px 28px',
+                        fontSize: '17px',
+                        fontWeight: '600',
+                        border: 'none',
                         borderRadius: '10px',
-                        backgroundColor: cellReceivedForm.efficiency === eff ? '#1976d2' : '#fff',
-                        color: cellReceivedForm.efficiency === eff ? 'white' : '#333',
+                        backgroundColor: cellReceivedForm.efficiency === eff ? '#1a237e' : '#f5f5f5',
+                        color: cellReceivedForm.efficiency === eff ? 'white' : '#546e7a',
                         cursor: 'pointer',
-                        transition: 'all 0.2s'
+                        transition: 'all 0.2s ease',
+                        boxShadow: cellReceivedForm.efficiency === eff ? '0 4px 12px rgba(26,35,126,0.3)' : 'none'
                       }}
                     >
                       {eff}%
@@ -6799,46 +6824,53 @@ function DailyReport() {
               </div>
 
               {/* Supplier Company */}
-              <div style={{marginBottom: '20px'}}>
+              <div style={{marginBottom: '24px'}}>
                 <label style={{
                   display: 'block', 
-                  fontWeight: 'bold', 
+                  fontWeight: '600', 
                   marginBottom: '10px',
-                  fontSize: '16px',
-                  color: '#388e3c'
+                  fontSize: '15px',
+                  color: '#37474f',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
                 }}>
-                  🏭 Supplier Company Name:
+                  Supplier Company <span style={{color: '#e53935'}}>*</span>
                 </label>
                 <input
                   type="text"
                   value={cellReceivedForm.supplierCompany}
                   onChange={(e) => setCellReceivedForm({...cellReceivedForm, supplierCompany: e.target.value})}
-                  placeholder="जैसे: Longi, JA Solar, Trina, Jinko..."
+                  placeholder="Enter supplier name..."
                   style={{
                     width: '100%',
-                    padding: '15px',
-                    fontSize: '18px',
-                    border: '2px solid #4caf50',
-                    borderRadius: '8px',
-                    boxSizing: 'border-box'
+                    padding: '14px 18px',
+                    fontSize: '16px',
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '10px',
+                    boxSizing: 'border-box',
+                    transition: 'border-color 0.2s',
+                    outline: 'none'
                   }}
+                  onFocus={(e) => e.target.style.borderColor = '#1a237e'}
+                  onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
                   required
                 />
-                {/* Quick Select Buttons */}
-                <div style={{marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
-                  {['Longi', 'JA Solar', 'Trina', 'Jinko', 'Canadian'].map(name => (
+                <div style={{marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
+                  {['Longi', 'JA Solar', 'Trina', 'Jinko', 'Canadian Solar', 'Risen'].map(name => (
                     <button
                       key={name}
                       type="button"
                       onClick={() => setCellReceivedForm({...cellReceivedForm, supplierCompany: name})}
                       style={{
-                        padding: '8px 15px',
-                        fontSize: '14px',
-                        border: '1px solid #4caf50',
-                        borderRadius: '5px',
-                        backgroundColor: cellReceivedForm.supplierCompany === name ? '#4caf50' : '#e8f5e9',
-                        color: cellReceivedForm.supplierCompany === name ? 'white' : '#2e7d32',
-                        cursor: 'pointer'
+                        padding: '8px 16px',
+                        fontSize: '13px',
+                        border: 'none',
+                        borderRadius: '20px',
+                        backgroundColor: cellReceivedForm.supplierCompany === name ? '#1a237e' : '#eceff1',
+                        color: cellReceivedForm.supplierCompany === name ? 'white' : '#546e7a',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.2s'
                       }}
                     >
                       {name}
@@ -6847,181 +6879,200 @@ function DailyReport() {
                 </div>
               </div>
 
-              {/* Quantity */}
-              <div style={{marginBottom: '20px'}}>
-                <label style={{
-                  display: 'block', 
-                  fontWeight: 'bold', 
-                  marginBottom: '10px',
-                  fontSize: '16px',
-                  color: '#d32f2f'
-                }}>
-                  📦 Quantity (Number of Cells):
-                </label>
-                <input
-                  type="number"
-                  value={cellReceivedForm.quantity}
-                  onChange={(e) => setCellReceivedForm({...cellReceivedForm, quantity: e.target.value})}
-                  placeholder="जैसे: 50000, 100000, 200000..."
-                  style={{
-                    width: '100%',
-                    padding: '15px',
-                    fontSize: '22px',
-                    fontWeight: 'bold',
-                    border: '2px solid #f44336',
-                    borderRadius: '8px',
-                    boxSizing: 'border-box',
-                    backgroundColor: '#ffebee'
-                  }}
-                  required
-                  min="1"
-                />
-                {cellReceivedForm.quantity && (
-                  <div style={{
-                    marginTop: '10px',
-                    padding: '10px',
-                    backgroundColor: '#e3f2fd',
-                    borderRadius: '5px',
-                    fontSize: '14px'
+              {/* Two Column Layout */}
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px'}}>
+                {/* Quantity */}
+                <div>
+                  <label style={{
+                    display: 'block', 
+                    fontWeight: '600', 
+                    marginBottom: '10px',
+                    fontSize: '15px',
+                    color: '#37474f',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
                   }}>
-                    <strong>📊 Calculation:</strong><br/>
-                    {parseInt(cellReceivedForm.quantity || 0).toLocaleString()} cells = ~{Math.floor(parseInt(cellReceivedForm.quantity || 0) / 66).toLocaleString()} Modules (66 cells/module)
-                  </div>
-                )}
+                    Quantity (Cells) <span style={{color: '#e53935'}}>*</span>
+                  </label>
+                  <input
+                    type="number"
+                    value={cellReceivedForm.quantity}
+                    onChange={(e) => setCellReceivedForm({...cellReceivedForm, quantity: e.target.value})}
+                    placeholder="e.g., 50000"
+                    style={{
+                      width: '100%',
+                      padding: '14px 18px',
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      border: '2px solid #e0e0e0',
+                      borderRadius: '10px',
+                      boxSizing: 'border-box',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#1a237e'}
+                    onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+                    required
+                    min="1"
+                  />
+                </div>
+
+                {/* Receive Date */}
+                <div>
+                  <label style={{
+                    display: 'block', 
+                    fontWeight: '600', 
+                    marginBottom: '10px',
+                    fontSize: '15px',
+                    color: '#37474f',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    Receive Date
+                  </label>
+                  <input
+                    type="date"
+                    value={cellReceivedForm.receiveDate}
+                    onChange={(e) => setCellReceivedForm({...cellReceivedForm, receiveDate: e.target.value})}
+                    style={{
+                      width: '100%',
+                      padding: '14px 18px',
+                      fontSize: '16px',
+                      border: '2px solid #e0e0e0',
+                      borderRadius: '10px',
+                      boxSizing: 'border-box',
+                      outline: 'none'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#1a237e'}
+                    onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+                  />
+                </div>
               </div>
 
-              {/* Invoice Number (Optional) */}
-              <div style={{marginBottom: '20px'}}>
+              {/* Invoice Number */}
+              <div style={{marginBottom: '28px'}}>
                 <label style={{
                   display: 'block', 
-                  fontWeight: 'bold', 
+                  fontWeight: '600', 
                   marginBottom: '10px',
-                  fontSize: '16px',
-                  color: '#7b1fa2'
+                  fontSize: '15px',
+                  color: '#37474f',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px'
                 }}>
-                  🧾 Invoice Number (Optional):
+                  Invoice / Challan Number <span style={{color: '#9e9e9e', fontWeight: '400', textTransform: 'none'}}>(Optional)</span>
                 </label>
                 <input
                   type="text"
                   value={cellReceivedForm.invoiceNo}
                   onChange={(e) => setCellReceivedForm({...cellReceivedForm, invoiceNo: e.target.value})}
-                  placeholder="Invoice/Challan Number..."
+                  placeholder="Enter invoice or challan number..."
                   style={{
                     width: '100%',
-                    padding: '12px',
+                    padding: '14px 18px',
                     fontSize: '16px',
-                    border: '2px solid #9c27b0',
-                    borderRadius: '8px',
-                    boxSizing: 'border-box'
+                    border: '2px solid #e0e0e0',
+                    borderRadius: '10px',
+                    boxSizing: 'border-box',
+                    outline: 'none'
                   }}
+                  onFocus={(e) => e.target.style.borderColor = '#1a237e'}
+                  onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
                 />
               </div>
 
-              {/* Receive Date */}
-              <div style={{marginBottom: '25px'}}>
-                <label style={{
-                  display: 'block', 
-                  fontWeight: 'bold', 
-                  marginBottom: '10px',
-                  fontSize: '16px',
-                  color: '#0288d1'
-                }}>
-                  📅 Receive Date:
-                </label>
-                <input
-                  type="date"
-                  value={cellReceivedForm.receiveDate}
-                  onChange={(e) => setCellReceivedForm({...cellReceivedForm, receiveDate: e.target.value})}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    fontSize: '16px',
-                    border: '2px solid #03a9f4',
-                    borderRadius: '8px',
-                    boxSizing: 'border-box'
-                  }}
-                />
-              </div>
-
-              {/* Summary Before Submit */}
+              {/* Summary Card */}
               {cellReceivedForm.supplierCompany && cellReceivedForm.quantity && (
                 <div style={{
-                  marginBottom: '25px',
-                  padding: '20px',
-                  backgroundColor: '#e8f5e9',
-                  borderRadius: '10px',
-                  border: '2px solid #4caf50'
+                  marginBottom: '28px',
+                  padding: '24px',
+                  background: 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)',
+                  borderRadius: '14px',
+                  border: '1px solid #a5d6a7'
                 }}>
-                  <h4 style={{margin: '0 0 15px 0', color: '#2e7d32'}}>✅ Entry Summary:</h4>
-                  <table style={{width: '100%', fontSize: '16px'}}>
-                    <tbody>
-                      <tr>
-                        <td><strong>Efficiency:</strong></td>
-                        <td style={{fontSize: '20px', color: '#1976d2', fontWeight: 'bold'}}>{cellReceivedForm.efficiency}%</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Supplier:</strong></td>
-                        <td style={{fontSize: '18px', color: '#388e3c', fontWeight: 'bold'}}>{cellReceivedForm.supplierCompany}</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Quantity:</strong></td>
-                        <td style={{fontSize: '22px', color: '#d32f2f', fontWeight: 'bold'}}>{parseInt(cellReceivedForm.quantity || 0).toLocaleString()} Cells</td>
-                      </tr>
-                      <tr>
-                        <td><strong>Est. Modules:</strong></td>
-                        <td style={{fontSize: '18px', color: '#7b1fa2', fontWeight: 'bold'}}>~{Math.floor(parseInt(cellReceivedForm.quantity || 0) / 66).toLocaleString()}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <h4 style={{margin: '0 0 18px 0', color: '#2e7d32', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <span style={{background: '#2e7d32', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px'}}>✓</span>
+                    Entry Summary
+                  </h4>
+                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px'}}>
+                    <div style={{background: 'white', padding: '16px', borderRadius: '10px'}}>
+                      <div style={{color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px'}}>Efficiency</div>
+                      <div style={{fontSize: '24px', fontWeight: '700', color: '#1a237e'}}>{cellReceivedForm.efficiency}%</div>
+                    </div>
+                    <div style={{background: 'white', padding: '16px', borderRadius: '10px'}}>
+                      <div style={{color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px'}}>Supplier</div>
+                      <div style={{fontSize: '18px', fontWeight: '600', color: '#37474f'}}>{cellReceivedForm.supplierCompany}</div>
+                    </div>
+                    <div style={{background: 'white', padding: '16px', borderRadius: '10px'}}>
+                      <div style={{color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px'}}>Total Cells</div>
+                      <div style={{fontSize: '24px', fontWeight: '700', color: '#d32f2f'}}>{parseInt(cellReceivedForm.quantity || 0).toLocaleString()}</div>
+                    </div>
+                    <div style={{background: 'white', padding: '16px', borderRadius: '10px'}}>
+                      <div style={{color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px'}}>Est. Modules</div>
+                      <div style={{fontSize: '24px', fontWeight: '700', color: '#7b1fa2'}}>~{Math.floor(parseInt(cellReceivedForm.quantity || 0) / 66).toLocaleString()}</div>
+                    </div>
+                  </div>
                 </div>
               )}
 
-              {/* Buttons */}
-              <div style={{display: 'flex', gap: '15px', justifyContent: 'center'}}>
+              {/* Action Buttons */}
+              <div style={{display: 'flex', gap: '16px'}}>
                 <button
                   type="submit"
                   style={{
-                    padding: '15px 40px',
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    backgroundColor: '#4caf50',
+                    flex: 1,
+                    padding: '16px 32px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    background: 'linear-gradient(135deg, #1a237e 0%, #3949ab 100%)',
                     color: 'white',
                     border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 15px rgba(26,35,126,0.3)',
+                    transition: 'transform 0.2s, box-shadow 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.target.style.transform = 'translateY(-2px)';
+                    e.target.style.boxShadow = '0 6px 20px rgba(26,35,126,0.4)';
+                  }}
+                  onMouseOut={(e) => {
+                    e.target.style.transform = 'translateY(0)';
+                    e.target.style.boxShadow = '0 4px 15px rgba(26,35,126,0.3)';
                   }}
                 >
-                  ✅ SAVE ENTRY
+                  Save Entry
                 </button>
                 <button
                   type="button"
                   onClick={() => setShowCellReceivedModal(false)}
                   style={{
-                    padding: '15px 40px',
-                    fontSize: '18px',
-                    fontWeight: 'bold',
-                    backgroundColor: '#9e9e9e',
-                    color: 'white',
+                    padding: '16px 32px',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    backgroundColor: '#eceff1',
+                    color: '#546e7a',
                     border: 'none',
-                    borderRadius: '8px',
-                    cursor: 'pointer'
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.2s'
                   }}
+                  onMouseOver={(e) => e.target.style.backgroundColor = '#cfd8dc'}
+                  onMouseOut={(e) => e.target.style.backgroundColor = '#eceff1'}
                 >
-                  ❌ CLOSE
+                  Cancel
                 </button>
               </div>
             </form>
 
-            {/* Current Stock Display */}
+            {/* Current Stock Footer */}
             <div style={{
-              marginTop: '30px',
-              padding: '15px',
-              backgroundColor: '#fff',
-              borderRadius: '8px',
-              border: '2px solid #1976d2'
+              padding: '20px 30px',
+              backgroundColor: '#fafafa',
+              borderTop: '1px solid #e0e0e0',
+              borderRadius: '0 0 16px 16px'
             }}>
-              <h4 style={{margin: '0 0 10px 0', color: '#1565c0'}}>📊 Current Stock Status:</h4>
-              <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px'}}>
+              <h4 style={{margin: '0 0 14px 0', color: '#546e7a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Current Inventory Status</h4>
+              <div style={{display: 'flex', gap: '12px', flexWrap: 'wrap'}}>
                 {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => {
                   const effData = selectedCompany?.cellEfficiencyReceived?.[eff] || {};
                   const total = typeof effData === 'object' 
@@ -7029,14 +7080,15 @@ function DailyReport() {
                     : (effData || 0);
                   return (
                     <div key={eff} style={{
-                      padding: '10px 15px',
+                      padding: '12px 20px',
                       backgroundColor: total > 0 ? '#e3f2fd' : '#f5f5f5',
-                      borderRadius: '5px',
+                      borderRadius: '10px',
                       textAlign: 'center',
-                      border: `2px solid ${total > 0 ? '#1976d2' : '#ccc'}`
+                      minWidth: '90px',
+                      border: `2px solid ${total > 0 ? '#1976d2' : '#e0e0e0'}`
                     }}>
-                      <div style={{fontWeight: 'bold', color: '#1976d2'}}>{eff}%</div>
-                      <div style={{fontSize: '16px', fontWeight: 'bold'}}>{total.toLocaleString()}</div>
+                      <div style={{fontWeight: '600', color: total > 0 ? '#1565c0' : '#9e9e9e', fontSize: '14px'}}>{eff}%</div>
+                      <div style={{fontSize: '18px', fontWeight: '700', color: total > 0 ? '#1a237e' : '#bdbdbd', marginTop: '4px'}}>{total.toLocaleString()}</div>
                     </div>
                   );
                 })}
