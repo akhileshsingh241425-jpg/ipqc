@@ -172,6 +172,16 @@ function DailyReport() {
     includeBomMaterials: true
   });
   
+  // Cell Efficiency Received Entry states
+  const [showCellReceivedModal, setShowCellReceivedModal] = useState(false);
+  const [cellReceivedForm, setCellReceivedForm] = useState({
+    efficiency: '25.5',
+    supplierCompany: '',
+    quantity: '',
+    invoiceNo: '',
+    receiveDate: new Date().toISOString().split('T')[0]
+  });
+
   // Manual COC Entry states
   const [showManualCocModal, setShowManualCocModal] = useState(false);
   const [manualCocForm, setManualCocForm] = useState({
@@ -3210,7 +3220,7 @@ function DailyReport() {
                       // Export Cell Efficiency Inventory Report to Excel
                       const XLSXStyle = require('xlsx-js-style');
                       
-                      const efficiencyGrades = ['25.0', '25.1', '25.2', '25.3', '25.4', '25.5', '25.6', '25.7', '25.8', '25.9', '26.0'];
+                      const efficiencyGrades = ['25.4', '25.5', '25.6', '25.7', '25.8'];
                       const cellEfficiencyReceived = selectedCompany?.cellEfficiencyReceived || {};
                       const records = selectedCompany?.productionRecords || [];
                       
@@ -3337,11 +3347,32 @@ function DailyReport() {
                   >
                     📊 Export Excel
                   </button>
+                  
+                  {/* ADD CELL RECEIVED BUTTON - Opens Modal */}
+                  <button
+                    onClick={() => setShowCellReceivedModal(true)}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: '#FF5722',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '5px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '5px',
+                      marginLeft: '10px'
+                    }}
+                  >
+                    ➕ CELL RECEIVED ENTRY
+                  </button>
                 </h4>
                 
                 {(() => {
                   // Calculate efficiency-wise inventory
-                  const efficiencyGrades = ['25.0', '25.1', '25.2', '25.3', '25.4', '25.5', '25.6', '25.7', '25.8', '25.9', '26.0'];
+                  const efficiencyGrades = ['25.4', '25.5', '25.6', '25.7', '25.8'];
                   
                   // Get cell efficiency received data from state
                   // Format: { "25.2": { "Longi": 50000, "JA Solar": 30000 }, "25.5": {...} }
@@ -3718,17 +3749,11 @@ function DailyReport() {
                             }}
                           >
                             <option value="">-</option>
-                            <option value="25.0">25.0%</option>
-                            <option value="25.1">25.1%</option>
-                            <option value="25.2">25.2%</option>
-                            <option value="25.3">25.3%</option>
                             <option value="25.4">25.4%</option>
                             <option value="25.5">25.5%</option>
                             <option value="25.6">25.6%</option>
                             <option value="25.7">25.7%</option>
                             <option value="25.8">25.8%</option>
-                            <option value="25.9">25.9%</option>
-                            <option value="26.0">26.0%</option>
                           </select>
                         </td>
                         <td style={{backgroundColor: '#bbdefb22'}}>
@@ -3748,17 +3773,11 @@ function DailyReport() {
                             }}
                           >
                             <option value="">-</option>
-                            <option value="25.0">25.0%</option>
-                            <option value="25.1">25.1%</option>
-                            <option value="25.2">25.2%</option>
-                            <option value="25.3">25.3%</option>
                             <option value="25.4">25.4%</option>
                             <option value="25.5">25.5%</option>
                             <option value="25.6">25.6%</option>
                             <option value="25.7">25.7%</option>
                             <option value="25.8">25.8%</option>
-                            <option value="25.9">25.9%</option>
-                            <option value="26.0">26.0%</option>
                           </select>
                         </td>
                         <td style={{backgroundColor: '#fff3cd22'}}>
@@ -4466,17 +4485,11 @@ function DailyReport() {
                           style={{width: '100%', padding: '5px', border: '2px solid #FF9800', borderRadius: '4px', backgroundColor: '#FFF8E1'}}
                         >
                           <option value="">Select Efficiency</option>
-                          <option value="25.0">25.0%</option>
-                          <option value="25.1">25.1%</option>
-                          <option value="25.2">25.2%</option>
-                          <option value="25.3">25.3%</option>
                           <option value="25.4">25.4%</option>
                           <option value="25.5">25.5%</option>
                           <option value="25.6">25.6%</option>
                           <option value="25.7">25.7%</option>
                           <option value="25.8">25.8%</option>
-                          <option value="25.9">25.9%</option>
-                          <option value="26.0">26.0%</option>
                         </select>
                       </div>
                     )}
@@ -6649,6 +6662,385 @@ function DailyReport() {
               >
                 Close
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== CELL RECEIVED ENTRY MODAL ========== */}
+      {showCellReceivedModal && (
+        <div className="modal-overlay" onClick={() => setShowCellReceivedModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{
+            maxWidth: '600px', 
+            maxHeight: '90vh', 
+            overflowY: 'auto',
+            padding: '25px',
+            backgroundColor: '#fff8e1'
+          }}>
+            <h2 style={{
+              margin: '0 0 20px 0', 
+              color: '#e65100', 
+              fontSize: '24px',
+              borderBottom: '3px solid #ff9800',
+              paddingBottom: '10px'
+            }}>
+              ⚡ CELL RECEIVED ENTRY
+            </h2>
+            
+            <p style={{
+              fontSize: '16px', 
+              color: '#555', 
+              marginBottom: '25px',
+              backgroundColor: '#e3f2fd',
+              padding: '15px',
+              borderRadius: '8px',
+              lineHeight: '1.6'
+            }}>
+              <strong>📋 यहाँ आप Solar Cell Received Data Enter करेंगे:</strong><br/>
+              • Cell Efficiency Grade Select करें (25.4% - 25.8%)<br/>
+              • Supplier Company का नाम लिखें (जैसे: Longi, JA Solar, Trina)<br/>
+              • कितने Cells मिले (Quantity) डालें<br/>
+              • Invoice Number (Optional) डालें
+            </p>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              
+              if (!cellReceivedForm.supplierCompany || !cellReceivedForm.quantity) {
+                alert('❌ Supplier Company और Quantity जरूरी है!');
+                return;
+              }
+              
+              const qty = parseInt(cellReceivedForm.quantity) || 0;
+              if (qty <= 0) {
+                alert('❌ Quantity 0 से ज्यादा होनी चाहिए!');
+                return;
+              }
+              
+              // Update cell efficiency received in company
+              const currentReceived = selectedCompany?.cellEfficiencyReceived || {};
+              const eff = cellReceivedForm.efficiency;
+              const company = cellReceivedForm.supplierCompany.trim();
+              
+              const newReceived = {...currentReceived};
+              if (!newReceived[eff]) {
+                newReceived[eff] = {};
+              }
+              if (typeof newReceived[eff] !== 'object') {
+                newReceived[eff] = {};
+              }
+              newReceived[eff][company] = (newReceived[eff][company] || 0) + qty;
+              
+              try {
+                const response = await fetch(`http://localhost:5003/api/companies/${selectedCompany.id}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    cellEfficiencyReceived: newReceived
+                  })
+                });
+                
+                if (response.ok) {
+                  alert(`✅ SUCCESS!\n\n${qty.toLocaleString()} Cells Added!\n\nEfficiency: ${eff}%\nSupplier: ${company}\nDate: ${cellReceivedForm.receiveDate}`);
+                  
+                  // Refresh data
+                  fetchCompanies();
+                  
+                  // Reset form for next entry
+                  setCellReceivedForm({
+                    efficiency: '25.5',
+                    supplierCompany: '',
+                    quantity: '',
+                    invoiceNo: '',
+                    receiveDate: new Date().toISOString().split('T')[0]
+                  });
+                } else {
+                  alert('❌ Error saving data!');
+                }
+              } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Server Error!');
+              }
+            }}>
+              
+              {/* Efficiency Selection - BIG BUTTONS */}
+              <div style={{marginBottom: '25px'}}>
+                <label style={{
+                  display: 'block', 
+                  fontWeight: 'bold', 
+                  marginBottom: '12px',
+                  fontSize: '18px',
+                  color: '#1976d2'
+                }}>
+                  ⚡ Cell Efficiency Grade Select करें:
+                </label>
+                <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap'}}>
+                  {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => (
+                    <button
+                      key={eff}
+                      type="button"
+                      onClick={() => setCellReceivedForm({...cellReceivedForm, efficiency: eff})}
+                      style={{
+                        padding: '15px 25px',
+                        fontSize: '20px',
+                        fontWeight: 'bold',
+                        border: cellReceivedForm.efficiency === eff ? '4px solid #1976d2' : '2px solid #ccc',
+                        borderRadius: '10px',
+                        backgroundColor: cellReceivedForm.efficiency === eff ? '#1976d2' : '#fff',
+                        color: cellReceivedForm.efficiency === eff ? 'white' : '#333',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {eff}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Supplier Company */}
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block', 
+                  fontWeight: 'bold', 
+                  marginBottom: '10px',
+                  fontSize: '16px',
+                  color: '#388e3c'
+                }}>
+                  🏭 Supplier Company Name:
+                </label>
+                <input
+                  type="text"
+                  value={cellReceivedForm.supplierCompany}
+                  onChange={(e) => setCellReceivedForm({...cellReceivedForm, supplierCompany: e.target.value})}
+                  placeholder="जैसे: Longi, JA Solar, Trina, Jinko..."
+                  style={{
+                    width: '100%',
+                    padding: '15px',
+                    fontSize: '18px',
+                    border: '2px solid #4caf50',
+                    borderRadius: '8px',
+                    boxSizing: 'border-box'
+                  }}
+                  required
+                />
+                {/* Quick Select Buttons */}
+                <div style={{marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
+                  {['Longi', 'JA Solar', 'Trina', 'Jinko', 'Canadian'].map(name => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => setCellReceivedForm({...cellReceivedForm, supplierCompany: name})}
+                      style={{
+                        padding: '8px 15px',
+                        fontSize: '14px',
+                        border: '1px solid #4caf50',
+                        borderRadius: '5px',
+                        backgroundColor: cellReceivedForm.supplierCompany === name ? '#4caf50' : '#e8f5e9',
+                        color: cellReceivedForm.supplierCompany === name ? 'white' : '#2e7d32',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Quantity */}
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block', 
+                  fontWeight: 'bold', 
+                  marginBottom: '10px',
+                  fontSize: '16px',
+                  color: '#d32f2f'
+                }}>
+                  📦 Quantity (Number of Cells):
+                </label>
+                <input
+                  type="number"
+                  value={cellReceivedForm.quantity}
+                  onChange={(e) => setCellReceivedForm({...cellReceivedForm, quantity: e.target.value})}
+                  placeholder="जैसे: 50000, 100000, 200000..."
+                  style={{
+                    width: '100%',
+                    padding: '15px',
+                    fontSize: '22px',
+                    fontWeight: 'bold',
+                    border: '2px solid #f44336',
+                    borderRadius: '8px',
+                    boxSizing: 'border-box',
+                    backgroundColor: '#ffebee'
+                  }}
+                  required
+                  min="1"
+                />
+                {cellReceivedForm.quantity && (
+                  <div style={{
+                    marginTop: '10px',
+                    padding: '10px',
+                    backgroundColor: '#e3f2fd',
+                    borderRadius: '5px',
+                    fontSize: '14px'
+                  }}>
+                    <strong>📊 Calculation:</strong><br/>
+                    {parseInt(cellReceivedForm.quantity || 0).toLocaleString()} cells = ~{Math.floor(parseInt(cellReceivedForm.quantity || 0) / 66).toLocaleString()} Modules (66 cells/module)
+                  </div>
+                )}
+              </div>
+
+              {/* Invoice Number (Optional) */}
+              <div style={{marginBottom: '20px'}}>
+                <label style={{
+                  display: 'block', 
+                  fontWeight: 'bold', 
+                  marginBottom: '10px',
+                  fontSize: '16px',
+                  color: '#7b1fa2'
+                }}>
+                  🧾 Invoice Number (Optional):
+                </label>
+                <input
+                  type="text"
+                  value={cellReceivedForm.invoiceNo}
+                  onChange={(e) => setCellReceivedForm({...cellReceivedForm, invoiceNo: e.target.value})}
+                  placeholder="Invoice/Challan Number..."
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    fontSize: '16px',
+                    border: '2px solid #9c27b0',
+                    borderRadius: '8px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {/* Receive Date */}
+              <div style={{marginBottom: '25px'}}>
+                <label style={{
+                  display: 'block', 
+                  fontWeight: 'bold', 
+                  marginBottom: '10px',
+                  fontSize: '16px',
+                  color: '#0288d1'
+                }}>
+                  📅 Receive Date:
+                </label>
+                <input
+                  type="date"
+                  value={cellReceivedForm.receiveDate}
+                  onChange={(e) => setCellReceivedForm({...cellReceivedForm, receiveDate: e.target.value})}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    fontSize: '16px',
+                    border: '2px solid #03a9f4',
+                    borderRadius: '8px',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              {/* Summary Before Submit */}
+              {cellReceivedForm.supplierCompany && cellReceivedForm.quantity && (
+                <div style={{
+                  marginBottom: '25px',
+                  padding: '20px',
+                  backgroundColor: '#e8f5e9',
+                  borderRadius: '10px',
+                  border: '2px solid #4caf50'
+                }}>
+                  <h4 style={{margin: '0 0 15px 0', color: '#2e7d32'}}>✅ Entry Summary:</h4>
+                  <table style={{width: '100%', fontSize: '16px'}}>
+                    <tbody>
+                      <tr>
+                        <td><strong>Efficiency:</strong></td>
+                        <td style={{fontSize: '20px', color: '#1976d2', fontWeight: 'bold'}}>{cellReceivedForm.efficiency}%</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Supplier:</strong></td>
+                        <td style={{fontSize: '18px', color: '#388e3c', fontWeight: 'bold'}}>{cellReceivedForm.supplierCompany}</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Quantity:</strong></td>
+                        <td style={{fontSize: '22px', color: '#d32f2f', fontWeight: 'bold'}}>{parseInt(cellReceivedForm.quantity || 0).toLocaleString()} Cells</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Est. Modules:</strong></td>
+                        <td style={{fontSize: '18px', color: '#7b1fa2', fontWeight: 'bold'}}>~{Math.floor(parseInt(cellReceivedForm.quantity || 0) / 66).toLocaleString()}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Buttons */}
+              <div style={{display: 'flex', gap: '15px', justifyContent: 'center'}}>
+                <button
+                  type="submit"
+                  style={{
+                    padding: '15px 40px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    backgroundColor: '#4caf50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ✅ SAVE ENTRY
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCellReceivedModal(false)}
+                  style={{
+                    padding: '15px 40px',
+                    fontSize: '18px',
+                    fontWeight: 'bold',
+                    backgroundColor: '#9e9e9e',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  ❌ CLOSE
+                </button>
+              </div>
+            </form>
+
+            {/* Current Stock Display */}
+            <div style={{
+              marginTop: '30px',
+              padding: '15px',
+              backgroundColor: '#fff',
+              borderRadius: '8px',
+              border: '2px solid #1976d2'
+            }}>
+              <h4 style={{margin: '0 0 10px 0', color: '#1565c0'}}>📊 Current Stock Status:</h4>
+              <div style={{display: 'flex', flexWrap: 'wrap', gap: '10px'}}>
+                {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => {
+                  const effData = selectedCompany?.cellEfficiencyReceived?.[eff] || {};
+                  const total = typeof effData === 'object' 
+                    ? Object.values(effData).reduce((sum, q) => sum + (q || 0), 0) 
+                    : (effData || 0);
+                  return (
+                    <div key={eff} style={{
+                      padding: '10px 15px',
+                      backgroundColor: total > 0 ? '#e3f2fd' : '#f5f5f5',
+                      borderRadius: '5px',
+                      textAlign: 'center',
+                      border: `2px solid ${total > 0 ? '#1976d2' : '#ccc'}`
+                    }}>
+                      <div style={{fontWeight: 'bold', color: '#1976d2'}}>{eff}%</div>
+                      <div style={{fontSize: '16px', fontWeight: 'bold'}}>{total.toLocaleString()}</div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
