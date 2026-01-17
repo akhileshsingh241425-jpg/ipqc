@@ -8,7 +8,7 @@ import os
 
 def add_cell_efficiency_column():
     # Get the database path
-    db_path = os.path.join(os.path.dirname(__file__), 'instance', 'pdi_system.db')
+    db_path = os.path.join(os.path.dirname(__file__), 'instance', 'pdi_database.db')
     
     if not os.path.exists(db_path):
         print(f"Database not found at: {db_path}")
