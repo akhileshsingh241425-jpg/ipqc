@@ -329,6 +329,7 @@ def add_production_record(company_id):
             pdi=pdi,
             running_order=running_order,
             pdi_approved=data.get('pdiApproved', False),
+            cell_efficiency=float(data.get('cellEfficiency')) if data.get('cellEfficiency') else None,
             cell_rejection_percent=float(data.get('cellRejectionPercent', 0.0)),
             module_rejection_percent=float(data.get('moduleRejectionPercent', 0.0)),
             is_closed=False
@@ -400,6 +401,8 @@ def update_production_record(company_id, record_id):
         record.serial_count = int(data.get('serialCount', record.serial_count or 0))
         record.cell_rejection_percent = float(data.get('cellRejectionPercent', record.cell_rejection_percent))
         record.module_rejection_percent = float(data.get('moduleRejectionPercent', record.module_rejection_percent))
+        if 'cellEfficiency' in data:
+            record.cell_efficiency = float(data.get('cellEfficiency')) if data.get('cellEfficiency') else None
         
         # Update new fields
         if 'lotNumber' in data:

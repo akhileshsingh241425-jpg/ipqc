@@ -3205,6 +3205,7 @@ function DailyReport() {
                     <th style={{width: '70px'}}>DAY</th>
                     <th style={{width: '70px'}}>NIGHT</th>
                     <th style={{width: '60px'}}>TOTAL</th>
+                    <th style={{width: '75px', backgroundColor: '#e3f2fd'}}>CELL EFF %</th>
                     <th style={{width: '70px', backgroundColor: '#fff3cd'}}>CELL REJ %</th>
                     <th style={{width: '80px', backgroundColor: '#f8d7da'}}>MODULE REJ %</th>
                     <th style={{width: '80px', backgroundColor: '#d1ecf1'}}>IPQC Sheet</th>
@@ -3302,6 +3303,36 @@ function DailyReport() {
                           />
                         </td>
                         <td className="total-cell" style={{fontSize: '12px', fontWeight: '700'}}>{total}</td>
+                        <td style={{backgroundColor: '#e3f2fd22'}}>
+                          <select
+                            value={record.cellEfficiency || ''}
+                            onChange={(e) => handleProductionChange(record.id, 'cellEfficiency', e.target.value)}
+                            disabled={isClosed}
+                            style={{
+                              width: '70px', 
+                              padding: '4px 2px', 
+                              fontSize: '11px', 
+                              border: '2px solid #1976d2',
+                              borderRadius: '3px',
+                              backgroundColor: record.cellEfficiency ? '#e3f2fd' : 'white',
+                              fontWeight: record.cellEfficiency ? 'bold' : 'normal',
+                              color: '#1565c0'
+                            }}
+                          >
+                            <option value="">-</option>
+                            <option value="25.0">25.0%</option>
+                            <option value="25.1">25.1%</option>
+                            <option value="25.2">25.2%</option>
+                            <option value="25.3">25.3%</option>
+                            <option value="25.4">25.4%</option>
+                            <option value="25.5">25.5%</option>
+                            <option value="25.6">25.6%</option>
+                            <option value="25.7">25.7%</option>
+                            <option value="25.8">25.8%</option>
+                            <option value="25.9">25.9%</option>
+                            <option value="26.0">26.0%</option>
+                          </select>
+                        </td>
                         <td style={{backgroundColor: '#fff3cd22'}}>
                           <input
                             type="number"

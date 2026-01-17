@@ -54,6 +54,7 @@ class ProductionRecord(db.Model):
     pdi_batch_id = db.Column(db.Integer, nullable=True)
     coc_invoice_numbers = db.Column(db.Text, nullable=True)  # Deprecated - use coc_materials
     coc_materials = db.Column(db.Text, nullable=True)  # JSON array for COC linking (customer docs)
+    cell_efficiency = db.Column(db.Float, nullable=True)  # Cell efficiency % for this day's production
     cell_rejection_percent = db.Column(db.Float, default=0.0)
     module_rejection_percent = db.Column(db.Float, default=0.0)
     ipqc_pdf = db.Column(db.String(500), nullable=True)  # Deprecated - use day_ipqc_pdf / night_ipqc_pdf
@@ -93,6 +94,7 @@ class ProductionRecord(db.Model):
             'pdiBatchId': self.pdi_batch_id,
             'cocInvoiceNumbers': self.coc_invoice_numbers,
             'cocMaterials': coc_materials_list,  # COC linking data (separate from BOM)
+            'cellEfficiency': self.cell_efficiency,  # Cell efficiency % for this day
             'cellRejectionPercent': self.cell_rejection_percent,
             'moduleRejectionPercent': self.module_rejection_percent,
             'ipqcPdf': self.ipqc_pdf,  # Deprecated - kept for backward compatibility
