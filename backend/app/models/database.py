@@ -1,5 +1,6 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
+import json
 
 db = SQLAlchemy()
 
@@ -14,6 +15,7 @@ class Company(db.Model):
     cells_received_qty = db.Column(db.Integer, nullable=True)
     cells_received_mw = db.Column(db.Float, nullable=True)
     current_running_order = db.Column(db.String(200), nullable=True)  # Current running order number
+    cell_efficiency_received = db.Column(db.Text, nullable=True)  # JSON: efficiency grade wise received cells
     created_date = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -21,6 +23,14 @@ class Company(db.Model):
     rejected_modules = db.relationship('RejectedModule', backref='company', lazy=True, cascade='all, delete-orphan')
     
     def to_dict(self):
+        # Parse cell efficiency received JSON
+        cell_eff_received = {}
+        if self.cell_efficiency_received:
+            try:
+                cell_eff_received = json.loads(self.cell_efficiency_received)
+            except:
+                cell_eff_received = {}
+        
         return {
             'id': self.id,
             'companyName': self.company_name,
@@ -30,6 +40,7 @@ class Company(db.Model):
             'currentRunningOrder': self.current_running_order,
             'cellsReceivedQty': self.cells_received_qty,
             'cellsReceivedMW': self.cells_received_mw,
+            'cellEfficiencyReceived': cell_eff_received,  # Efficiency grade wise received cells
             'createdDate': self.created_date.strftime('%Y-%m-%d') if self.created_date else None,
             'productionRecords': [pr.to_dict() for pr in self.production_records],
             'rejectedModules': [rm.to_dict() for rm in self.rejected_modules]
@@ -54,7 +65,9 @@ class ProductionRecord(db.Model):
     pdi_batch_id = db.Column(db.Integer, nullable=True)
     coc_invoice_numbers = db.Column(db.Text, nullable=True)  # Deprecated - use coc_materials
     coc_materials = db.Column(db.Text, nullable=True)  # JSON array for COC linking (customer docs)
-    cell_efficiency = db.Column(db.Float, nullable=True)  # Cell efficiency % for this day's production
+    cell_efficiency = db.Column(db.Float, nullable=True)  # Deprecated - use day/night cell efficiency
+    day_cell_efficiency = db.Column(db.Float, nullable=True)  # Cell efficiency % for day shift
+    night_cell_efficiency = db.Column(db.Float, nullable=True)  # Cell efficiency % for night shift
     cell_rejection_percent = db.Column(db.Float, default=0.0)
     module_rejection_percent = db.Column(db.Float, default=0.0)
     ipqc_pdf = db.Column(db.String(500), nullable=True)  # Deprecated - use day_ipqc_pdf / night_ipqc_pdf
@@ -94,7 +107,9 @@ class ProductionRecord(db.Model):
             'pdiBatchId': self.pdi_batch_id,
             'cocInvoiceNumbers': self.coc_invoice_numbers,
             'cocMaterials': coc_materials_list,  # COC linking data (separate from BOM)
-            'cellEfficiency': self.cell_efficiency,  # Cell efficiency % for this day
+            'cellEfficiency': self.cell_efficiency,  # Deprecated - kept for backward compatibility
+            'dayCellEfficiency': self.day_cell_efficiency,  # Day shift cell efficiency
+            'nightCellEfficiency': self.night_cell_efficiency,  # Night shift cell efficiency
             'cellRejectionPercent': self.cell_rejection_percent,
             'moduleRejectionPercent': self.module_rejection_percent,
             'ipqcPdf': self.ipqc_pdf,  # Deprecated - kept for backward compatibility

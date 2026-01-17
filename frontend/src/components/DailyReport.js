@@ -3192,6 +3192,143 @@ function DailyReport() {
                 </div>
               )}
               
+              {/* Cell Efficiency Inventory Section */}
+              <div style={{
+                marginBottom: '20px', 
+                padding: '15px', 
+                backgroundColor: '#e3f2fd', 
+                borderRadius: '10px',
+                border: '2px solid #1976d2'
+              }}>
+                <h4 style={{margin: '0 0 12px 0', color: '#1565c0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  ⚡ Cell Efficiency Inventory
+                  <span style={{fontSize: '11px', color: '#666', fontWeight: 'normal'}}>(Solar Cell Grade Wise Stock)</span>
+                </h4>
+                
+                {(() => {
+                  // Calculate efficiency-wise inventory
+                  const efficiencyGrades = ['25.0', '25.1', '25.2', '25.3', '25.4', '25.5', '25.6', '25.7', '25.8', '25.9', '26.0'];
+                  
+                  // Get cell efficiency received data from state (if exists)
+                  const cellEfficiencyReceived = selectedCompany?.cellEfficiencyReceived || {};
+                  
+                  // Calculate used cells per efficiency from production records
+                  const usedByEfficiency = {};
+                  efficiencyGrades.forEach(eff => { usedByEfficiency[eff] = 0; });
+                  
+                  dateRecords.forEach(record => {
+                    const dayEff = record.dayCellEfficiency ? String(record.dayCellEfficiency) : null;
+                    const nightEff = record.nightCellEfficiency ? String(record.nightCellEfficiency) : null;
+                    const dayProd = record.dayProduction || 0;
+                    const nightProd = record.nightProduction || 0;
+                    
+                    // Each module uses 66 cells (half-cut)
+                    if (dayEff && usedByEfficiency.hasOwnProperty(dayEff)) {
+                      usedByEfficiency[dayEff] += dayProd * 66;
+                    }
+                    if (nightEff && usedByEfficiency.hasOwnProperty(nightEff)) {
+                      usedByEfficiency[nightEff] += nightProd * 66;
+                    }
+                  });
+                  
+                  return (
+                    <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
+                      {efficiencyGrades.map(eff => {
+                        const received = cellEfficiencyReceived[eff] || 0;
+                        const used = usedByEfficiency[eff] || 0;
+                        const remaining = received - used;
+                        const hasData = received > 0 || used > 0;
+                        
+                        return (
+                          <div 
+                            key={eff}
+                            style={{
+                              minWidth: '90px',
+                              padding: '8px',
+                              backgroundColor: remaining < 0 ? '#ffebee' : remaining === 0 && received === 0 ? '#f5f5f5' : '#e8f5e9',
+                              borderRadius: '6px',
+                              border: `2px solid ${remaining < 0 ? '#f44336' : hasData ? '#4caf50' : '#bdbdbd'}`,
+                              textAlign: 'center'
+                            }}
+                          >
+                            <div style={{
+                              fontSize: '13px', 
+                              fontWeight: 'bold', 
+                              color: '#1565c0',
+                              marginBottom: '4px'
+                            }}>
+                              {eff}%
+                            </div>
+                            <div style={{fontSize: '10px', color: '#666'}}>
+                              <div>Rcvd: <strong style={{color: '#1976d2'}}>{received.toLocaleString()}</strong></div>
+                              <div>Used: <strong style={{color: '#d32f2f'}}>{used.toLocaleString()}</strong></div>
+                              <div style={{
+                                marginTop: '3px',
+                                padding: '2px 4px',
+                                backgroundColor: remaining < 0 ? '#f44336' : remaining > 0 ? '#4caf50' : '#9e9e9e',
+                                color: 'white',
+                                borderRadius: '3px',
+                                fontWeight: 'bold'
+                              }}>
+                                Bal: {remaining.toLocaleString()}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                      
+                      {/* Add/Edit Received Button */}
+                      <button
+                        onClick={async () => {
+                          const effInput = prompt(
+                            'Enter Cell Efficiency Received (format: efficiency:qty, efficiency:qty)\nExample: 25.2:50000, 25.5:30000\n\nCurrent:\n' +
+                            efficiencyGrades.map(e => `${e}%: ${(cellEfficiencyReceived[e] || 0).toLocaleString()}`).join('\n')
+                          );
+                          if (effInput) {
+                            const newReceived = {...cellEfficiencyReceived};
+                            effInput.split(',').forEach(pair => {
+                              const [eff, qty] = pair.trim().split(':');
+                              if (eff && qty) {
+                                newReceived[eff.trim()] = parseInt(qty.trim()) || 0;
+                              }
+                            });
+                            
+                            // Save to server
+                            try {
+                              await companyService.updateCompany(selectedCompany.id, {
+                                ...selectedCompany,
+                                cellEfficiencyReceived: newReceived
+                              });
+                              await refreshSelectedCompany();
+                              alert('✅ Cell Efficiency data saved successfully!');
+                            } catch (error) {
+                              console.error('Failed to save:', error);
+                              alert('❌ Failed to save. Try again.');
+                            }
+                          }
+                        }}
+                        style={{
+                          minWidth: '60px',
+                          padding: '8px',
+                          backgroundColor: '#1976d2',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontSize: '20px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="Add/Edit Cell Received Qty"
+                      >
+                        ➕
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+              
               <div className="production-table-wrapper" style={{overflowX: 'auto', maxWidth: '100%'}}>
                 <table className="production-table" style={{fontSize: '12px', minWidth: '1550px'}}>
                 <thead>
@@ -3205,7 +3342,8 @@ function DailyReport() {
                     <th style={{width: '70px'}}>DAY</th>
                     <th style={{width: '70px'}}>NIGHT</th>
                     <th style={{width: '60px'}}>TOTAL</th>
-                    <th style={{width: '75px', backgroundColor: '#e3f2fd'}}>CELL EFF %</th>
+                    <th style={{width: '75px', backgroundColor: '#e3f2fd'}}>DAY EFF %</th>
+                    <th style={{width: '75px', backgroundColor: '#bbdefb'}}>NIGHT EFF %</th>
                     <th style={{width: '70px', backgroundColor: '#fff3cd'}}>CELL REJ %</th>
                     <th style={{width: '80px', backgroundColor: '#f8d7da'}}>MODULE REJ %</th>
                     <th style={{width: '80px', backgroundColor: '#d1ecf1'}}>IPQC Sheet</th>
@@ -3305,8 +3443,8 @@ function DailyReport() {
                         <td className="total-cell" style={{fontSize: '12px', fontWeight: '700'}}>{total}</td>
                         <td style={{backgroundColor: '#e3f2fd22'}}>
                           <select
-                            value={record.cellEfficiency || ''}
-                            onChange={(e) => handleProductionChange(record.id, 'cellEfficiency', e.target.value)}
+                            value={record.dayCellEfficiency || ''}
+                            onChange={(e) => handleProductionChange(record.id, 'dayCellEfficiency', e.target.value)}
                             disabled={isClosed}
                             style={{
                               width: '70px', 
@@ -3314,9 +3452,39 @@ function DailyReport() {
                               fontSize: '11px', 
                               border: '2px solid #1976d2',
                               borderRadius: '3px',
-                              backgroundColor: record.cellEfficiency ? '#e3f2fd' : 'white',
-                              fontWeight: record.cellEfficiency ? 'bold' : 'normal',
+                              backgroundColor: record.dayCellEfficiency ? '#e3f2fd' : 'white',
+                              fontWeight: record.dayCellEfficiency ? 'bold' : 'normal',
                               color: '#1565c0'
+                            }}
+                          >
+                            <option value="">-</option>
+                            <option value="25.0">25.0%</option>
+                            <option value="25.1">25.1%</option>
+                            <option value="25.2">25.2%</option>
+                            <option value="25.3">25.3%</option>
+                            <option value="25.4">25.4%</option>
+                            <option value="25.5">25.5%</option>
+                            <option value="25.6">25.6%</option>
+                            <option value="25.7">25.7%</option>
+                            <option value="25.8">25.8%</option>
+                            <option value="25.9">25.9%</option>
+                            <option value="26.0">26.0%</option>
+                          </select>
+                        </td>
+                        <td style={{backgroundColor: '#bbdefb22'}}>
+                          <select
+                            value={record.nightCellEfficiency || ''}
+                            onChange={(e) => handleProductionChange(record.id, 'nightCellEfficiency', e.target.value)}
+                            disabled={isClosed}
+                            style={{
+                              width: '70px', 
+                              padding: '4px 2px', 
+                              fontSize: '11px', 
+                              border: '2px solid #0d47a1',
+                              borderRadius: '3px',
+                              backgroundColor: record.nightCellEfficiency ? '#bbdefb' : 'white',
+                              fontWeight: record.nightCellEfficiency ? 'bold' : 'normal',
+                              color: '#0d47a1'
                             }}
                           >
                             <option value="">-</option>

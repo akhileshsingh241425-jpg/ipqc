@@ -261,6 +261,11 @@ def update_company(company_id):
         company.cells_received_qty = int(data.get('cellsReceivedQty')) if data.get('cellsReceivedQty') else None
         company.cells_received_mw = float(data.get('cellsReceivedMW')) if data.get('cellsReceivedMW') else None
         
+        # Update cell efficiency received (JSON)
+        if 'cellEfficiencyReceived' in data:
+            import json
+            company.cell_efficiency_received = json.dumps(data.get('cellEfficiencyReceived', {}))
+        
         db.session.commit()
         
         return jsonify(company.to_dict()), 200
@@ -330,6 +335,8 @@ def add_production_record(company_id):
             running_order=running_order,
             pdi_approved=data.get('pdiApproved', False),
             cell_efficiency=float(data.get('cellEfficiency')) if data.get('cellEfficiency') else None,
+            day_cell_efficiency=float(data.get('dayCellEfficiency')) if data.get('dayCellEfficiency') else None,
+            night_cell_efficiency=float(data.get('nightCellEfficiency')) if data.get('nightCellEfficiency') else None,
             cell_rejection_percent=float(data.get('cellRejectionPercent', 0.0)),
             module_rejection_percent=float(data.get('moduleRejectionPercent', 0.0)),
             is_closed=False
@@ -403,6 +410,10 @@ def update_production_record(company_id, record_id):
         record.module_rejection_percent = float(data.get('moduleRejectionPercent', record.module_rejection_percent))
         if 'cellEfficiency' in data:
             record.cell_efficiency = float(data.get('cellEfficiency')) if data.get('cellEfficiency') else None
+        if 'dayCellEfficiency' in data:
+            record.day_cell_efficiency = float(data.get('dayCellEfficiency')) if data.get('dayCellEfficiency') else None
+        if 'nightCellEfficiency' in data:
+            record.night_cell_efficiency = float(data.get('nightCellEfficiency')) if data.get('nightCellEfficiency') else None
         
         # Update new fields
         if 'lotNumber' in data:
