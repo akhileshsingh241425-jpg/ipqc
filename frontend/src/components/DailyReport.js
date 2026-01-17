@@ -181,6 +181,8 @@ function DailyReport() {
     invoiceNo: '',
     receiveDate: new Date().toISOString().split('T')[0]
   });
+  const [cellReceivedEditMode, setCellReceivedEditMode] = useState(false); // For edit mode
+  const [cellReceivedEditKey, setCellReceivedEditKey] = useState(null); // {eff, company} for editing
 
   // Manual COC Entry states
   const [showManualCocModal, setShowManualCocModal] = useState(false);
@@ -3352,18 +3354,19 @@ function DailyReport() {
                   <button
                     onClick={() => setShowCellReceivedModal(true)}
                     style={{
-                      padding: '8px 16px',
+                      padding: '10px 20px',
                       backgroundColor: '#FF5722',
                       color: 'white',
                       border: 'none',
-                      borderRadius: '5px',
+                      borderRadius: '8px',
                       cursor: 'pointer',
-                      fontSize: '12px',
+                      fontSize: '14px',
                       fontWeight: 'bold',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '5px',
-                      marginLeft: '10px'
+                      gap: '8px',
+                      marginLeft: '10px',
+                      boxShadow: '0 3px 10px rgba(255,87,34,0.3)'
                     }}
                   >
                     ➕ CELL RECEIVED ENTRY
@@ -3430,44 +3433,93 @@ function DailyReport() {
                   
                   return (
                     <div>
-                      {/* Summary Stats */}
+                      {/* GRAND SUMMARY STATS - BIG CARDS */}
                       <div style={{
-                        display: 'flex', 
-                        gap: '15px', 
-                        marginBottom: '15px', 
-                        padding: '10px', 
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(6, 1fr)',
+                        gap: '12px', 
+                        marginBottom: '20px', 
+                        padding: '15px', 
                         backgroundColor: 'white', 
-                        borderRadius: '8px',
-                        flexWrap: 'wrap'
+                        borderRadius: '12px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
                       }}>
-                        <div style={{textAlign: 'center', padding: '5px 15px', borderRight: '2px solid #e0e0e0'}}>
-                          <div style={{fontSize: '10px', color: '#666'}}>Total Received</div>
-                          <div style={{fontSize: '16px', fontWeight: 'bold', color: '#1976d2'}}>{grandTotalReceived.toLocaleString()}</div>
+                        <div style={{
+                          textAlign: 'center', 
+                          padding: '15px', 
+                          background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
+                          borderRadius: '10px',
+                          border: '2px solid #1976d2'
+                        }}>
+                          <div style={{fontSize: '12px', color: '#1565c0', fontWeight: '600', marginBottom: '5px'}}>📦 TOTAL RECEIVED</div>
+                          <div style={{fontSize: '26px', fontWeight: 'bold', color: '#1976d2'}}>{grandTotalReceived.toLocaleString()}</div>
+                          <div style={{fontSize: '11px', color: '#666'}}>Cells</div>
                         </div>
-                        <div style={{textAlign: 'center', padding: '5px 15px', borderRight: '2px solid #e0e0e0'}}>
-                          <div style={{fontSize: '10px', color: '#666'}}>Total Used</div>
-                          <div style={{fontSize: '16px', fontWeight: 'bold', color: '#d32f2f'}}>{grandTotalUsed.toLocaleString()}</div>
+                        <div style={{
+                          textAlign: 'center', 
+                          padding: '15px', 
+                          background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
+                          borderRadius: '10px',
+                          border: '2px solid #d32f2f'
+                        }}>
+                          <div style={{fontSize: '12px', color: '#c62828', fontWeight: '600', marginBottom: '5px'}}>🔧 TOTAL USED</div>
+                          <div style={{fontSize: '26px', fontWeight: 'bold', color: '#d32f2f'}}>{grandTotalUsed.toLocaleString()}</div>
+                          <div style={{fontSize: '11px', color: '#666'}}>Cells</div>
                         </div>
-                        <div style={{textAlign: 'center', padding: '5px 15px', borderRight: '2px solid #e0e0e0'}}>
-                          <div style={{fontSize: '10px', color: '#666'}}>Remaining</div>
-                          <div style={{fontSize: '16px', fontWeight: 'bold', color: grandRemaining >= 0 ? '#4caf50' : '#f44336'}}>{grandRemaining.toLocaleString()}</div>
+                        <div style={{
+                          textAlign: 'center', 
+                          padding: '15px', 
+                          background: grandRemaining >= 0 
+                            ? 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)' 
+                            : 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
+                          borderRadius: '10px',
+                          border: `2px solid ${grandRemaining >= 0 ? '#4caf50' : '#f44336'}`
+                        }}>
+                          <div style={{fontSize: '12px', color: grandRemaining >= 0 ? '#2e7d32' : '#c62828', fontWeight: '600', marginBottom: '5px'}}>📊 REMAINING</div>
+                          <div style={{fontSize: '26px', fontWeight: 'bold', color: grandRemaining >= 0 ? '#4caf50' : '#f44336'}}>{grandRemaining.toLocaleString()}</div>
+                          <div style={{fontSize: '11px', color: '#666'}}>Cells</div>
                         </div>
-                        <div style={{textAlign: 'center', padding: '5px 15px', borderRight: '2px solid #e0e0e0'}}>
-                          <div style={{fontSize: '10px', color: '#666'}}>Avg Rejection</div>
-                          <div style={{fontSize: '16px', fontWeight: 'bold', color: '#ff9800'}}>{avgRejectionPercent}%</div>
+                        <div style={{
+                          textAlign: 'center', 
+                          padding: '15px', 
+                          background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
+                          borderRadius: '10px',
+                          border: '2px solid #ff9800'
+                        }}>
+                          <div style={{fontSize: '12px', color: '#e65100', fontWeight: '600', marginBottom: '5px'}}>⚠️ AVG REJECTION</div>
+                          <div style={{fontSize: '26px', fontWeight: 'bold', color: '#ff9800'}}>{avgRejectionPercent}%</div>
+                          <div style={{fontSize: '11px', color: '#666'}}>Rate</div>
                         </div>
-                        <div style={{textAlign: 'center', padding: '5px 15px', borderRight: '2px solid #e0e0e0'}}>
-                          <div style={{fontSize: '10px', color: '#666'}}>After Rejection</div>
-                          <div style={{fontSize: '16px', fontWeight: 'bold', color: '#9c27b0'}}>{afterRejection.toLocaleString()}</div>
+                        <div style={{
+                          textAlign: 'center', 
+                          padding: '15px', 
+                          background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)',
+                          borderRadius: '10px',
+                          border: '2px solid #9c27b0'
+                        }}>
+                          <div style={{fontSize: '12px', color: '#7b1fa2', fontWeight: '600', marginBottom: '5px'}}>✅ AFTER REJECTION</div>
+                          <div style={{fontSize: '26px', fontWeight: 'bold', color: '#9c27b0'}}>{afterRejection.toLocaleString()}</div>
+                          <div style={{fontSize: '11px', color: '#666'}}>Usable Cells</div>
                         </div>
-                        <div style={{textAlign: 'center', padding: '5px 15px', backgroundColor: '#4caf50', borderRadius: '5px'}}>
-                          <div style={{fontSize: '10px', color: 'white'}}>Est. Modules</div>
-                          <div style={{fontSize: '18px', fontWeight: 'bold', color: 'white'}}>{estimatedModules.toLocaleString()}</div>
+                        <div style={{
+                          textAlign: 'center', 
+                          padding: '15px', 
+                          background: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)',
+                          borderRadius: '10px',
+                          boxShadow: '0 4px 15px rgba(76,175,80,0.4)'
+                        }}>
+                          <div style={{fontSize: '12px', color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginBottom: '5px'}}>🏭 EST. MODULES</div>
+                          <div style={{fontSize: '30px', fontWeight: 'bold', color: 'white'}}>{estimatedModules.toLocaleString()}</div>
+                          <div style={{fontSize: '11px', color: 'rgba(255,255,255,0.8)'}}>Can Produce</div>
                         </div>
                       </div>
                       
-                      {/* Efficiency-wise Grid */}
-                      <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
+                      {/* EFFICIENCY-WISE DETAILED CARDS */}
+                      <div style={{
+                        display: 'grid', 
+                        gridTemplateColumns: 'repeat(5, 1fr) auto',
+                        gap: '15px'
+                      }}>
                         {efficiencyGrades.map(eff => {
                           const effData = cellEfficiencyReceived[eff] || {};
                           const companies = typeof effData === 'object' ? effData : {};
@@ -3484,136 +3536,111 @@ function DailyReport() {
                             <div 
                               key={eff}
                               style={{
-                                minWidth: '120px',
-                                padding: '8px',
-                                backgroundColor: remaining < 0 ? '#ffebee' : remaining === 0 && totalReceived === 0 ? '#f5f5f5' : '#e8f5e9',
-                                borderRadius: '6px',
-                                border: `2px solid ${remaining < 0 ? '#f44336' : hasData ? '#4caf50' : '#bdbdbd'}`,
-                                textAlign: 'center'
+                                padding: '15px',
+                                backgroundColor: remaining < 0 ? '#ffebee' : remaining === 0 && totalReceived === 0 ? '#fafafa' : '#ffffff',
+                                borderRadius: '12px',
+                                border: `3px solid ${remaining < 0 ? '#f44336' : hasData ? '#4caf50' : '#e0e0e0'}`,
+                                boxShadow: hasData ? '0 4px 15px rgba(0,0,0,0.1)' : 'none'
                               }}
                             >
+                              {/* Efficiency Header */}
                               <div style={{
-                                fontSize: '14px', 
+                                fontSize: '22px', 
                                 fontWeight: 'bold', 
                                 color: '#1565c0',
-                                marginBottom: '6px',
-                                borderBottom: '1px solid #90caf9',
-                                paddingBottom: '4px'
+                                marginBottom: '12px',
+                                textAlign: 'center',
+                                padding: '8px',
+                                background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
+                                borderRadius: '8px'
                               }}>
-                                {eff}%
+                                ⚡ {eff}%
                               </div>
                               
                               {/* Company-wise breakdown */}
                               {Object.keys(companies).length > 0 && (
-                                <div style={{fontSize: '9px', color: '#666', marginBottom: '4px', textAlign: 'left'}}>
+                                <div style={{
+                                  marginBottom: '12px', 
+                                  padding: '10px', 
+                                  backgroundColor: '#f5f5f5', 
+                                  borderRadius: '8px'
+                                }}>
+                                  <div style={{fontSize: '11px', color: '#666', marginBottom: '6px', fontWeight: '600'}}>SUPPLIER WISE:</div>
                                   {Object.entries(companies).map(([company, qty]) => (
-                                    <div key={company}>📦 {company}: <strong>{(qty || 0).toLocaleString()}</strong></div>
+                                    <div key={company} style={{
+                                      display: 'flex', 
+                                      justifyContent: 'space-between', 
+                                      padding: '4px 0',
+                                      borderBottom: '1px dashed #e0e0e0',
+                                      fontSize: '13px'
+                                    }}>
+                                      <span style={{color: '#555'}}>🏭 {company}</span>
+                                      <strong style={{color: '#1976d2'}}>{(qty || 0).toLocaleString()}</strong>
+                                    </div>
                                   ))}
                                 </div>
                               )}
                               
-                              <div style={{fontSize: '10px', color: '#666'}}>
-                                <div>Rcvd: <strong style={{color: '#1976d2'}}>{totalReceived.toLocaleString()}</strong></div>
-                                <div>Used: <strong style={{color: '#d32f2f'}}>{used.toLocaleString()}</strong></div>
-                                <div>Bal: <strong style={{color: remaining >= 0 ? '#4caf50' : '#f44336'}}>{remaining.toLocaleString()}</strong></div>
-                                <div style={{
-                                  marginTop: '4px',
-                                  padding: '3px',
-                                  backgroundColor: '#4caf50',
-                                  color: 'white',
-                                  borderRadius: '3px',
-                                  fontWeight: 'bold'
-                                }}>
-                                  🔧 {estModules.toLocaleString()} Mod
+                              {/* Stats Grid */}
+                              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px'}}>
+                                <div style={{padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '8px', textAlign: 'center'}}>
+                                  <div style={{fontSize: '10px', color: '#1565c0', fontWeight: '600'}}>RECEIVED</div>
+                                  <div style={{fontSize: '18px', fontWeight: 'bold', color: '#1976d2'}}>{totalReceived.toLocaleString()}</div>
                                 </div>
+                                <div style={{padding: '10px', backgroundColor: '#ffebee', borderRadius: '8px', textAlign: 'center'}}>
+                                  <div style={{fontSize: '10px', color: '#c62828', fontWeight: '600'}}>USED</div>
+                                  <div style={{fontSize: '18px', fontWeight: 'bold', color: '#d32f2f'}}>{used.toLocaleString()}</div>
+                                </div>
+                              </div>
+                              
+                              {/* Balance */}
+                              <div style={{
+                                padding: '12px', 
+                                backgroundColor: remaining >= 0 ? '#e8f5e9' : '#ffebee', 
+                                borderRadius: '8px', 
+                                textAlign: 'center',
+                                marginBottom: '10px'
+                              }}>
+                                <div style={{fontSize: '10px', color: remaining >= 0 ? '#2e7d32' : '#c62828', fontWeight: '600'}}>BALANCE</div>
+                                <div style={{fontSize: '22px', fontWeight: 'bold', color: remaining >= 0 ? '#4caf50' : '#f44336'}}>
+                                  {remaining.toLocaleString()}
+                                </div>
+                              </div>
+                              
+                              {/* Estimated Modules */}
+                              <div style={{
+                                padding: '12px',
+                                background: 'linear-gradient(135deg, #4caf50 0%, #66bb6a 100%)',
+                                borderRadius: '8px',
+                                textAlign: 'center',
+                                color: 'white'
+                              }}>
+                                <div style={{fontSize: '10px', fontWeight: '600', opacity: 0.9}}>EST. MODULES</div>
+                                <div style={{fontSize: '24px', fontWeight: 'bold'}}>🔧 {estModules.toLocaleString()}</div>
                               </div>
                             </div>
                           );
                         })}
                         
                         {/* Add/Edit Received Button */}
-                        <button
-                          onClick={async () => {
-                            const currentData = efficiencyGrades.map(e => {
-                              const effData = cellEfficiencyReceived[e] || {};
-                              if (typeof effData === 'object') {
-                                return `${e}%: ${Object.entries(effData).map(([c, q]) => `${c}:${q}`).join(', ') || 'None'}`;
-                              }
-                              return `${e}%: ${effData || 0}`;
-                            }).join('\n');
-                            
-                            const effInput = prompt(
-                              'Enter Cell Received (format: efficiency:company:qty)\n' +
-                              'Example: 25.2:Longi:50000, 25.5:JA Solar:30000\n\n' +
-                              'To add to existing, just enter new values.\n\n' +
-                              'Current:\n' + currentData
-                            );
-                            
-                            if (effInput) {
-                              const newReceived = {...cellEfficiencyReceived};
-                              
-                              effInput.split(',').forEach(item => {
-                                const parts = item.trim().split(':');
-                                if (parts.length >= 3) {
-                                  const eff = parts[0].trim();
-                                  const company = parts[1].trim();
-                                  const qty = parseInt(parts[2].trim()) || 0;
-                                  
-                                  if (!newReceived[eff]) {
-                                    newReceived[eff] = {};
-                                  }
-                                  if (typeof newReceived[eff] !== 'object') {
-                                    newReceived[eff] = {};
-                                  }
-                                  newReceived[eff][company] = (newReceived[eff][company] || 0) + qty;
-                                } else if (parts.length === 2) {
-                                  // Simple format: efficiency:qty
-                                  const eff = parts[0].trim();
-                                  const qty = parseInt(parts[1].trim()) || 0;
-                                  if (!newReceived[eff]) {
-                                    newReceived[eff] = {};
-                                  }
-                                  if (typeof newReceived[eff] !== 'object') {
-                                    newReceived[eff] = { 'Default': newReceived[eff] };
-                                  }
-                                  newReceived[eff]['Default'] = (newReceived[eff]['Default'] || 0) + qty;
-                                }
-                              });
-                              
-                              // Save to server
-                              try {
-                                await companyService.updateCompany(selectedCompany.id, {
-                                  ...selectedCompany,
-                                  cellEfficiencyReceived: newReceived
-                                });
-                                await refreshSelectedCompany();
-                                alert('✅ Cell Efficiency data saved successfully!');
-                              } catch (error) {
-                                console.error('Failed to save:', error);
-                                alert('❌ Failed to save. Try again.');
-                              }
-                            }
-                          }}
-                          style={{
-                            minWidth: '70px',
-                            padding: '10px',
-                            backgroundColor: '#1976d2',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '14px',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '4px'
-                          }}
-                          title="Add Cell Received Qty"
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                          padding: '20px',
+                          backgroundColor: '#e3f2fd',
+                          borderRadius: '12px',
+                          border: '3px dashed #1976d2',
+                          cursor: 'pointer',
+                          minWidth: '100px'
+                        }}
+                        onClick={() => setShowCellReceivedModal(true)}
                         >
-                          <span style={{fontSize: '24px'}}>➕</span>
-                          <span style={{fontSize: '9px'}}>Add Cells</span>
-                        </button>
+                          <span style={{fontSize: '40px', marginBottom: '10px'}}>➕</span>
+                          <span style={{fontSize: '14px', fontWeight: '600', color: '#1565c0'}}>Add Cells</span>
+                          <span style={{fontSize: '11px', color: '#666', marginTop: '5px'}}>Click to add</span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -6744,18 +6771,40 @@ function DailyReport() {
                 return;
               }
               
-              const currentReceived = selectedCompany?.cellEfficiencyReceived || {};
+              const currentReceived = {...(selectedCompany?.cellEfficiencyReceived || {})};
               const eff = cellReceivedForm.efficiency;
               const company = cellReceivedForm.supplierCompany.trim();
               
               const newReceived = {...currentReceived};
-              if (!newReceived[eff]) {
-                newReceived[eff] = {};
+              
+              // If in EDIT mode, first remove old entry if efficiency/company changed
+              if (cellReceivedEditMode && cellReceivedEditKey) {
+                const oldEff = cellReceivedEditKey.eff;
+                const oldCompany = cellReceivedEditKey.company;
+                
+                // Remove old entry
+                if (newReceived[oldEff] && newReceived[oldEff][oldCompany]) {
+                  delete newReceived[oldEff][oldCompany];
+                  if (Object.keys(newReceived[oldEff]).length === 0) {
+                    delete newReceived[oldEff];
+                  }
+                }
+                
+                // Set new entry (replace, not add)
+                if (!newReceived[eff]) {
+                  newReceived[eff] = {};
+                }
+                newReceived[eff][company] = qty;
+              } else {
+                // ADD mode - add to existing
+                if (!newReceived[eff]) {
+                  newReceived[eff] = {};
+                }
+                if (typeof newReceived[eff] !== 'object') {
+                  newReceived[eff] = {};
+                }
+                newReceived[eff][company] = (newReceived[eff][company] || 0) + qty;
               }
-              if (typeof newReceived[eff] !== 'object') {
-                newReceived[eff] = {};
-              }
-              newReceived[eff][company] = (newReceived[eff][company] || 0) + qty;
               
               try {
                 const API_BASE_URL = getAPIBaseURL();
@@ -6768,8 +6817,20 @@ function DailyReport() {
                 });
                 
                 if (response.ok) {
-                  alert(`✅ Entry Saved Successfully!\n\n📦 ${qty.toLocaleString()} Cells\n⚡ Efficiency: ${eff}%\n🏭 Supplier: ${company}`);
-                  loadCompanies();
+                  alert(`✅ ${cellReceivedEditMode ? 'Updated' : 'Added'} Successfully!\n\n📦 ${qty.toLocaleString()} Cells\n⚡ Efficiency: ${eff}%\n🏭 Supplier: ${company}`);
+                  
+                  // Refresh both companies list AND selected company
+                  await loadCompanies();
+                  
+                  // Also update selectedCompany directly so UI shows immediately
+                  setSelectedCompany(prev => ({
+                    ...prev,
+                    cellEfficiencyReceived: newReceived
+                  }));
+                  
+                  // Reset form and edit mode
+                  setCellReceivedEditMode(false);
+                  setCellReceivedEditKey(null);
                   setCellReceivedForm({
                     efficiency: '25.5',
                     supplierCompany: '',
@@ -7041,11 +7102,15 @@ function DailyReport() {
                     e.target.style.boxShadow = '0 4px 15px rgba(26,35,126,0.3)';
                   }}
                 >
-                  Save Entry
+                  {cellReceivedEditMode ? 'Update Entry' : 'Save Entry'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowCellReceivedModal(false)}
+                  onClick={() => {
+                    setShowCellReceivedModal(false);
+                    setCellReceivedEditMode(false);
+                    setCellReceivedEditKey(null);
+                  }}
                   style={{
                     padding: '16px 32px',
                     fontSize: '16px',
@@ -7065,34 +7130,144 @@ function DailyReport() {
               </div>
             </form>
 
-            {/* Current Stock Footer */}
+            {/* Current Stock Footer with EDIT/DELETE buttons */}
             <div style={{
               padding: '20px 30px',
               backgroundColor: '#fafafa',
               borderTop: '1px solid #e0e0e0',
               borderRadius: '0 0 16px 16px'
             }}>
-              <h4 style={{margin: '0 0 14px 0', color: '#546e7a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>Current Inventory Status</h4>
-              <div style={{display: 'flex', gap: '12px', flexWrap: 'wrap'}}>
+              <h4 style={{margin: '0 0 14px 0', color: '#546e7a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>
+                Current Inventory - Click to Edit/Delete
+              </h4>
+              
+              {/* Show all entries with edit/delete */}
+              <div style={{maxHeight: '300px', overflowY: 'auto'}}>
                 {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => {
                   const effData = selectedCompany?.cellEfficiencyReceived?.[eff] || {};
-                  const total = typeof effData === 'object' 
-                    ? Object.values(effData).reduce((sum, q) => sum + (q || 0), 0) 
-                    : (effData || 0);
+                  const companies = typeof effData === 'object' ? effData : {};
+                  
+                  if (Object.keys(companies).length === 0) return null;
+                  
                   return (
-                    <div key={eff} style={{
-                      padding: '12px 20px',
-                      backgroundColor: total > 0 ? '#e3f2fd' : '#f5f5f5',
-                      borderRadius: '10px',
-                      textAlign: 'center',
-                      minWidth: '90px',
-                      border: `2px solid ${total > 0 ? '#1976d2' : '#e0e0e0'}`
-                    }}>
-                      <div style={{fontWeight: '600', color: total > 0 ? '#1565c0' : '#9e9e9e', fontSize: '14px'}}>{eff}%</div>
-                      <div style={{fontSize: '18px', fontWeight: '700', color: total > 0 ? '#1a237e' : '#bdbdbd', marginTop: '4px'}}>{total.toLocaleString()}</div>
+                    <div key={eff} style={{marginBottom: '15px'}}>
+                      <div style={{
+                        fontWeight: '700', 
+                        color: '#1565c0', 
+                        fontSize: '16px', 
+                        marginBottom: '8px',
+                        padding: '5px 10px',
+                        backgroundColor: '#e3f2fd',
+                        borderRadius: '5px'
+                      }}>
+                        ⚡ {eff}% Efficiency
+                      </div>
+                      {Object.entries(companies).map(([company, qty]) => (
+                        <div key={`${eff}-${company}`} style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 15px',
+                          backgroundColor: 'white',
+                          borderRadius: '8px',
+                          marginBottom: '5px',
+                          border: '1px solid #e0e0e0'
+                        }}>
+                          <div>
+                            <span style={{fontWeight: '600', color: '#37474f'}}>🏭 {company}</span>
+                            <span style={{marginLeft: '15px', fontSize: '18px', fontWeight: '700', color: '#1976d2'}}>
+                              {(qty || 0).toLocaleString()} cells
+                            </span>
+                          </div>
+                          <div style={{display: 'flex', gap: '8px'}}>
+                            {/* EDIT Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCellReceivedEditMode(true);
+                                setCellReceivedEditKey({eff, company});
+                                setCellReceivedForm({
+                                  efficiency: eff,
+                                  supplierCompany: company,
+                                  quantity: String(qty || 0),
+                                  invoiceNo: '',
+                                  receiveDate: new Date().toISOString().split('T')[0]
+                                });
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#ff9800',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '5px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '600'
+                              }}
+                            >
+                              ✏️ Edit
+                            </button>
+                            {/* DELETE Button */}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!window.confirm(`Delete ${company} (${qty.toLocaleString()} cells) from ${eff}%?`)) return;
+                                
+                                const currentReceived = {...(selectedCompany?.cellEfficiencyReceived || {})};
+                                if (currentReceived[eff] && currentReceived[eff][company]) {
+                                  delete currentReceived[eff][company];
+                                  // If no companies left in this efficiency, remove the efficiency too
+                                  if (Object.keys(currentReceived[eff]).length === 0) {
+                                    delete currentReceived[eff];
+                                  }
+                                }
+                                
+                                try {
+                                  const API_BASE_URL = getAPIBaseURL();
+                                  const response = await fetch(`${API_BASE_URL}/api/companies/${selectedCompany.id}`, {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ cellEfficiencyReceived: currentReceived })
+                                  });
+                                  
+                                  if (response.ok) {
+                                    alert('✅ Deleted successfully!');
+                                    await loadCompanies();
+                                    setSelectedCompany(prev => ({...prev, cellEfficiencyReceived: currentReceived}));
+                                  }
+                                } catch (error) {
+                                  alert('❌ Error deleting');
+                                }
+                              }}
+                              style={{
+                                padding: '6px 12px',
+                                backgroundColor: '#f44336',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '5px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: '600'
+                              }}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   );
                 })}
+                
+                {/* No data message */}
+                {!['25.4', '25.5', '25.6', '25.7', '25.8'].some(eff => {
+                  const effData = selectedCompany?.cellEfficiencyReceived?.[eff] || {};
+                  return typeof effData === 'object' && Object.keys(effData).length > 0;
+                }) && (
+                  <div style={{textAlign: 'center', padding: '30px', color: '#999'}}>
+                    No cell inventory data yet. Add your first entry above!
+                  </div>
+                )}
               </div>
             </div>
           </div>
