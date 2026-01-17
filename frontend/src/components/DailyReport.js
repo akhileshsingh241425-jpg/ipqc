@@ -3318,17 +3318,26 @@ function DailyReport() {
                       // Helper to normalize efficiency to "25.4", "25.5" etc
                       const normalizeEff = (e) => e ? parseFloat(e).toFixed(1) : null;
                       
+                      // SMART LOGIC: If only one efficiency is set, count TOTAL production
                       records.forEach(record => {
                         const dayEff = normalizeEff(record.dayCellEfficiency);
                         const nightEff = normalizeEff(record.nightCellEfficiency);
                         const dayProd = record.dayProduction || 0;
                         const nightProd = record.nightProduction || 0;
+                        const totalProd = dayProd + nightProd;
                         
-                        if (dayEff && usedByEfficiency.hasOwnProperty(dayEff)) {
-                          usedByEfficiency[dayEff] += dayProd * 66;
+                        // Case 1: Both set - count separately
+                        if (dayEff && nightEff) {
+                          if (usedByEfficiency.hasOwnProperty(dayEff)) usedByEfficiency[dayEff] += dayProd * 66;
+                          if (usedByEfficiency.hasOwnProperty(nightEff)) usedByEfficiency[nightEff] += nightProd * 66;
                         }
-                        if (nightEff && usedByEfficiency.hasOwnProperty(nightEff)) {
-                          usedByEfficiency[nightEff] += nightProd * 66;
+                        // Case 2: Only Day efficiency - count TOTAL
+                        else if (dayEff && !nightEff) {
+                          if (usedByEfficiency.hasOwnProperty(dayEff)) usedByEfficiency[dayEff] += totalProd * 66;
+                        }
+                        // Case 3: Only Night efficiency - count TOTAL
+                        else if (!dayEff && nightEff) {
+                          if (usedByEfficiency.hasOwnProperty(nightEff)) usedByEfficiency[nightEff] += totalProd * 66;
                         }
                         
                         if (record.cellRejectionPercent > 0) {
@@ -3477,18 +3486,26 @@ function DailyReport() {
                   // Helper to normalize efficiency to "25.4", "25.5" etc
                   const normalizeEff = (e) => e ? parseFloat(e).toFixed(1) : null;
                   
+                  // SMART LOGIC: If only one efficiency is set, count TOTAL production
                   dateRecords.forEach(record => {
                     const dayEff = normalizeEff(record.dayCellEfficiency);
                     const nightEff = normalizeEff(record.nightCellEfficiency);
                     const dayProd = record.dayProduction || 0;
                     const nightProd = record.nightProduction || 0;
+                    const totalProd = dayProd + nightProd;
                     
-                    // Each module uses 66 cells (half-cut)
-                    if (dayEff && usedByEfficiency.hasOwnProperty(dayEff)) {
-                      usedByEfficiency[dayEff] += dayProd * 66;
+                    // Case 1: Both set - count separately
+                    if (dayEff && nightEff) {
+                      if (usedByEfficiency.hasOwnProperty(dayEff)) usedByEfficiency[dayEff] += dayProd * 66;
+                      if (usedByEfficiency.hasOwnProperty(nightEff)) usedByEfficiency[nightEff] += nightProd * 66;
                     }
-                    if (nightEff && usedByEfficiency.hasOwnProperty(nightEff)) {
-                      usedByEfficiency[nightEff] += nightProd * 66;
+                    // Case 2: Only Day efficiency - count TOTAL
+                    else if (dayEff && !nightEff) {
+                      if (usedByEfficiency.hasOwnProperty(dayEff)) usedByEfficiency[dayEff] += totalProd * 66;
+                    }
+                    // Case 3: Only Night efficiency - count TOTAL
+                    else if (!dayEff && nightEff) {
+                      if (usedByEfficiency.hasOwnProperty(nightEff)) usedByEfficiency[nightEff] += totalProd * 66;
                     }
                     
                     // Track rejection percentage
@@ -3733,6 +3750,82 @@ function DailyReport() {
                     </div>
                   );
                 })()}
+              </div>
+              
+              {/* BULK UPDATE EFFICIENCY BUTTONS */}
+              <div style={{
+                display: 'flex', 
+                gap: '10px', 
+                marginBottom: '15px', 
+                padding: '15px', 
+                backgroundColor: '#fff3e0', 
+                borderRadius: '10px',
+                border: '2px solid #ff9800',
+                alignItems: 'center',
+                flexWrap: 'wrap'
+              }}>
+                <span style={{fontWeight: 'bold', color: '#e65100', marginRight: '10px'}}>⚡ BULK UPDATE EFFICIENCY:</span>
+                {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => (
+                  <button
+                    key={eff}
+                    onClick={async () => {
+                      const recordsToUpdate = (selectedCompany?.productionRecords || [])
+                        .filter(r => !r.dayCellEfficiency || r.dayCellEfficiency === '');
+                      
+                      if (recordsToUpdate.length === 0) {
+                        alert('✅ All records already have Day Efficiency set!');
+                        return;
+                      }
+                      
+                      if (!window.confirm(`Set Day Efficiency to ${eff}% for ${recordsToUpdate.length} records without efficiency?\n\nThis will update all records where Day Efficiency is not set.`)) {
+                        return;
+                      }
+                      
+                      setLoading(true);
+                      let successCount = 0;
+                      let failCount = 0;
+                      
+                      for (const record of recordsToUpdate) {
+                        try {
+                          await companyService.updateProductionRecord(selectedCompany.id, record.id, {
+                            ...record,
+                            dayCellEfficiency: eff
+                          });
+                          successCount++;
+                        } catch (error) {
+                          console.error('Failed to update record:', record.id, error);
+                          failCount++;
+                        }
+                      }
+                      
+                      await loadCompanies();
+                      if (selectedCompany) {
+                        const updatedCompany = companies.find(c => c.id === selectedCompany.id);
+                        if (updatedCompany) setSelectedCompany(updatedCompany);
+                      }
+                      
+                      setLoading(false);
+                      alert(`✅ Bulk Update Complete!\n\nSuccess: ${successCount}\nFailed: ${failCount}`);
+                    }}
+                    disabled={loading}
+                    style={{
+                      padding: '10px 20px',
+                      backgroundColor: '#ff9800',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      cursor: loading ? 'not-allowed' : 'pointer',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      opacity: loading ? 0.6 : 1
+                    }}
+                  >
+                    {eff}%
+                  </button>
+                ))}
+                <span style={{fontSize: '11px', color: '#666', marginLeft: '10px'}}>
+                  (Updates records without Day Efficiency set)
+                </span>
               </div>
               
               <div className="production-table-wrapper" style={{overflowX: 'auto', maxWidth: '100%'}}>
@@ -4264,17 +4357,34 @@ function DailyReport() {
                 return num.toFixed(1);
               };
               
+              // SMART LOGIC: If only one efficiency is set, count TOTAL production for that efficiency
               (selectedCompany?.productionRecords || []).forEach(record => {
                 const dayEff = normalizeEfficiency(record.dayCellEfficiency);
                 const nightEff = normalizeEfficiency(record.nightCellEfficiency);
                 const dayProd = record.dayProduction || 0;
                 const nightProd = record.nightProduction || 0;
+                const totalProd = dayProd + nightProd;
                 
-                if (dayEff && usedByEfficiency.hasOwnProperty(dayEff)) {
-                  usedByEfficiency[dayEff] += dayProd * 66;
+                // Case 1: Both Day and Night efficiency set - count separately
+                if (dayEff && nightEff) {
+                  if (usedByEfficiency.hasOwnProperty(dayEff)) {
+                    usedByEfficiency[dayEff] += dayProd * 66;
+                  }
+                  if (usedByEfficiency.hasOwnProperty(nightEff)) {
+                    usedByEfficiency[nightEff] += nightProd * 66;
+                  }
                 }
-                if (nightEff && usedByEfficiency.hasOwnProperty(nightEff)) {
-                  usedByEfficiency[nightEff] += nightProd * 66;
+                // Case 2: Only Day efficiency set - count TOTAL production
+                else if (dayEff && !nightEff) {
+                  if (usedByEfficiency.hasOwnProperty(dayEff)) {
+                    usedByEfficiency[dayEff] += totalProd * 66;
+                  }
+                }
+                // Case 3: Only Night efficiency set - count TOTAL production
+                else if (!dayEff && nightEff) {
+                  if (usedByEfficiency.hasOwnProperty(nightEff)) {
+                    usedByEfficiency[nightEff] += totalProd * 66;
+                  }
                 }
                 
                 if (record.cellRejectionPercent > 0) {
@@ -4318,6 +4428,57 @@ function DailyReport() {
                           const XLSXStyle = require('xlsx-js-style');
                           const wb = XLSXStyle.utils.book_new();
                           const records = selectedCompany?.productionRecords || [];
+                          
+                          // Recalculate all values fresh
+                          const effGrades = ['25.4', '25.5', '25.6', '25.7', '25.8'];
+                          const cellEffReceived = selectedCompany?.cellEfficiencyReceived || {};
+                          const usedByEff = {};
+                          effGrades.forEach(eff => { usedByEff[eff] = 0; });
+                          
+                          let totalRejPct = 0;
+                          let recsWithRej = 0;
+                          
+                          // Helper to normalize efficiency
+                          const normEff = (e) => e ? parseFloat(e).toFixed(1) : null;
+                          
+                          // Calculate used cells - SMART LOGIC
+                          // If only one efficiency is set, use TOTAL production for that efficiency
+                          records.forEach(record => {
+                            const dayEff = normEff(record.dayCellEfficiency);
+                            const nightEff = normEff(record.nightCellEfficiency);
+                            const dayProd = record.dayProduction || 0;
+                            const nightProd = record.nightProduction || 0;
+                            const totalProd = dayProd + nightProd;
+                            
+                            // Case 1: Both Day and Night efficiency set - count separately
+                            if (dayEff && nightEff) {
+                              if (usedByEff.hasOwnProperty(dayEff)) {
+                                usedByEff[dayEff] += dayProd * 66;
+                              }
+                              if (usedByEff.hasOwnProperty(nightEff)) {
+                                usedByEff[nightEff] += nightProd * 66;
+                              }
+                            }
+                            // Case 2: Only Day efficiency set - count TOTAL production
+                            else if (dayEff && !nightEff) {
+                              if (usedByEff.hasOwnProperty(dayEff)) {
+                                usedByEff[dayEff] += totalProd * 66;
+                              }
+                            }
+                            // Case 3: Only Night efficiency set - count TOTAL production
+                            else if (!dayEff && nightEff) {
+                              if (usedByEff.hasOwnProperty(nightEff)) {
+                                usedByEff[nightEff] += totalProd * 66;
+                              }
+                            }
+                            
+                            if (record.cellRejectionPercent > 0) {
+                              totalRejPct += record.cellRejectionPercent;
+                              recsWithRej++;
+                            }
+                          });
+                          
+                          const avgRejPct = recsWithRej > 0 ? (totalRejPct / recsWithRej).toFixed(2) : 0;
                           
                           // ======== STYLES ========
                           const titleStyle = { 
@@ -4407,13 +4568,13 @@ function DailyReport() {
                           
                           let grandReceived = 0, grandUsed = 0, grandRemaining = 0, grandAfterRej = 0, grandEstModules = 0;
                           
-                          efficiencyGrades.forEach(eff => {
-                            const effData = cellEfficiencyReceived[eff] || {};
+                          effGrades.forEach(eff => {
+                            const effData = cellEffReceived[eff] || {};
                             const totalReceived = typeof effData === 'object' 
                               ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0) : (effData || 0);
-                            const used = usedByEfficiency[eff] || 0;
+                            const used = usedByEff[eff] || 0;
                             const remaining = totalReceived - used;
-                            const afterRej = Math.floor(remaining * (1 - avgRejectionPercent / 100));
+                            const afterRej = Math.floor(remaining * (1 - avgRejPct / 100));
                             const estModules = Math.floor(afterRej / 66);
                             const status = remaining < 0 ? '🔴 SHORTAGE' : remaining === 0 ? '🟡 ZERO' : '🟢 OK';
                             const percentUsed = totalReceived > 0 ? ((used / totalReceived) * 100).toFixed(1) + '%' : '0%';
@@ -4435,7 +4596,7 @@ function DailyReport() {
                           summaryData.push(['════════════════════════════════════════════════════════════════════']);
                           summaryData.push([]);
                           summaryData.push(['Metric', 'Value', 'Description']);
-                          summaryData.push(['Average Rejection %', `${avgRejectionPercent}%`, 'Average cell rejection rate from production']);
+                          summaryData.push(['Average Rejection %', `${avgRejPct}%`, 'Average cell rejection rate from production']);
                           summaryData.push(['Cells Per Module', '66', 'Standard cells required per module']);
                           summaryData.push(['Total Days Operated', records.length, 'Number of production days']);
                           summaryData.push(['Total Day Production', records.reduce((s, r) => s + (r.dayProduction || 0), 0), 'Sum of all day shift modules']);
@@ -4453,7 +4614,7 @@ function DailyReport() {
                             { s: { r: 16, c: 0 }, e: { r: 16, c: 7 } }
                           ];
                           ['A10', 'B10', 'C10', 'D10', 'E10', 'F10', 'G10', 'H10'].forEach(cell => { if (ws1[cell]) ws1[cell].s = headerStyle; });
-                          efficiencyGrades.forEach((_, idx) => {
+                          effGrades.forEach((_, idx) => {
                             const row = 11 + idx;
                             ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
                               const cell = `${col}${row}`;
@@ -4474,8 +4635,8 @@ function DailyReport() {
                           supplierData.push(['EFFICIENCY', 'SUPPLIER', 'QTY RECEIVED', 'EST. MODULES', '% OF TOTAL']);
                           
                           let supplierRow = 5;
-                          efficiencyGrades.forEach(eff => {
-                            const effData = cellEfficiencyReceived[eff] || {};
+                          effGrades.forEach(eff => {
+                            const effData = cellEffReceived[eff] || {};
                             if (typeof effData === 'object' && Object.keys(effData).length > 0) {
                               const totalForEff = Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0);
                               Object.entries(effData).forEach(([company, qty]) => {
@@ -4611,13 +4772,13 @@ function DailyReport() {
                           balanceData.push(['EFFICIENCY', 'RECEIVED', 'USED', 'BALANCE', 'AFTER REJ', 'EST. MODULES', 'DAYS LEFT (EST)', 'REORDER NEEDED']);
                           
                           const avgDailyUsage = grandUsed / (records.length || 1);
-                          efficiencyGrades.forEach(eff => {
-                            const effData = cellEfficiencyReceived[eff] || {};
+                          effGrades.forEach(eff => {
+                            const effData = cellEffReceived[eff] || {};
                             const totalReceived = typeof effData === 'object' 
                               ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0) : (effData || 0);
-                            const used = usedByEfficiency[eff] || 0;
+                            const used = usedByEff[eff] || 0;
                             const remaining = totalReceived - used;
-                            const afterRej = Math.floor(remaining * (1 - avgRejectionPercent / 100));
+                            const afterRej = Math.floor(remaining * (1 - avgRejPct / 100));
                             const estModules = Math.floor(afterRej / 66);
                             const avgEffUsage = used / (records.length || 1);
                             const daysLeft = avgEffUsage > 0 ? Math.floor(remaining / avgEffUsage) : remaining > 0 ? '∞' : 0;
@@ -4636,7 +4797,7 @@ function DailyReport() {
                           if (ws5['A1']) ws5['A1'].s = titleStyle;
                           ws5['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
                           ['A4', 'B4', 'C4', 'D4', 'E4', 'F4', 'G4', 'H4'].forEach(cell => { if (ws5[cell]) ws5[cell].s = headerStyle; });
-                          efficiencyGrades.forEach((_, idx) => {
+                          effGrades.forEach((_, idx) => {
                             const row = 5 + idx;
                             ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
                               const cell = `${col}${row}`;
