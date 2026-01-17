@@ -7,8 +7,71 @@ from app.models.database import db, ProductionRecord, BomMaterial, Company
 from app.models.pdi_models import PDIBatch, ModuleSerialNumber, MasterOrder, COCDocument, PDICOCUsage
 from io import BytesIO
 import os
+import requests
 
 pdi_bp = Blueprint('pdi', __name__)
+
+# ============================================
+# WHATSAPP NOTIFICATION CONFIG (for PDI alerts)
+# ============================================
+WHATSAPP_API_URL = 'https://wb.omni.tatatelebusiness.com/whatsapp-cloud/messages'
+WHATSAPP_AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwaG9uZU51bWJlciI6Iis5MTg1MjcyODg5MzgiLCJwaG9uZU51bWJlcklkIjoiNDgwNTg4MDkxNzk5NDkwIiwiaWF0IjoxNzI4NTU3MDQ3fQ.jOY6HSv88KZja3dsml3EaUQWrepRDhezsSMZ5IfcUZo'
+
+# Default notification numbers (add your numbers here)
+PDI_ALERT_NUMBERS = ['9773983859']  # Add more numbers as needed
+
+def send_pdi_whatsapp_alert(caution, party_name, module_no, pallet_no, rejection_reason):
+    """Send WhatsApp alert for PDI issues"""
+    try:
+        results = []
+        for number in PDI_ALERT_NUMBERS:
+            recipient = '91' + number.replace('+91', '').replace(' ', '')
+            
+            payload = {
+                "to": recipient,
+                "type": "template",
+                "source": "external",
+                "template": {
+                    "name": "pack_dispatch",
+                    "language": {"code": "en"},
+                    "components": [
+                        {
+                            "type": "header",
+                            "parameters": [
+                                {"type": "text", "text": str(caution)}
+                            ]
+                        },
+                        {
+                            "type": "body",
+                            "parameters": [
+                                {"type": "text", "text": str(party_name)},
+                                {"type": "text", "text": str(module_no)},
+                                {"type": "text", "text": str(pallet_no)},
+                                {"type": "text", "text": str(rejection_reason)}
+                            ]
+                        }
+                    ]
+                }
+            }
+            
+            headers = {
+                "Authorization": WHATSAPP_AUTH_TOKEN,
+                "Content-Type": "application/json"
+            }
+            
+            response = requests.post(WHATSAPP_API_URL, json=payload, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                print(f"✅ PDI WhatsApp alert sent to {recipient}")
+                results.append({'recipient': recipient, 'success': True})
+            else:
+                print(f"❌ PDI WhatsApp failed for {recipient}: {response.text}")
+                results.append({'recipient': recipient, 'success': False, 'error': response.text})
+        
+        return results
+    except Exception as e:
+        print(f"❌ PDI WhatsApp error: {str(e)}")
+        return []
 
 # Get all PDI batches
 @pdi_bp.route('/api/pdi-batches', methods=['GET'])
@@ -232,14 +295,52 @@ def update_serial(serial_id):
         serial = ModuleSerialNumber.query.get_or_404(serial_id)
         data = request.get_json()
         
+        # Get PDI batch and party info for WhatsApp alerts
+        pdi_batch = PDIBatch.query.get(serial.pdi_batch_id)
+        party_name = "Unknown"
+        pallet_no = data.get('palletNo', 'N/A')
+        
+        if pdi_batch:
+            order = MasterOrder.query.get(pdi_batch.order_id)
+            if order:
+                company = Company.query.get(order.company_id)
+                if company:
+                    party_name = company.name
+        
+        # Check if rejection is being uploaded
+        if 'rejectionReason' in data and data['rejectionReason']:
+            serial.rejection_reason = data['rejectionReason']
+            
+            # 🔔 ALERT: Rejection uploaded - Send WhatsApp
+            print(f"⚠️ REJECTION DETECTED: Module {serial.serial_number} - {data['rejectionReason']}")
+            
+            send_pdi_whatsapp_alert(
+                caution="⚠️ REJECTION ALERT",
+                party_name=party_name,
+                module_no=serial.serial_number,
+                pallet_no=pallet_no,
+                rejection_reason=data['rejectionReason']
+            )
+        
         if 'qcStatus' in data:
             serial.qc_status = data['qcStatus']
-        if 'rejectionReason' in data:
-            serial.rejection_reason = data['rejectionReason']
+            
         if 'dispatched' in data:
             serial.dispatched = data['dispatched']
             if data['dispatched']:
                 serial.dispatch_date = datetime.utcnow().date()
+                
+                # 🔔 CHECK: If rejected module is being dispatched - ALERT!
+                if serial.rejection_reason:
+                    print(f"🚨 CRITICAL: Rejected module {serial.serial_number} being dispatched!")
+                    
+                    send_pdi_whatsapp_alert(
+                        caution="🚨 CRITICAL - REJECTED MODULE DISPATCH",
+                        party_name=party_name,
+                        module_no=serial.serial_number,
+                        pallet_no=pallet_no,
+                        rejection_reason=f"REJECTED: {serial.rejection_reason} - BUT BEING DISPATCHED!"
+                    )
         
         db.session.commit()
         return jsonify(serial.to_dict()), 200
@@ -377,4 +478,74 @@ def delete_bom_material():
         print(f"Error unassigning COC: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================
+# PDI ALERT SETTINGS
+# ============================================
+
+@pdi_bp.route('/api/pdi/alert-numbers', methods=['GET'])
+def get_alert_numbers():
+    """Get list of WhatsApp alert numbers"""
+    return jsonify({
+        'numbers': PDI_ALERT_NUMBERS,
+        'count': len(PDI_ALERT_NUMBERS)
+    }), 200
+
+
+@pdi_bp.route('/api/pdi/alert-numbers', methods=['POST'])
+def update_alert_numbers():
+    """Update WhatsApp alert numbers"""
+    global PDI_ALERT_NUMBERS
+    try:
+        data = request.get_json()
+        numbers = data.get('numbers', [])
+        
+        if not numbers:
+            return jsonify({'error': 'At least one number is required'}), 400
+        
+        # Clean numbers
+        cleaned = []
+        for num in numbers:
+            num = str(num).replace('+91', '').replace(' ', '').replace('-', '')
+            if len(num) == 10 and num.isdigit():
+                cleaned.append(num)
+        
+        if not cleaned:
+            return jsonify({'error': 'No valid numbers provided'}), 400
+        
+        PDI_ALERT_NUMBERS = cleaned
+        
+        return jsonify({
+            'success': True,
+            'numbers': PDI_ALERT_NUMBERS,
+            'message': f'Updated {len(PDI_ALERT_NUMBERS)} alert number(s)'
+        }), 200
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@pdi_bp.route('/api/pdi/test-alert', methods=['POST'])
+def test_pdi_alert():
+    """Send a test WhatsApp alert"""
+    try:
+        data = request.get_json()
+        
+        results = send_pdi_whatsapp_alert(
+            caution="🧪 TEST ALERT",
+            party_name=data.get('party_name', 'Test Party'),
+            module_no=data.get('module_no', 'TEST-MODULE-001'),
+            pallet_no=data.get('pallet_no', 'TEST-PLT-001'),
+            rejection_reason=data.get('rejection_reason', 'This is a test alert')
+        )
+        
+        return jsonify({
+            'success': True,
+            'results': results,
+            'message': f'Test alert sent to {len(PDI_ALERT_NUMBERS)} number(s)'
+        }), 200
+        
+    except Exception as e:
         return jsonify({'error': str(e)}), 500

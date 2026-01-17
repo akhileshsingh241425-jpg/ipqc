@@ -1,6 +1,12 @@
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 import os
+import threading
+import time
+import requests
+
+# Global flag for scheduler
+_scheduler_started = False
 
 def create_app():
     app = Flask(__name__)
@@ -88,5 +94,62 @@ def create_app():
         if path and os.path.exists(os.path.join(static_folder, path)):
             return send_from_directory(static_folder, path)
         return send_from_directory(static_folder, 'index.html')
+    
+    # ============================================
+    # AUTO PACKING VALIDATION SCHEDULER
+    # Runs every 10 minutes to check for issues
+    # ============================================
+    def run_packing_validation():
+        """Background task to validate packing every 10 minutes"""
+        global _scheduler_started
+        
+        if _scheduler_started:
+            return
+        _scheduler_started = True
+        
+        # List of companies to check
+        COMPANIES_TO_CHECK = ['Rays Power', 'Larsen & Toubro', 'Sterlin and Wilson']
+        CHECK_INTERVAL = 600  # 10 minutes in seconds
+        
+        def validation_loop():
+            print("\n🔄 PACKING VALIDATION SCHEDULER STARTED")
+            print(f"   Checking every {CHECK_INTERVAL // 60} minutes")
+            print(f"   Companies: {', '.join(COMPANIES_TO_CHECK)}")
+            
+            # Wait for server to fully start
+            time.sleep(30)
+            
+            while True:
+                try:
+                    print(f"\n⏰ [{time.strftime('%Y-%m-%d %H:%M:%S')}] Running scheduled packing validation...")
+                    
+                    for company in COMPANIES_TO_CHECK:
+                        try:
+                            # Call the validation API internally
+                            with app.app_context():
+                                from app.routes.ai_assistant_routes import validate_packing_internal
+                                result = validate_packing_internal(company, send_alerts=True)
+                                
+                                if result.get('total_issues', 0) > 0:
+                                    print(f"   ⚠️ {company}: {result['total_issues']} issues found - Alerts sent!")
+                                else:
+                                    print(f"   ✅ {company}: No issues")
+                        except Exception as e:
+                            print(f"   ❌ Error checking {company}: {str(e)}")
+                    
+                    print(f"   Next check in {CHECK_INTERVAL // 60} minutes...")
+                    
+                except Exception as e:
+                    print(f"❌ Scheduler error: {str(e)}")
+                
+                time.sleep(CHECK_INTERVAL)
+        
+        # Start background thread
+        scheduler_thread = threading.Thread(target=validation_loop, daemon=True)
+        scheduler_thread.start()
+    
+    # Start scheduler when app starts (only in production mode)
+    if os.environ.get('FLASK_ENV') != 'development' or os.environ.get('START_SCHEDULER') == 'true':
+        run_packing_validation()
     
     return app
