@@ -1249,9 +1249,28 @@ const FTRManagement = () => {
             </div>
 
             {loadingMasterView ? (
-              <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
+              <div>
+                <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
+                <button 
+                  onClick={() => setShowMasterViewModal(false)}
+                  style={{
+                    marginTop: '15px',
+                    width: '100%',
+                    padding: '12px',
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             ) : (
-              <>
+              <div>
                 <div style={{display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap'}}>
                   <div style={{flex: 1, padding: '12px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center'}}>
                     <div style={{fontSize: '24px', fontWeight: 'bold', color: '#2e7d32'}}>{masterSerials.length}</div>
@@ -1339,7 +1358,7 @@ const FTRManagement = () => {
                 >
                   Close
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
@@ -1372,9 +1391,28 @@ const FTRManagement = () => {
             </div>
 
             {loadingRejectionView ? (
-              <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
+              <div>
+                <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
+                <button 
+                  onClick={() => setShowRejectionViewModal(false)}
+                  style={{
+                    marginTop: '15px',
+                    width: '100%',
+                    padding: '12px',
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
             ) : (
-              <>
+              <div>
                 <div style={{display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap'}}>
                   <div style={{flex: 1, padding: '12px', background: '#ffebee', borderRadius: '8px', textAlign: 'center', border: '2px solid #dc3545'}}>
                     <div style={{fontSize: '24px', fontWeight: 'bold', color: '#c62828'}}>{rejectionSerials.length}</div>
@@ -1460,7 +1498,7 @@ const FTRManagement = () => {
                 >
                   Close
                 </button>
-              </>
+              </div>
             )}
           </div>
         </div>
