@@ -6758,7 +6758,8 @@ function DailyReport() {
               newReceived[eff][company] = (newReceived[eff][company] || 0) + qty;
               
               try {
-                const response = await fetch(`http://localhost:5003/api/companies/${selectedCompany.id}`, {
+                const API_BASE_URL = getAPIBaseURL();
+                const response = await fetch(`${API_BASE_URL}/api/companies/${selectedCompany.id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
