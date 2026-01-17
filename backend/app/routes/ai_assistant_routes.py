@@ -4752,6 +4752,66 @@ def run_validation_now():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@ai_assistant_bp.route('/ai/scheduler-control', methods=['POST', 'OPTIONS'])
+def scheduler_control():
+    """
+    Control the auto packing validation scheduler
+    Body: { "action": "start" | "stop" }
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({'success': True}), 200
+        
+    try:
+        import app as app_module
+        
+        data = request.json or {}
+        action = data.get('action', 'status')
+        
+        if action == 'stop':
+            app_module._scheduler_enabled = False
+            return jsonify({
+                'success': True,
+                'status': 'stopped',
+                'message': '⏸️ Scheduler paused - No automatic validations will run'
+            })
+        elif action == 'start':
+            app_module._scheduler_enabled = True
+            return jsonify({
+                'success': True,
+                'status': 'running',
+                'message': '▶️ Scheduler resumed - Automatic validations will run every 10 minutes'
+            })
+        else:
+            return jsonify({
+                'success': True,
+                'status': 'running' if app_module._scheduler_enabled else 'stopped',
+                'message': 'Scheduler status retrieved'
+            })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@ai_assistant_bp.route('/ai/scheduler-status', methods=['GET', 'OPTIONS'])
+def scheduler_status():
+    """Get current scheduler status"""
+    if request.method == 'OPTIONS':
+        return jsonify({'success': True}), 200
+        
+    try:
+        import app as app_module
+        enabled = getattr(app_module, '_scheduler_enabled', True)
+        
+        return jsonify({
+            'success': True,
+            'enabled': enabled,
+            'status': 'running' if enabled else 'stopped',
+            'interval': 10,  # minutes
+            'companies': ['Rays Power', 'Larsen & Toubro', 'Sterlin and Wilson']
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 # ============================================
 # WHATSAPP NOTIFICATION - PACK DISPATCH
 # ============================================

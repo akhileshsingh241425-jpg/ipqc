@@ -15,6 +15,8 @@ const AIAssistant = () => {
   const [checkResults, setCheckResults] = useState(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [validationLoading, setValidationLoading] = useState(false);
+  const [schedulerEnabled, setSchedulerEnabled] = useState(true);
+  const [schedulerLoading, setSchedulerLoading] = useState(false);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -23,6 +25,7 @@ const AIAssistant = () => {
   useEffect(() => {
     checkApiConfig();
     loadFTRData();
+    checkSchedulerStatus();
     // Add welcome message
     setMessages([{
       role: 'assistant',
@@ -422,6 +425,60 @@ const AIAssistant = () => {
     }
   };
 
+  // Check Scheduler Status
+  const checkSchedulerStatus = async () => {
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.get(`${API_BASE_URL}/api/ai/scheduler-status`);
+      if (response.data.success) {
+        setSchedulerEnabled(response.data.enabled);
+      }
+    } catch (error) {
+      console.error('Failed to check scheduler status:', error);
+    }
+  };
+
+  // Toggle Scheduler (Start/Stop)
+  const handleToggleScheduler = async () => {
+    setSchedulerLoading(true);
+    const action = schedulerEnabled ? 'stop' : 'start';
+    
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: `${schedulerEnabled ? '⏸️ Stopping' : '▶️ Starting'} auto validation scheduler...`
+    }]);
+    
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.post(`${API_BASE_URL}/api/ai/scheduler-control`, {
+        action: action
+      });
+      
+      if (response.data.success) {
+        setSchedulerEnabled(!schedulerEnabled);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: response.data.message
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `❌ Error: ${response.data.error}`,
+          isError: true
+        }]);
+      }
+    } catch (error) {
+      console.error('Scheduler control error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ Failed to ${action} scheduler: ${error.response?.data?.error || error.message}`,
+        isError: true
+      }]);
+    } finally {
+      setSchedulerLoading(false);
+    }
+  };
+
   return (
     <div className="ai-assistant-container">
       {/* Header */}
@@ -613,6 +670,39 @@ const AIAssistant = () => {
             <p style={{ fontSize: '11px', color: '#888', marginTop: '5px', textAlign: 'center' }}>
               {selectedCompany ? `For: ${selectedCompany}` : 'All Companies: Rays, L&T, S&W'}
             </p>
+            
+            {/* Auto Scheduler Control */}
+            <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #ddd' }}>
+              <p style={{ fontSize: '12px', color: '#555', marginBottom: '8px', textAlign: 'center' }}>
+                🤖 Auto Scheduler (Every 10 min)
+              </p>
+              <button 
+                onClick={handleToggleScheduler}
+                disabled={schedulerLoading}
+                style={{
+                  backgroundColor: schedulerEnabled ? '#f39c12' : '#27ae60',
+                  color: 'white',
+                  padding: '10px 14px',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: schedulerLoading ? 'wait' : 'pointer',
+                  width: '100%',
+                  fontWeight: 'bold',
+                  fontSize: '13px'
+                }}
+              >
+                {schedulerLoading ? '⏳ Processing...' : (schedulerEnabled ? '⏸️ Stop Scheduler' : '▶️ Start Scheduler')}
+              </button>
+              <p style={{ 
+                fontSize: '10px', 
+                color: schedulerEnabled ? '#27ae60' : '#e74c3c', 
+                marginTop: '5px', 
+                textAlign: 'center',
+                fontWeight: 'bold'
+              }}>
+                Status: {schedulerEnabled ? '🟢 Running' : '🔴 Stopped'}
+              </p>
+            </div>
           </div>
         </div>
 

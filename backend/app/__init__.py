@@ -5,8 +5,10 @@ import threading
 import time
 import requests
 
-# Global flag for scheduler
+# Global flags for scheduler
 _scheduler_started = False
+_scheduler_enabled = True  # Default: scheduler is enabled
+_scheduler_enabled = True  # Control flag to pause/resume scheduler
 
 def create_app():
     app = Flask(__name__)
@@ -112,6 +114,7 @@ def create_app():
         CHECK_INTERVAL = 600  # 10 minutes in seconds
         
         def validation_loop():
+            global _scheduler_enabled
             print("\n🔄 PACKING VALIDATION SCHEDULER STARTED")
             print(f"   Checking every {CHECK_INTERVAL // 60} minutes")
             print(f"   Companies: {', '.join(COMPANIES_TO_CHECK)}")
@@ -121,6 +124,12 @@ def create_app():
             
             while True:
                 try:
+                    # Check if scheduler is enabled
+                    if not _scheduler_enabled:
+                        print(f"\n⏸️ [{time.strftime('%Y-%m-%d %H:%M:%S')}] Scheduler paused, skipping validation...")
+                        time.sleep(CHECK_INTERVAL)
+                        continue
+                    
                     print(f"\n⏰ [{time.strftime('%Y-%m-%d %H:%M:%S')}] Running scheduled packing validation...")
                     
                     for company in COMPANIES_TO_CHECK:
