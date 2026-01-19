@@ -28,6 +28,10 @@ const FTRManagement = () => {
   const [showRejectionModal, setShowRejectionModal] = useState(false);
   const [uploadingRejection, setUploadingRejection] = useState(false);
   const [selectedRejectionFile, setSelectedRejectionFile] = useState(null);
+  const [rejectionType, setRejectionType] = useState('normal'); // 'normal' or 'special'
+  const [specialRejectionReason, setSpecialRejectionReason] = useState('');
+  const [specialRejectionStage, setSpecialRejectionStage] = useState('Visual Inspection');
+  const [specialRejectionRemarks, setSpecialRejectionRemarks] = useState('');
   
   // View Rejection Serials
   const [showRejectionViewModal, setShowRejectionViewModal] = useState(false);
@@ -203,6 +207,12 @@ const FTRManagement = () => {
 
   const handleRejectionUpload = async () => {
     if (!selectedRejectionFile) return;
+    
+    // Special rejection requires reason
+    if (rejectionType === 'special' && !specialRejectionReason.trim()) {
+      alert('❌ Special Rejection requires a reason!');
+      return;
+    }
 
     try {
       setUploadingRejection(true);
@@ -246,18 +256,35 @@ const FTRManagement = () => {
             return;
           }
           
-          // Upload to rejection API
-          const response = await axios.post(`${API_BASE_URL}/api/ftr/rejection`, {
+          // Build request data based on rejection type
+          const requestData = {
             company_id: selectedCompany.id,
             serial_numbers: serialNumbers,
-            file_name: file.name
-          });
+            file_name: file.name,
+            rejection_type: rejectionType
+          };
+          
+          // Add special rejection details
+          if (rejectionType === 'special') {
+            requestData.reason = specialRejectionReason;
+            requestData.stage = specialRejectionStage;
+            requestData.remarks = specialRejectionRemarks;
+          }
+          
+          // Upload to rejection API
+          const response = await axios.post(`${API_BASE_URL}/api/ftr/rejection`, requestData);
           
           if (response.data.success) {
-            alert(`✅ Rejection Data Uploaded!\n\n❌ Marked as REJECTED: ${response.data.updated_count}\n⚠️ Already Rejected: ${response.data.already_rejected}\n🆕 New Entries: ${response.data.new_entries}`);
+            const typeLabel = rejectionType === 'special' ? '🔴 SPECIAL' : '⚪ Normal';
+            alert(`✅ ${typeLabel} Rejection Uploaded!\n\n❌ Marked as REJECTED: ${response.data.updated_count}\n⚠️ Already Rejected: ${response.data.already_rejected}\n🆕 New Entries: ${response.data.new_entries}`);
             loadFTRData(selectedCompany.id);
             setShowRejectionModal(false);
             setSelectedRejectionFile(null);
+            // Reset special rejection fields
+            setRejectionType('normal');
+            setSpecialRejectionReason('');
+            setSpecialRejectionStage('Visual Inspection');
+            setSpecialRejectionRemarks('');
           }
         } catch (error) {
           console.error('Failed to process Rejection Excel:', error);
@@ -273,6 +300,7 @@ const FTRManagement = () => {
       setUploadingRejection(false);
     }
   };
+
 
   // Load Master FTR Serials
   const loadMasterSerials = async (search = '', page = 1) => {
@@ -827,7 +855,7 @@ const FTRManagement = () => {
       {/* Rejection Upload Modal */}
       {showRejectionModal && (
         <div className="modal-overlay" onClick={() => setShowRejectionModal(false)}>
-          <div className="modal-content" onClick={e => e.stopPropagation()}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{maxWidth: '550px'}}>
             <h2 style={{
               display: 'flex',
               alignItems: 'center',
@@ -840,6 +868,133 @@ const FTRManagement = () => {
             <p style={{ color: '#999', marginBottom: '20px', fontSize: '14px' }}>
               Company: <strong style={{color: '#dc3545'}}>{selectedCompany?.companyName}</strong>
             </p>
+            
+            {/* Rejection Type Selector */}
+            <div style={{marginBottom: '20px', display: 'flex', gap: '10px'}}>
+              <button
+                onClick={() => setRejectionType('normal')}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: rejectionType === 'normal' ? 'linear-gradient(135deg, #6c757d, #5a6268)' : '#f5f5f5',
+                  color: rejectionType === 'normal' ? 'white' : '#333',
+                  border: rejectionType === 'normal' ? 'none' : '2px solid #ddd',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}
+              >
+                ⚪ Normal Rejection
+              </button>
+              <button
+                onClick={() => setRejectionType('special')}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: rejectionType === 'special' ? 'linear-gradient(135deg, #dc3545, #c82333)' : '#f5f5f5',
+                  color: rejectionType === 'special' ? 'white' : '#333',
+                  border: rejectionType === 'special' ? 'none' : '2px solid #ddd',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '14px'
+                }}
+              >
+                🔴 Special Rejection
+              </button>
+            </div>
+            
+            {/* Special Rejection Details */}
+            {rejectionType === 'special' && (
+              <div style={{
+                background: '#fff5f5',
+                padding: '15px',
+                borderRadius: '10px',
+                marginBottom: '20px',
+                border: '2px solid #dc3545'
+              }}>
+                <h4 style={{color: '#dc3545', marginBottom: '12px', fontSize: '14px'}}>🔴 Special Rejection Details</h4>
+                
+                <div style={{marginBottom: '12px'}}>
+                  <label style={{display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px'}}>
+                    Reason <span style={{color: 'red'}}>*</span>
+                  </label>
+                  <select
+                    value={specialRejectionReason}
+                    onChange={(e) => setSpecialRejectionReason(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <option value="">-- Select Reason --</option>
+                    <option value="Cell Crack">Cell Crack</option>
+                    <option value="Micro Crack">Micro Crack</option>
+                    <option value="Hot Spot">Hot Spot</option>
+                    <option value="Broken Glass">Broken Glass</option>
+                    <option value="Junction Box Issue">Junction Box Issue</option>
+                    <option value="Frame Damage">Frame Damage</option>
+                    <option value="EVA Yellowing">EVA Yellowing</option>
+                    <option value="Backsheet Damage">Backsheet Damage</option>
+                    <option value="Visual Defect">Visual Defect</option>
+                    <option value="EL Test Failed">EL Test Failed</option>
+                    <option value="IV Test Failed">IV Test Failed</option>
+                    <option value="Insulation Test Failed">Insulation Test Failed</option>
+                    <option value="Low Power Output">Low Power Output</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                
+                <div style={{marginBottom: '12px'}}>
+                  <label style={{display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px'}}>
+                    Stage
+                  </label>
+                  <select
+                    value={specialRejectionStage}
+                    onChange={(e) => setSpecialRejectionStage(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '13px'
+                    }}
+                  >
+                    <option value="Visual Inspection">Visual Inspection</option>
+                    <option value="EL Test">EL Test</option>
+                    <option value="IV Test">IV Test</option>
+                    <option value="Insulation Test">Insulation Test</option>
+                    <option value="Final QC">Final QC</option>
+                    <option value="Packing">Packing</option>
+                    <option value="Customer Return">Customer Return</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label style={{display: 'block', fontSize: '12px', color: '#666', marginBottom: '4px'}}>
+                    Remarks (Optional)
+                  </label>
+                  <textarea
+                    value={specialRejectionRemarks}
+                    onChange={(e) => setSpecialRejectionRemarks(e.target.value)}
+                    placeholder="Additional notes..."
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      border: '1px solid #ddd',
+                      fontSize: '13px',
+                      minHeight: '60px',
+                      resize: 'vertical'
+                    }}
+                  />
+                </div>
+              </div>
+            )}
             
             <div style={{
               background: 'linear-gradient(135deg, #1a1a2e, #16213e)',
@@ -900,25 +1055,29 @@ const FTRManagement = () => {
             <div style={{display: 'flex', gap: '10px'}}>
               <button 
                 onClick={handleRejectionUpload}
-                disabled={uploadingRejection || !selectedRejectionFile}
+                disabled={uploadingRejection || !selectedRejectionFile || (rejectionType === 'special' && !specialRejectionReason)}
                 style={{
                   flex: 1,
                   padding: '12px',
-                  background: !selectedRejectionFile ? '#ccc' : 'linear-gradient(135deg, #dc3545, #c82333)',
+                  background: (!selectedRejectionFile || (rejectionType === 'special' && !specialRejectionReason)) ? '#ccc' : 'linear-gradient(135deg, #dc3545, #c82333)',
                   border: 'none',
                   borderRadius: '8px',
                   color: 'white',
-                  cursor: !selectedRejectionFile ? 'not-allowed' : 'pointer',
+                  cursor: (!selectedRejectionFile || (rejectionType === 'special' && !specialRejectionReason)) ? 'not-allowed' : 'pointer',
                   fontSize: '14px',
                   fontWeight: '600'
                 }}
               >
-                {uploadingRejection ? '⏳ Uploading...' : '❌ Upload Rejection'}
+                {uploadingRejection ? '⏳ Uploading...' : (rejectionType === 'special' ? '🔴 Upload Special Rejection' : '⚪ Upload Normal Rejection')}
               </button>
               <button 
                 onClick={() => {
                   setShowRejectionModal(false);
                   setSelectedRejectionFile(null);
+                  setRejectionType('normal');
+                  setSpecialRejectionReason('');
+                  setSpecialRejectionStage('Visual Inspection');
+                  setSpecialRejectionRemarks('');
                 }}
                 disabled={uploadingRejection}
                 style={{
