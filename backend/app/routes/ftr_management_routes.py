@@ -525,3 +525,54 @@ def get_rejection_serials(company_id):
     except Exception as e:
         print(f"Error fetching rejection serials: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@ftr_management_bp.route('/ftr/pdi-serials/<int:company_id>/<pdi_number>', methods=['GET'])
+def get_pdi_serials(company_id, pdi_number):
+    """Get all serial numbers assigned to a specific PDI with pagination"""
+    try:
+        search = request.args.get('search', '').strip()
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 100))
+
+        base_query = "FROM ftr_master_serials WHERE company_id = :company_id AND pdi_number = :pdi_number"
+        params = {'company_id': company_id, 'pdi_number': pdi_number}
+        if search:
+            base_query += " AND serial_number LIKE :search"
+            params['search'] = f'%{search}%'
+
+        # Get total count
+        count_result = db.session.execute(text(f"SELECT COUNT(*) {base_query}"), params)
+        total = count_result.scalar() or 0
+
+        # Get paginated data
+        offset = (page - 1) * page_size
+        data_query = f"SELECT serial_number, pmax, binning, class_status, status, pdi_number, upload_date, assigned_date {base_query} ORDER BY assigned_date DESC LIMIT :limit OFFSET :offset"
+        params.update({'limit': page_size, 'offset': offset})
+        result = db.session.execute(text(data_query), params).fetchall()
+
+        serials = []
+        for row in result:
+            serials.append({
+                'serial_number': row[0],
+                'pmax': float(row[1]) if row[1] else None,
+                'binning': row[2],
+                'class_status': row[3],
+                'status': row[4],
+                'pdi_number': row[5],
+                'upload_date': row[6].strftime('%Y-%m-%d %H:%M:%S') if row[6] else None,
+                'assigned_date': row[7].strftime('%Y-%m-%d %H:%M:%S') if row[7] else None
+            })
+
+        return jsonify({
+            'success': True,
+            'serials': serials,
+            'total': total,
+            'page': page,
+            'page_size': page_size,
+            'pdi_number': pdi_number
+        })
+        
+    except Exception as e:
+        print(f"Error fetching PDI serials: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500

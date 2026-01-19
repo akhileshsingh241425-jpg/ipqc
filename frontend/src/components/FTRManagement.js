@@ -50,6 +50,16 @@ const FTRManagement = () => {
   const [uploadingPacked, setUploadingPacked] = useState(false);
   const [selectedPackedFile, setSelectedPackedFile] = useState(null);
 
+  // View PDI Assigned Serials
+  const [showPdiSerialsModal, setShowPdiSerialsModal] = useState(false);
+  const [pdiSerials, setPdiSerials] = useState([]);
+  const [selectedPdiNumber, setSelectedPdiNumber] = useState('');
+  const [loadingPdiSerials, setLoadingPdiSerials] = useState(false);
+  const [pdiSerialsPage, setPdiSerialsPage] = useState(1);
+  const [pdiSerialsTotal, setPdiSerialsTotal] = useState(0);
+  const [pdiSerialsTotalPages, setPdiSerialsTotalPages] = useState(1);
+  const [pdiSerialsSearch, setPdiSerialsSearch] = useState('');
+
   const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
 
   useEffect(() => {
@@ -286,6 +296,31 @@ const FTRManagement = () => {
       alert('❌ Failed to load master serials');
     } finally {
       setLoadingMasterView(false);
+    }
+  };
+
+  // Load PDI Assigned Serials
+  const loadPdiSerials = async (pdiNumber, search = '', page = 1) => {
+    if (!selectedCompany || !pdiNumber) return;
+    
+    try {
+      setLoadingPdiSerials(true);
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.get(
+        `${API_BASE_URL}/api/ftr/pdi-serials/${selectedCompany.id}/${encodeURIComponent(pdiNumber)}?search=${encodeURIComponent(search)}&page=${page}&page_size=${PAGE_SIZE}`
+      );
+      
+      if (response.data.success) {
+        setPdiSerials(response.data.serials);
+        setPdiSerialsTotal(response.data.total);
+        setPdiSerialsPage(response.data.page);
+        setPdiSerialsTotalPages(Math.ceil(response.data.total / PAGE_SIZE));
+      }
+    } catch (error) {
+      console.error('Failed to load PDI serials:', error);
+      alert('❌ Failed to load PDI serials');
+    } finally {
+      setLoadingPdiSerials(false);
     }
   };
 
@@ -545,7 +580,18 @@ const FTRManagement = () => {
                 <td>{pdi.count.toLocaleString()}</td>
                 <td>{new Date(pdi.date).toLocaleDateString()}</td>
                 <td>
-                  <button className="btn-view">View Serials</button>
+                  <button 
+                    className="btn-view"
+                    onClick={() => {
+                      setSelectedPdiNumber(pdi.pdi_number);
+                      setPdiSerialsSearch('');
+                      setPdiSerialsPage(1);
+                      setShowPdiSerialsModal(true);
+                      loadPdiSerials(pdi.pdi_number, '', 1);
+                    }}
+                  >
+                    View Serials
+                  </button>
                 </td>
               </tr>
             ))}
@@ -1578,6 +1624,185 @@ const FTRManagement = () => {
 
                 <button 
                   onClick={() => setShowRejectionViewModal(false)}
+                  style={{
+                    marginTop: '10px',
+                    width: '100%',
+                    padding: '12px',
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* View PDI Assigned Serials Modal */}
+      {showPdiSerialsModal && (
+        <div className="modal-overlay" onClick={() => setShowPdiSerialsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '95%', width: '1400px', maxHeight: '90vh', height: '85vh'}}>
+            <h2 style={{marginBottom: '20px', fontSize: '24px', color: '#17a2b8'}}>📋 PDI Assigned Serials - {selectedPdiNumber}</h2>
+            
+            {/* Search Bar */}
+            <div style={{marginBottom: '15px'}}>
+              <input 
+                type="text"
+                placeholder="🔍 Search serial number..."
+                value={pdiSerialsSearch}
+                onChange={(e) => {
+                  setPdiSerialsSearch(e.target.value);
+                  setPdiSerialsPage(1);
+                  loadPdiSerials(selectedPdiNumber, e.target.value, 1);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '2px solid #17a2b8',
+                  borderRadius: '8px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            {loadingPdiSerials ? (
+              <div>
+                <p style={{textAlign: 'center', padding: '20px'}}>⏳ Loading...</p>
+                <button 
+                  onClick={() => setShowPdiSerialsModal(false)}
+                  style={{
+                    marginTop: '15px',
+                    width: '100%',
+                    padding: '12px',
+                    background: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: '600'
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap'}}>
+                  <div style={{flex: 1, padding: '12px', background: '#d1ecf1', borderRadius: '8px', textAlign: 'center', border: '2px solid #17a2b8'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#0c5460'}}>{pdiSerialsTotal.toLocaleString()}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Total Assigned</div>
+                  </div>
+                  <div style={{flex: 1, padding: '12px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#2e7d32'}}>{pdiSerials.filter(s => s.class_status === 'OK').length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>OK (Page)</div>
+                  </div>
+                  <div style={{flex: 1, padding: '12px', background: '#ffebee', borderRadius: '8px', textAlign: 'center'}}>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#c62828'}}>{pdiSerials.filter(s => s.class_status !== 'OK').length}</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Rejected (Page)</div>
+                  </div>
+                </div>
+                
+                <div style={{maxHeight: 'calc(85vh - 320px)', overflowY: 'auto', border: '2px solid #17a2b8', borderRadius: '8px'}}>
+                  <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
+                    <thead style={{position: 'sticky', top: 0, background: 'linear-gradient(135deg, #17a2b8 0%, #138496 100%)', zIndex: 1}}>
+                      <tr>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>#</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Serial Number</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Pmax (W)</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Binning</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Class</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Status</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Assigned Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pdiSerials.map((serial, idx) => (
+                        <tr key={idx} style={{borderBottom: '1px solid #eee', background: idx % 2 === 0 ? '#f0f9ff' : 'white'}}>
+                          <td style={{padding: '10px'}}>{((pdiSerialsPage - 1) * PAGE_SIZE) + idx + 1}</td>
+                          <td style={{padding: '10px', fontFamily: 'monospace', fontWeight: '500'}}>{serial.serial_number}</td>
+                          <td style={{padding: '10px'}}>{serial.pmax ? serial.pmax.toFixed(2) : '-'}</td>
+                          <td style={{padding: '10px', fontWeight: '500'}}>{serial.binning || '-'}</td>
+                          <td style={{padding: '10px'}}>
+                            <span style={{
+                              padding: '4px 10px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              background: serial.class_status === 'OK' ? '#d4edda' : '#f8d7da',
+                              color: serial.class_status === 'OK' ? '#155724' : '#721c24'
+                            }}>
+                              {serial.class_status}
+                            </span>
+                          </td>
+                          <td style={{padding: '10px'}}>
+                            <span style={{
+                              padding: '4px 10px',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              background: serial.status === 'assigned' ? '#fff3cd' : '#d4edda',
+                              color: serial.status === 'assigned' ? '#856404' : '#155724'
+                            }}>
+                              {serial.status}
+                            </span>
+                          </td>
+                          <td style={{padding: '10px', fontSize: '11px', color: '#666'}}>{serial.assigned_date || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {/* Pagination Controls */}
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', padding: '10px', background: '#e8f4f8', borderRadius: '8px', border: '1px solid #17a2b8'}}>
+                  <div style={{fontSize: '14px', color: '#666'}}>
+                    Showing {((pdiSerialsPage - 1) * PAGE_SIZE) + 1} - {Math.min(pdiSerialsPage * PAGE_SIZE, pdiSerialsTotal)} of {pdiSerialsTotal.toLocaleString()} serials
+                  </div>
+                  <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                    <button 
+                      onClick={() => { setPdiSerialsPage(p => p - 1); loadPdiSerials(selectedPdiNumber, pdiSerialsSearch, pdiSerialsPage - 1); }}
+                      disabled={pdiSerialsPage <= 1}
+                      style={{
+                        padding: '8px 16px',
+                        background: pdiSerialsPage <= 1 ? '#ccc' : '#17a2b8',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: pdiSerialsPage <= 1 ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      ◀ Prev
+                    </button>
+                    <span style={{fontWeight: '600', color: '#333'}}>Page {pdiSerialsPage} of {pdiSerialsTotalPages}</span>
+                    <button 
+                      onClick={() => { setPdiSerialsPage(p => p + 1); loadPdiSerials(selectedPdiNumber, pdiSerialsSearch, pdiSerialsPage + 1); }}
+                      disabled={pdiSerialsPage >= pdiSerialsTotalPages}
+                      style={{
+                        padding: '8px 16px',
+                        background: pdiSerialsPage >= pdiSerialsTotalPages ? '#ccc' : '#17a2b8',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: pdiSerialsPage >= pdiSerialsTotalPages ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setShowPdiSerialsModal(false)}
                   style={{
                     marginTop: '10px',
                     width: '100%',
