@@ -13,6 +13,7 @@ import UserManagement from './components/UserManagement';
 import FTRManagement from './components/FTRManagement';
 import AIAssistant from './components/AIAssistant';
 import COCManagementDashboard from './components/COCManagementDashboard';
+import WitnessReport from './components/WitnessReport';
 import Login from './components/Login';
 import './styles/Navbar.css';
 import './App.css';
@@ -345,6 +346,8 @@ function App() {
         return <FTRReportManager />;
       case 'ftr-management':
         return <FTRManagement />;
+      case 'witness-report':
+        return <WitnessReport />;
       case 'ai-assistant':
         return <AIAssistant />;
       case 'test-report':
@@ -498,6 +501,14 @@ function App() {
           >
             <span className="icon">🏭</span>
             {!sidebarCollapsed && <span className="label">FTR Management</span>}
+          </li>
+          <li 
+            className={activeSection === 'witness-report' ? 'active' : ''}
+            onClick={() => handleMenuItemClick('witness-report')}
+            title="Witness Report"
+          >
+            <span className="icon">📋</span>
+            {!sidebarCollapsed && <span className="label">Witness Report</span>}
           </li>
           <li 
             className={activeSection === 'ai-assistant' ? 'active' : ''}
