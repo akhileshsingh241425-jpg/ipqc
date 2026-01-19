@@ -73,41 +73,32 @@ def generate_witness_report():
         report_date = data.get('report_date', datetime.now().strftime('%d/%m/%Y'))
         total_qty = data.get('total_qty', len(serial_numbers))
         
-        # AQL Info
-        use_aql = data.get('use_aql', False)
-        aql_level = data.get('aql_level', '2.5')
-        aql_level_name = data.get('aql_level_name', '')
-        lot_size = data.get('lot_size', 0)
-        sample_size = data.get('sample_size', total_qty)
-        code_letter = data.get('code_letter', '')
-        accept_number = data.get('accept_number', 0)
-        reject_number = data.get('reject_number', 1)
+        # Module Info
+        module_type = data.get('module_type', 'G2G580')
+        module_name = data.get('module_name', '625W')
         
-        # AQL info dict
-        aql_info = {
-            'use_aql': use_aql,
-            'aql_level': aql_level,
-            'aql_level_name': aql_level_name,
-            'lot_size': lot_size,
-            'sample_size': sample_size,
-            'code_letter': code_letter,
-            'accept_number': accept_number,
-            'reject_number': reject_number
-        } if use_aql else None
+        # EL + Hipot Dimension Data
+        el_hipot_data = data.get('el_hipot_data', {
+            'length': '2278',
+            'width': '1134', 
+            'thickness': '30',
+            'hipotVoltage': '3800',
+            'hipotDuration': '3',
+            'elResult': 'OK'
+        })
+        
+        # RFID Serials (separate list)
+        rfid_serials = data.get('rfid_serials', [])
+        
+        # FTR Data (auto-generated or with deviations)
+        generated_ftr_data = data.get('generated_ftr_data', {})
+        has_deviation_data = data.get('has_deviation_data', False)
         
         if not serial_numbers:
             return jsonify({'success': False, 'error': 'No serial numbers provided'}), 400
         
-        # Check if using generated FTR data from frontend or database
-        use_database_ftr = data.get('use_database_ftr', True)
-        generated_ftr_data = data.get('generated_ftr_data', {})
-        
-        # Get FTR data - either from database or use frontend generated data
-        if use_database_ftr:
-            ftr_data = get_ftr_data_for_serials(company_id, serial_numbers)
-        else:
-            # Use frontend generated FTR data based on module type
-            ftr_data = generated_ftr_data
+        # Get FTR data - use frontend generated data
+        ftr_data = generated_ftr_data
         
         # Create workbook
         wb = openpyxl.Workbook()
@@ -117,7 +108,7 @@ def generate_witness_report():
         
         # ========== SHEET 1: FTR (Inspection) ==========
         ws_ftr = wb.create_sheet("FTR(Inspection)")
-        create_ftr_sheet(ws_ftr, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data, aql_info)
+        create_ftr_sheet(ws_ftr, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data, module_name)
         
         # ========== SHEET 2: Bifaciality ==========
         ws_bif = wb.create_sheet("Bifaciality")
@@ -129,19 +120,21 @@ def generate_witness_report():
         
         # ========== SHEET 4: EL Inspection ==========
         ws_el = wb.create_sheet("EL Inspection")
-        create_el_inspection_sheet(ws_el, company_name, party_name, total_qty, report_date, serial_numbers)
+        create_el_inspection_sheet(ws_el, company_name, party_name, total_qty, report_date, serial_numbers, el_hipot_data)
         
         # ========== SHEET 5: IR,HV,GD,Wet Leakage ==========
         ws_ir = wb.create_sheet("IR,HV,GD,Wet Leakage")
-        create_safety_tests_sheet(ws_ir, company_name, party_name, total_qty, report_date, serial_numbers)
+        create_safety_tests_sheet(ws_ir, company_name, party_name, total_qty, report_date, serial_numbers, el_hipot_data)
         
         # ========== SHEET 6: Dimension ==========
         ws_dim = wb.create_sheet("Dimension")
-        create_dimension_sheet(ws_dim, company_name, party_name, total_qty, report_date, serial_numbers)
+        create_dimension_sheet(ws_dim, company_name, party_name, total_qty, report_date, serial_numbers, el_hipot_data)
         
         # ========== SHEET 7: RFID ==========
         ws_rfid = wb.create_sheet("RFID")
-        create_rfid_sheet(ws_rfid, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data)
+        # Only include RFID serials if provided, else use all serials
+        rfid_list = rfid_serials if rfid_serials else serial_numbers
+        create_rfid_sheet(ws_rfid, company_name, party_name, len(rfid_list), report_date, rfid_list, ftr_data, module_name)
         
         # Save to buffer
         buffer = io.BytesIO()
@@ -164,7 +157,7 @@ def generate_witness_report():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def create_header_rows(ws, title, company_name, total_qty, report_date, aql_info=None):
+def create_header_rows(ws, title, company_name, total_qty, report_date):
     """Create standard header rows for all sheets"""
     # Row 1: Company Name
     ws.merge_cells('A1:I1')
@@ -181,13 +174,9 @@ def create_header_rows(ws, title, company_name, total_qty, report_date, aql_info
     ws['A2'].alignment = Alignment(horizontal='center')
     ws.row_dimensions[2].height = 20
     
-    # Row 3: Total Qty with AQL info
+    # Row 3: Total Qty
     ws.merge_cells('A3:I3')
-    if aql_info and aql_info.get('use_aql'):
-        qty_text = f"Lot Size: {aql_info.get('lot_size', 0)} | Sample Size: {total_qty} Pcs | AQL Level: {aql_info.get('aql_level', '2.5')}% | Code: {aql_info.get('code_letter', '')} | Accept/Reject: {aql_info.get('accept_number', 0)}/{aql_info.get('reject_number', 1)}"
-    else:
-        qty_text = f"Total Qty:- {total_qty} Pcs"
-    ws['A3'] = qty_text
+    ws['A3'] = f"Total Qty:- {total_qty} Pcs"
     ws['A3'].font = Font(bold=True, size=11)
     ws['A3'].alignment = Alignment(horizontal='center')
     
@@ -198,9 +187,9 @@ def create_header_rows(ws, title, company_name, total_qty, report_date, aql_info
     ws['A4'].alignment = Alignment(horizontal='center')
 
 
-def create_ftr_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data, aql_info=None):
+def create_ftr_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data, module_name='625W'):
     """Create FTR (Flasher Test Report) sheet"""
-    create_header_rows(ws, "Flasher Test (Power Measurement) Report", company_name, total_qty, report_date, aql_info)
+    create_header_rows(ws, "Flasher Test (Power Measurement) Report", company_name, total_qty, report_date)
     
     # Headers Row 5
     headers = ['Sr.No.', 'Module Sr.No.', 'Pmax', 'Isc', 'Voc', 'Ipm', 'Vpm', 'FF', 'Eff.']
@@ -348,7 +337,7 @@ def create_visual_inspection_sheet(ws, company_name, party_name, total_qty, repo
     ws.column_dimensions['D'].width = 15
 
 
-def create_el_inspection_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers):
+def create_el_inspection_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, el_hipot_data=None):
     """Create EL Inspection sheet"""
     create_header_rows(ws, "EL Inspection Checks Sheet", company_name, total_qty, report_date)
     
@@ -361,14 +350,16 @@ def create_el_inspection_sheet(ws, company_name, party_name, total_qty, report_d
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
     
-    # Data rows (sample - first 14 modules typically for EL)
-    sample_serials = serial_numbers[:min(14, len(serial_numbers))]
-    for idx, serial in enumerate(sample_serials, 1):
+    # EL Result from config
+    el_result = el_hipot_data.get('elResult', 'OK') if el_hipot_data else 'OK'
+    
+    # Data rows (all modules for EL)
+    for idx, serial in enumerate(serial_numbers, 1):
         row = idx + 5
         ws.cell(row=row, column=1, value=idx).border = thin_border
         ws.cell(row=row, column=2, value=serial).border = thin_border
         ws.cell(row=row, column=3, value='Nil').border = thin_border
-        ws.cell(row=row, column=4, value='Ok').border = thin_border
+        ws.cell(row=row, column=4, value=el_result).border = thin_border
         
         for col in range(1, 5):
             ws.cell(row=row, column=col).alignment = Alignment(horizontal='center')
@@ -379,12 +370,16 @@ def create_el_inspection_sheet(ws, company_name, party_name, total_qty, report_d
     ws.column_dimensions['D'].width = 15
 
 
-def create_safety_tests_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers):
+def create_safety_tests_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, el_hipot_data=None):
     """Create IR, HV, Ground Continuity, Wet Leakage sheet"""
     create_header_rows(ws, "IR, HV, Ground continuity, Wet Leakage Test Sheet", company_name, total_qty, report_date)
     
+    # Get Hipot config values
+    hipot_voltage = el_hipot_data.get('hipotVoltage', '3800') if el_hipot_data else '3800'
+    hipot_duration = el_hipot_data.get('hipotDuration', '3') if el_hipot_data else '3'
+    
     # Headers
-    headers = ['SL.NO', 'MODULE ID', 'IR TEST(≥40MΩ.m²)', 'DCW TEST(<50µA)', 'GROUND CONTINUITY', 'Wet Leakage Test', 'REMARKS']
+    headers = ['SL.NO', 'MODULE ID', f'IR TEST(≥40MΩ.m²)', f'DCW TEST(<50µA) @ {hipot_voltage}V/{hipot_duration}s', 'GROUND CONTINUITY', 'Wet Leakage Test', 'REMARKS']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=5, column=col, value=header)
         cell.font = header_font
@@ -392,10 +387,9 @@ def create_safety_tests_sheet(ws, company_name, party_name, total_qty, report_da
         cell.alignment = Alignment(horizontal='center', wrap_text=True)
         cell.border = thin_border
     
-    # Sample data rows
+    # Data rows for all serials
     import random
-    sample_serials = serial_numbers[:min(14, len(serial_numbers))]
-    for idx, serial in enumerate(sample_serials, 1):
+    for idx, serial in enumerate(serial_numbers, 1):
         row = idx + 5
         ws.cell(row=row, column=1, value=idx).border = thin_border
         ws.cell(row=row, column=2, value=serial).border = thin_border
@@ -411,12 +405,21 @@ def create_safety_tests_sheet(ws, company_name, party_name, total_qty, report_da
     ws.column_dimensions['A'].width = 8
     ws.column_dimensions['B'].width = 22
     for col in ['C', 'D', 'E', 'F', 'G']:
-        ws.column_dimensions[col].width = 18
+        ws.column_dimensions[col].width = 22
 
 
-def create_dimension_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers):
+def create_dimension_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, el_hipot_data=None):
     """Create Dimension & Anodizing sheet"""
     create_header_rows(ws, "Dimension & Anodizing Coating Thickness Measurement", company_name, total_qty, report_date)
+    
+    # Get dimension values from config
+    length = int(el_hipot_data.get('length', '2278')) if el_hipot_data else 2278
+    width = int(el_hipot_data.get('width', '1134')) if el_hipot_data else 1134
+    thickness = int(el_hipot_data.get('thickness', '30')) if el_hipot_data else 30
+    
+    # Calculate diagonal
+    import math
+    diagonal = round(math.sqrt(length**2 + width**2), 0)
     
     # Headers Row 5
     headers = ['Sr. No.', 'Module ID', 'Length(mm)', 'Width(mm)', 'Thickness(mm)', 
@@ -429,27 +432,26 @@ def create_dimension_sheet(ws, company_name, party_name, total_qty, report_date,
         cell.alignment = Alignment(horizontal='center', wrap_text=True)
         cell.border = thin_border
     
-    # Sample data rows
-    sample_serials = serial_numbers[:min(14, len(serial_numbers))]
+    # Data rows for all serials
     import random
-    for idx, serial in enumerate(sample_serials, 1):
+    for idx, serial in enumerate(serial_numbers, 1):
         row = idx + 5
         ws.cell(row=row, column=1, value=idx).border = thin_border
         ws.cell(row=row, column=2, value=serial).border = thin_border
-        ws.cell(row=row, column=3, value=2382).border = thin_border       # Length
-        ws.cell(row=row, column=4, value=1134).border = thin_border       # Width
-        ws.cell(row=row, column=5, value=30).border = thin_border         # Thickness
-        ws.cell(row=row, column=6, value=2636).border = thin_border       # Diagonal 1
-        ws.cell(row=row, column=7, value=2636).border = thin_border       # Diagonal 2
-        ws.cell(row=row, column=8, value=0).border = thin_border          # Diff
-        ws.cell(row=row, column=9, value=1400).border = thin_border       # Hole1
-        ws.cell(row=row, column=10, value=790).border = thin_border       # Hole2
-        ws.cell(row=row, column=11, value=400).border = thin_border       # Hole3
-        ws.cell(row=row, column=12, value='14*9').border = thin_border    # Hole Size
-        ws.cell(row=row, column=13, value=1200).border = thin_border      # Cable
-        ws.cell(row=row, column=14, value='MC4').border = thin_border     # Connector
-        ws.cell(row=row, column=15, value=2).border = thin_border         # Ground Holes
-        ws.cell(row=row, column=16, value='OK').border = thin_border      # Drain Hole
+        ws.cell(row=row, column=3, value=length).border = thin_border       # Length from config
+        ws.cell(row=row, column=4, value=width).border = thin_border        # Width from config
+        ws.cell(row=row, column=5, value=thickness).border = thin_border    # Thickness from config
+        ws.cell(row=row, column=6, value=int(diagonal)).border = thin_border       # Diagonal 1
+        ws.cell(row=row, column=7, value=int(diagonal)).border = thin_border       # Diagonal 2
+        ws.cell(row=row, column=8, value=0).border = thin_border            # Diff
+        ws.cell(row=row, column=9, value=1400).border = thin_border         # Hole1
+        ws.cell(row=row, column=10, value=790).border = thin_border         # Hole2
+        ws.cell(row=row, column=11, value=400).border = thin_border         # Hole3
+        ws.cell(row=row, column=12, value='14*9').border = thin_border      # Hole Size
+        ws.cell(row=row, column=13, value=1200).border = thin_border        # Cable
+        ws.cell(row=row, column=14, value='MC4').border = thin_border       # Connector
+        ws.cell(row=row, column=15, value=2).border = thin_border           # Ground Holes
+        ws.cell(row=row, column=16, value='OK').border = thin_border        # Drain Hole
         ws.cell(row=row, column=17, value=round(random.uniform(16, 20), 1)).border = thin_border  # Anodizing
         
         for col in range(1, 18):
@@ -461,7 +463,7 @@ def create_dimension_sheet(ws, company_name, party_name, total_qty, report_date,
         ws.column_dimensions[get_column_letter(col)].width = 10
 
 
-def create_rfid_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data):
+def create_rfid_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data, module_name='625W'):
     """Create RFID Inspection sheet"""
     create_header_rows(ws, "RFID Inspection Report", company_name, total_qty, report_date)
     
@@ -475,14 +477,14 @@ def create_rfid_sheet(ws, company_name, party_name, total_qty, report_date, seri
         cell.alignment = Alignment(horizontal='center')
         cell.border = thin_border
     
-    # Data rows
+    # Data rows - only for RFID serials
     for idx, serial in enumerate(serial_numbers, 1):
         row = idx + 5
         ftr = ftr_data.get(serial, {})
         
         ws.cell(row=row, column=1, value=idx).border = thin_border
         ws.cell(row=row, column=2, value=serial).border = thin_border
-        ws.cell(row=row, column=3, value='625W').border = thin_border
+        ws.cell(row=row, column=3, value=module_name).border = thin_border
         ws.cell(row=row, column=4, value='GSPL').border = thin_border
         ws.cell(row=row, column=5, value='SOLARSPACE').border = thin_border
         ws.cell(row=row, column=6, value='Aug, 25').border = thin_border

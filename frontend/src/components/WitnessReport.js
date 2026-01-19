@@ -4,45 +4,7 @@ import * as XLSX from 'xlsx';
 
 const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
 
-// AQL Sampling Tables (IS 2500 / ISO 2859)
-const AQL_SAMPLE_SIZES = {
-  '2-8': { min: 2, max: 8, code: 'A', sample: 2 },
-  '9-15': { min: 9, max: 15, code: 'B', sample: 3 },
-  '16-25': { min: 16, max: 25, code: 'C', sample: 5 },
-  '26-50': { min: 26, max: 50, code: 'D', sample: 8 },
-  '51-90': { min: 51, max: 90, code: 'E', sample: 13 },
-  '91-150': { min: 91, max: 150, code: 'F', sample: 20 },
-  '151-280': { min: 151, max: 280, code: 'G', sample: 32 },
-  '281-500': { min: 281, max: 500, code: 'H', sample: 50 },
-  '501-1200': { min: 501, max: 1200, code: 'J', sample: 80 },
-  '1201-3200': { min: 1201, max: 3200, code: 'K', sample: 125 },
-  '3201-10000': { min: 3201, max: 10000, code: 'L', sample: 200 },
-  '10001-35000': { min: 10001, max: 35000, code: 'M', sample: 315 },
-  '35001-150000': { min: 35001, max: 150000, code: 'N', sample: 500 },
-  '150001-500000': { min: 150001, max: 500000, code: 'P', sample: 800 },
-  '500001+': { min: 500001, max: Infinity, code: 'Q', sample: 1250 }
-};
-
-// AQL Accept/Reject numbers for different AQL levels
-const AQL_ACCEPT_REJECT = {
-  'A': { '0.65': {ac: 0, re: 1}, '1.0': {ac: 0, re: 1}, '1.5': {ac: 0, re: 1}, '2.5': {ac: 0, re: 1}, '4.0': {ac: 0, re: 1}, '6.5': {ac: 1, re: 2} },
-  'B': { '0.65': {ac: 0, re: 1}, '1.0': {ac: 0, re: 1}, '1.5': {ac: 0, re: 1}, '2.5': {ac: 0, re: 1}, '4.0': {ac: 0, re: 1}, '6.5': {ac: 1, re: 2} },
-  'C': { '0.65': {ac: 0, re: 1}, '1.0': {ac: 0, re: 1}, '1.5': {ac: 0, re: 1}, '2.5': {ac: 0, re: 1}, '4.0': {ac: 1, re: 2}, '6.5': {ac: 1, re: 2} },
-  'D': { '0.65': {ac: 0, re: 1}, '1.0': {ac: 0, re: 1}, '1.5': {ac: 0, re: 1}, '2.5': {ac: 1, re: 2}, '4.0': {ac: 1, re: 2}, '6.5': {ac: 2, re: 3} },
-  'E': { '0.65': {ac: 0, re: 1}, '1.0': {ac: 0, re: 1}, '1.5': {ac: 1, re: 2}, '2.5': {ac: 1, re: 2}, '4.0': {ac: 2, re: 3}, '6.5': {ac: 3, re: 4} },
-  'F': { '0.65': {ac: 0, re: 1}, '1.0': {ac: 1, re: 2}, '1.5': {ac: 1, re: 2}, '2.5': {ac: 2, re: 3}, '4.0': {ac: 3, re: 4}, '6.5': {ac: 5, re: 6} },
-  'G': { '0.65': {ac: 1, re: 2}, '1.0': {ac: 1, re: 2}, '1.5': {ac: 2, re: 3}, '2.5': {ac: 3, re: 4}, '4.0': {ac: 5, re: 6}, '6.5': {ac: 7, re: 8} },
-  'H': { '0.65': {ac: 1, re: 2}, '1.0': {ac: 2, re: 3}, '1.5': {ac: 3, re: 4}, '2.5': {ac: 5, re: 6}, '4.0': {ac: 7, re: 8}, '6.5': {ac: 10, re: 11} },
-  'J': { '0.65': {ac: 2, re: 3}, '1.0': {ac: 3, re: 4}, '1.5': {ac: 5, re: 6}, '2.5': {ac: 7, re: 8}, '4.0': {ac: 10, re: 11}, '6.5': {ac: 14, re: 15} },
-  'K': { '0.65': {ac: 3, re: 4}, '1.0': {ac: 5, re: 6}, '1.5': {ac: 7, re: 8}, '2.5': {ac: 10, re: 11}, '4.0': {ac: 14, re: 15}, '6.5': {ac: 21, re: 22} },
-  'L': { '0.65': {ac: 5, re: 6}, '1.0': {ac: 7, re: 8}, '1.5': {ac: 10, re: 11}, '2.5': {ac: 14, re: 15}, '4.0': {ac: 21, re: 22}, '6.5': {ac: 21, re: 22} },
-  'M': { '0.65': {ac: 7, re: 8}, '1.0': {ac: 10, re: 11}, '1.5': {ac: 14, re: 15}, '2.5': {ac: 21, re: 22}, '4.0': {ac: 21, re: 22}, '6.5': {ac: 21, re: 22} },
-  'N': { '0.65': {ac: 10, re: 11}, '1.0': {ac: 14, re: 15}, '1.5': {ac: 21, re: 22}, '2.5': {ac: 21, re: 22}, '4.0': {ac: 21, re: 22}, '6.5': {ac: 21, re: 22} },
-  'P': { '0.65': {ac: 14, re: 15}, '1.0': {ac: 21, re: 22}, '1.5': {ac: 21, re: 22}, '2.5': {ac: 21, re: 22}, '4.0': {ac: 21, re: 22}, '6.5': {ac: 21, re: 22} },
-  'Q': { '0.65': {ac: 21, re: 22}, '1.0': {ac: 21, re: 22}, '1.5': {ac: 21, re: 22}, '2.5': {ac: 21, re: 22}, '4.0': {ac: 21, re: 22}, '6.5': {ac: 21, re: 22} }
-};
-
-// Module Database with FTR specs (same as TestReport)
+// Module Database with FTR specs
 const moduleDatabase = {
   "G2B510": { name: "G2B510-HAD", power: 510, cells: 144, size: "2278x1134x35", series: "Mono PERC G2B",
     specs: { pmax: 510.0, vpm: 39.5, ipm: 12.9, isc: 13.5, voc: 47.8, ff: 77.5, eff: 19.8 }
@@ -121,43 +83,9 @@ const moduleDatabase = {
   }
 };
 
-// Function to get AQL sample info based on lot size
-const getAQLInfo = (lotSize, aqlLevel = '2.5') => {
-  let sampleInfo = { code: 'A', sample: 2, accept: 0, reject: 1 };
-  
-  for (const key of Object.keys(AQL_SAMPLE_SIZES)) {
-    const range = AQL_SAMPLE_SIZES[key];
-    if (lotSize >= range.min && lotSize <= range.max) {
-      sampleInfo.code = range.code;
-      sampleInfo.sample = range.sample;
-      break;
-    }
-  }
-  
-  // Get accept/reject numbers
-  if (AQL_ACCEPT_REJECT[sampleInfo.code] && AQL_ACCEPT_REJECT[sampleInfo.code][aqlLevel]) {
-    const ar = AQL_ACCEPT_REJECT[sampleInfo.code][aqlLevel];
-    sampleInfo.accept = ar.ac;
-    sampleInfo.reject = ar.re;
-  }
-  
-  return sampleInfo;
-};
-
-// Function to generate FTR data based on module type (like TestReport)
+// Function to generate FTR data based on module type
 const generateFTRData = (moduleType, serialNumber) => {
-  // Find matching module from database based on power
-  let moduleSpecs = null;
-  
-  // Try to match by key
-  if (moduleDatabase[moduleType]) {
-    moduleSpecs = moduleDatabase[moduleType].specs;
-  }
-  
-  // If no match, use default 580W specs
-  if (!moduleSpecs) {
-    moduleSpecs = moduleDatabase['G2G580'].specs;
-  }
+  let moduleSpecs = moduleDatabase[moduleType]?.specs || moduleDatabase['G2G580'].specs;
   
   // Generate realistic variations (±0.5%)
   const variation = () => (Math.random() - 0.5) * 0.01;
@@ -182,20 +110,36 @@ function WitnessReport() {
   const [manualSerials, setManualSerials] = useState('');
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [uploadMode, setUploadMode] = useState('pdi');
+  const [uploadMode, setUploadMode] = useState('excel'); // Default to Excel
   const [partyName, setPartyName] = useState('NTPC');
   const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
   const [progress, setProgress] = useState(0);
   
-  // AQL Settings
-  const [useAQL, setUseAQL] = useState(true);
-  const [lotSize, setLotSize] = useState(0);
-  const [aqlLevel, setAqlLevel] = useState('2.5');
-  const [aqlInfo, setAqlInfo] = useState({ code: 'A', sample: 2, accept: 0, reject: 1 });
+  // Step 1: After Excel upload, show configuration modal
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configStep, setConfigStep] = useState(1); // 1: Module Type, 2: EL+Hipot, 3: RFID, 4: FTR Deviation
   
   // Module Type for FTR generation
   const [selectedModuleType, setSelectedModuleType] = useState('G2G580');
-  const [useDatabaseFTR, setUseDatabaseFTR] = useState(false);
+  
+  // EL + Hipot Dimension Settings
+  const [elHipotData, setElHipotData] = useState({
+    length: '2278',
+    width: '1134',
+    thickness: '30',
+    hipotVoltage: '3800',
+    hipotDuration: '3',
+    elResult: 'OK'
+  });
+  
+  // RFID Data
+  const [rfidSerials, setRfidSerials] = useState([]);
+  const [rfidFile, setRfidFile] = useState(null);
+  
+  // FTR Deviation Data
+  const [hasDeviationData, setHasDeviationData] = useState(false);
+  const [deviationSerials, setDeviationSerials] = useState({}); // {serial: {pmax, isc, voc, ...}}
+  const [deviationFile, setDeviationFile] = useState(null);
   
   // Generated FTR data
   const [generatedFTRData, setGeneratedFTRData] = useState({});
@@ -204,22 +148,21 @@ function WitnessReport() {
     loadCompanies();
   }, []);
 
-  // Update AQL info when lot size or AQL level changes
+  // Generate FTR data when config is complete
   useEffect(() => {
-    const info = getAQLInfo(lotSize, aqlLevel);
-    setAqlInfo(info);
-  }, [lotSize, aqlLevel]);
-
-  // Generate FTR data when serials or module type changes
-  useEffect(() => {
-    if (!useDatabaseFTR && serialNumbers.length > 0 && selectedModuleType) {
+    if (serialNumbers.length > 0 && selectedModuleType && !showConfigModal) {
       const newFTRData = {};
       serialNumbers.forEach(serial => {
-        newFTRData[serial] = generateFTRData(selectedModuleType, serial);
+        // Check if deviation data exists for this serial
+        if (hasDeviationData && deviationSerials[serial]) {
+          newFTRData[serial] = deviationSerials[serial];
+        } else {
+          newFTRData[serial] = generateFTRData(selectedModuleType, serial);
+        }
       });
       setGeneratedFTRData(newFTRData);
     }
-  }, [serialNumbers, selectedModuleType, useDatabaseFTR]);
+  }, [serialNumbers, selectedModuleType, showConfigModal, hasDeviationData, deviationSerials]);
 
   const loadCompanies = async () => {
     try {
@@ -256,7 +199,9 @@ function WitnessReport() {
       if (response.data.success) {
         const serials = response.data.serials;
         setSerialNumbers(serials);
-        setLotSize(serials.length);
+        // Show config modal after loading serials
+        setShowConfigModal(true);
+        setConfigStep(1);
       }
     } catch (error) {
       console.error('Failed to load serials:', error);
@@ -277,6 +222,7 @@ function WitnessReport() {
     loadSerialsForPdi(pdi);
   };
 
+  // Handle main Excel upload (Serial Numbers)
   const handleExcelUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -299,11 +245,89 @@ function WitnessReport() {
           }
         }
         setSerialNumbers(serials);
-        setLotSize(serials.length);
-        alert(`✅ Loaded ${serials.length} serial numbers from Excel`);
+        
+        // Show configuration modal
+        setShowConfigModal(true);
+        setConfigStep(1);
+        
       } catch (error) {
         console.error('Error reading Excel:', error);
         alert('❌ Failed to read Excel file');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Handle RFID Excel upload
+  const handleRFIDExcelUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setRfidFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+        const rfids = [];
+        for (let i = 0; i < jsonData.length; i++) {
+          if (jsonData[i][0]) {
+            const serial = String(jsonData[i][0]).trim();
+            if (serial && serial.length > 5) {
+              rfids.push(serial);
+            }
+          }
+        }
+        setRfidSerials(rfids);
+        alert(`✅ Loaded ${rfids.length} RFID serial numbers`);
+      } catch (error) {
+        console.error('Error reading RFID Excel:', error);
+        alert('❌ Failed to read RFID Excel file');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // Handle Deviation Excel upload (FTR data with deviations)
+  const handleDeviationExcelUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setDeviationFile(file);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+        const deviations = {};
+        jsonData.forEach(row => {
+          // Expected columns: Serial, Pmax, Isc, Voc, Ipm, Vpm, FF, Efficiency
+          const serial = String(row['Serial'] || row['serial'] || row['Serial Number'] || row['SERIAL'] || '').trim();
+          if (serial && serial.length > 5) {
+            deviations[serial] = {
+              pmax: row['Pmax'] || row['PMAX'] || row['pmax'] || '0',
+              isc: row['Isc'] || row['ISC'] || row['isc'] || '0',
+              voc: row['Voc'] || row['VOC'] || row['voc'] || '0',
+              ipm: row['Ipm'] || row['IPM'] || row['ipm'] || '0',
+              vpm: row['Vpm'] || row['VPM'] || row['vpm'] || '0',
+              ff: row['FF'] || row['ff'] || '0',
+              efficiency: row['Efficiency'] || row['Eff'] || row['eff'] || row['EFFICIENCY'] || '0'
+            };
+          }
+        });
+        
+        setDeviationSerials(deviations);
+        setHasDeviationData(true);
+        alert(`✅ Loaded deviation data for ${Object.keys(deviations).length} modules`);
+      } catch (error) {
+        console.error('Error reading Deviation Excel:', error);
+        alert('❌ Failed to read Deviation Excel file');
       }
     };
     reader.readAsArrayBuffer(file);
@@ -315,19 +339,30 @@ function WitnessReport() {
       .map(s => s.trim())
       .filter(s => s.length > 5);
     setSerialNumbers(serials);
-    setLotSize(serials.length);
-    alert(`✅ Loaded ${serials.length} serial numbers`);
+    
+    // Show configuration modal
+    setShowConfigModal(true);
+    setConfigStep(1);
   };
 
-  // Apply AQL sampling to serial numbers
-  const getAQLSampledSerials = () => {
-    if (!useAQL || serialNumbers.length === 0) return serialNumbers;
-    
-    const sampleSize = Math.min(aqlInfo.sample, serialNumbers.length);
-    
-    // Random sampling
-    const shuffled = [...serialNumbers].sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, sampleSize);
+  // Navigate through config steps
+  const nextStep = () => {
+    if (configStep < 4) {
+      setConfigStep(configStep + 1);
+    } else {
+      // Close modal and generate data
+      setShowConfigModal(false);
+    }
+  };
+
+  const prevStep = () => {
+    if (configStep > 1) {
+      setConfigStep(configStep - 1);
+    }
+  };
+
+  const skipToEnd = () => {
+    setShowConfigModal(false);
   };
 
   const generateReport = async () => {
@@ -347,12 +382,6 @@ function WitnessReport() {
       const API_BASE_URL = getAPIBaseURL();
       setProgress(30);
 
-      // Get sampled serials if AQL is enabled
-      const sampledSerials = useAQL ? getAQLSampledSerials() : serialNumbers;
-      
-      // Prepare FTR data to send
-      const ftrDataToSend = useDatabaseFTR ? {} : generatedFTRData;
-
       const response = await axios.post(
         `${API_BASE_URL}/api/witness/generate`,
         {
@@ -360,22 +389,19 @@ function WitnessReport() {
           company_name: selectedCompany.name,
           party_name: partyName,
           pdi_number: selectedPdi || 'Custom',
-          serial_numbers: sampledSerials,
+          serial_numbers: serialNumbers,
           report_date: new Date(reportDate).toLocaleDateString('en-IN'),
-          total_qty: sampledSerials.length,
-          // AQL Info
-          use_aql: useAQL,
-          aql_level: aqlLevel,
-          aql_level_name: `AQL ${aqlLevel}% - General Inspection Level II`,
-          lot_size: lotSize,
-          sample_size: sampledSerials.length,
-          code_letter: aqlInfo.code,
-          accept_number: aqlInfo.accept,
-          reject_number: aqlInfo.reject,
-          // Module type for FTR generation
+          total_qty: serialNumbers.length,
+          // Module type
           module_type: selectedModuleType,
-          use_database_ftr: useDatabaseFTR,
-          generated_ftr_data: ftrDataToSend
+          module_name: moduleDatabase[selectedModuleType]?.name || selectedModuleType,
+          // EL + Hipot data
+          el_hipot_data: elHipotData,
+          // RFID serials
+          rfid_serials: rfidSerials,
+          // FTR data (auto-generated or with deviations)
+          generated_ftr_data: generatedFTRData,
+          has_deviation_data: hasDeviationData
         },
         { responseType: 'blob' }
       );
@@ -407,6 +433,408 @@ function WitnessReport() {
     }
   };
 
+  // Configuration Modal
+  const renderConfigModal = () => {
+    if (!showConfigModal) return null;
+
+    return (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0,0,0,0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }}>
+        <div style={{
+          background: 'white',
+          borderRadius: '20px',
+          padding: '30px',
+          width: '600px',
+          maxWidth: '95vw',
+          maxHeight: '90vh',
+          overflowY: 'auto',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+        }}>
+          {/* Step Indicator */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'center',
+            gap: '10px',
+            marginBottom: '25px'
+          }}>
+            {[1, 2, 3, 4].map(step => (
+              <div key={step} style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '50%',
+                background: configStep === step ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                  : configStep > step ? '#4CAF50' : '#e0e0e0',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: '700',
+                fontSize: '14px'
+              }}>
+                {configStep > step ? '✓' : step}
+              </div>
+            ))}
+          </div>
+
+          {/* Step 1: Module Type */}
+          {configStep === 1 && (
+            <div>
+              <h2 style={{margin: '0 0 20px', textAlign: 'center', color: '#333'}}>
+                ⚡ Step 1: Select Module Type
+              </h2>
+              <p style={{color: '#666', textAlign: 'center', marginBottom: '20px'}}>
+                Loaded {serialNumbers.length} modules. Select the module type for FTR generation.
+              </p>
+              
+              <select
+                value={selectedModuleType}
+                onChange={(e) => setSelectedModuleType(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '15px',
+                  borderRadius: '10px',
+                  border: '2px solid #667eea',
+                  fontSize: '15px',
+                  marginBottom: '15px'
+                }}
+              >
+                <optgroup label="Mono PERC G2B (510W-540W)">
+                  {Object.entries(moduleDatabase).filter(([k, m]) => m.series === 'Mono PERC G2B').map(([key, mod]) => (
+                    <option key={key} value={key}>{mod.name} - {mod.power}W</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Mono PERC G2X (550W-560W)">
+                  {Object.entries(moduleDatabase).filter(([k, m]) => m.series === 'Mono PERC G2X').map(([key, mod]) => (
+                    <option key={key} value={key}>{mod.name} - {mod.power}W</option>
+                  ))}
+                </optgroup>
+                <optgroup label="TOPCon G2G (570W-610W)">
+                  {Object.entries(moduleDatabase).filter(([k, m]) => m.series === 'TOPCon G2G').map(([key, mod]) => (
+                    <option key={key} value={key}>{mod.name} - {mod.power}W</option>
+                  ))}
+                </optgroup>
+                <optgroup label="TOPCon G2G-G12R (615W-660W)">
+                  {Object.entries(moduleDatabase).filter(([k, m]) => m.series === 'TOPCon G2G-G12R').map(([key, mod]) => (
+                    <option key={key} value={key}>{mod.name} - {mod.power}W</option>
+                  ))}
+                </optgroup>
+              </select>
+
+              {selectedModuleType && moduleDatabase[selectedModuleType] && (
+                <div style={{
+                  padding: '15px',
+                  background: '#f5f5f5',
+                  borderRadius: '10px',
+                  fontSize: '13px'
+                }}>
+                  <strong>Selected Module Specs:</strong><br />
+                  Pmax: {moduleDatabase[selectedModuleType].specs.pmax}W | 
+                  Voc: {moduleDatabase[selectedModuleType].specs.voc}V | 
+                  Isc: {moduleDatabase[selectedModuleType].specs.isc}A | 
+                  FF: {moduleDatabase[selectedModuleType].specs.ff}% |
+                  Size: {moduleDatabase[selectedModuleType].size}mm
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 2: EL + Hipot Dimension */}
+          {configStep === 2 && (
+            <div>
+              <h2 style={{margin: '0 0 20px', textAlign: 'center', color: '#333'}}>
+                📐 Step 2: EL & Hipot Dimension
+              </h2>
+              
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px', marginBottom: '20px'}}>
+                <div>
+                  <label style={{display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '13px'}}>
+                    Length (mm)
+                  </label>
+                  <input
+                    type="text"
+                    value={elHipotData.length}
+                    onChange={(e) => setElHipotData({...elHipotData, length: e.target.value})}
+                    style={{width: '100%', padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0'}}
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '13px'}}>
+                    Width (mm)
+                  </label>
+                  <input
+                    type="text"
+                    value={elHipotData.width}
+                    onChange={(e) => setElHipotData({...elHipotData, width: e.target.value})}
+                    style={{width: '100%', padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0'}}
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '13px'}}>
+                    Thickness (mm)
+                  </label>
+                  <input
+                    type="text"
+                    value={elHipotData.thickness}
+                    onChange={(e) => setElHipotData({...elHipotData, thickness: e.target.value})}
+                    style={{width: '100%', padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0'}}
+                  />
+                </div>
+              </div>
+
+              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '15px'}}>
+                <div>
+                  <label style={{display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '13px'}}>
+                    Hipot Voltage (V)
+                  </label>
+                  <input
+                    type="text"
+                    value={elHipotData.hipotVoltage}
+                    onChange={(e) => setElHipotData({...elHipotData, hipotVoltage: e.target.value})}
+                    style={{width: '100%', padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0'}}
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '13px'}}>
+                    Duration (sec)
+                  </label>
+                  <input
+                    type="text"
+                    value={elHipotData.hipotDuration}
+                    onChange={(e) => setElHipotData({...elHipotData, hipotDuration: e.target.value})}
+                    style={{width: '100%', padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0'}}
+                  />
+                </div>
+                <div>
+                  <label style={{display: 'block', fontWeight: '600', marginBottom: '5px', fontSize: '13px'}}>
+                    EL Result
+                  </label>
+                  <select
+                    value={elHipotData.elResult}
+                    onChange={(e) => setElHipotData({...elHipotData, elResult: e.target.value})}
+                    style={{width: '100%', padding: '10px', borderRadius: '8px', border: '2px solid #e0e0e0'}}
+                  >
+                    <option value="OK">OK / Pass</option>
+                    <option value="NG">NG / Fail</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: RFID Upload */}
+          {configStep === 3 && (
+            <div>
+              <h2 style={{margin: '0 0 20px', textAlign: 'center', color: '#333'}}>
+                📡 Step 3: RFID Modules Excel
+              </h2>
+              <p style={{color: '#666', textAlign: 'center', marginBottom: '20px'}}>
+                Upload Excel with serial numbers of modules that have RFID tags. Skip if not applicable.
+              </p>
+              
+              <div style={{
+                padding: '30px',
+                border: '3px dashed #667eea',
+                borderRadius: '15px',
+                textAlign: 'center',
+                background: '#f8f9ff',
+                marginBottom: '20px'
+              }}>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleRFIDExcelUpload}
+                  style={{display: 'none'}}
+                  id="rfid-upload"
+                />
+                <label htmlFor="rfid-upload" style={{cursor: 'pointer'}}>
+                  <div style={{fontSize: '40px', marginBottom: '10px'}}>📡</div>
+                  <div style={{fontWeight: '600', color: '#667eea'}}>
+                    Click to Upload RFID Excel
+                  </div>
+                  <div style={{fontSize: '12px', color: '#666', marginTop: '5px'}}>
+                    Excel with Serial Number column
+                  </div>
+                </label>
+              </div>
+
+              {rfidSerials.length > 0 && (
+                <div style={{
+                  padding: '15px',
+                  background: '#e8f5e9',
+                  borderRadius: '10px',
+                  border: '2px solid #4CAF50'
+                }}>
+                  <div style={{fontWeight: '600', color: '#2e7d32', marginBottom: '10px'}}>
+                    ✅ Loaded {rfidSerials.length} RFID Serials
+                  </div>
+                  <div style={{fontSize: '12px', color: '#666', maxHeight: '100px', overflowY: 'auto'}}>
+                    {rfidSerials.slice(0, 10).join(', ')}
+                    {rfidSerials.length > 10 && ` ... and ${rfidSerials.length - 10} more`}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 4: FTR Deviation */}
+          {configStep === 4 && (
+            <div>
+              <h2 style={{margin: '0 0 20px', textAlign: 'center', color: '#333'}}>
+                ⚡ Step 4: FTR Data - Deviation?
+              </h2>
+              <p style={{color: '#666', textAlign: 'center', marginBottom: '20px'}}>
+                Total {serialNumbers.length} modules. Do you have FTR data for specific modules (deviation)?
+              </p>
+              
+              <div style={{display: 'flex', gap: '15px', marginBottom: '20px'}}>
+                <button
+                  onClick={() => setHasDeviationData(false)}
+                  style={{
+                    flex: 1,
+                    padding: '20px',
+                    borderRadius: '12px',
+                    border: !hasDeviationData ? '3px solid #4CAF50' : '2px solid #e0e0e0',
+                    background: !hasDeviationData ? '#e8f5e9' : 'white',
+                    cursor: 'pointer',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{fontSize: '30px', marginBottom: '8px'}}>🤖</div>
+                  <div style={{fontWeight: '700', color: '#2e7d32'}}>Auto Generate All</div>
+                  <div style={{fontSize: '12px', color: '#666', marginTop: '5px'}}>
+                    Generate FTR data for all {serialNumbers.length} modules based on module type
+                  </div>
+                </button>
+                
+                <button
+                  onClick={() => setHasDeviationData(true)}
+                  style={{
+                    flex: 1,
+                    padding: '20px',
+                    borderRadius: '12px',
+                    border: hasDeviationData ? '3px solid #ff9800' : '2px solid #e0e0e0',
+                    background: hasDeviationData ? '#fff3e0' : 'white',
+                    cursor: 'pointer',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{fontSize: '30px', marginBottom: '8px'}}>📊</div>
+                  <div style={{fontWeight: '700', color: '#e65100'}}>Upload Deviation Excel</div>
+                  <div style={{fontSize: '12px', color: '#666', marginTop: '5px'}}>
+                    Upload custom FTR data for specific modules
+                  </div>
+                </button>
+              </div>
+
+              {hasDeviationData && (
+                <div style={{
+                  padding: '20px',
+                  border: '3px dashed #ff9800',
+                  borderRadius: '15px',
+                  textAlign: 'center',
+                  background: '#fff8e1',
+                  marginBottom: '15px'
+                }}>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={handleDeviationExcelUpload}
+                    style={{display: 'none'}}
+                    id="deviation-upload"
+                  />
+                  <label htmlFor="deviation-upload" style={{cursor: 'pointer'}}>
+                    <div style={{fontSize: '35px', marginBottom: '8px'}}>📈</div>
+                    <div style={{fontWeight: '600', color: '#e65100'}}>
+                      Click to Upload Deviation Excel
+                    </div>
+                    <div style={{fontSize: '11px', color: '#666', marginTop: '5px'}}>
+                      Columns: Serial, Pmax, Isc, Voc, Ipm, Vpm, FF, Efficiency
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {hasDeviationData && Object.keys(deviationSerials).length > 0 && (
+                <div style={{
+                  padding: '15px',
+                  background: '#e8f5e9',
+                  borderRadius: '10px',
+                  border: '2px solid #4CAF50'
+                }}>
+                  <div style={{fontWeight: '600', color: '#2e7d32', marginBottom: '5px'}}>
+                    ✅ Loaded deviation data for {Object.keys(deviationSerials).length} modules
+                  </div>
+                  <div style={{fontSize: '12px', color: '#666'}}>
+                    Remaining {serialNumbers.length - Object.keys(deviationSerials).length} modules will be auto-generated
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '25px'}}>
+            <button
+              onClick={prevStep}
+              disabled={configStep === 1}
+              style={{
+                padding: '12px 25px',
+                borderRadius: '8px',
+                border: 'none',
+                background: configStep === 1 ? '#e0e0e0' : '#667eea',
+                color: 'white',
+                cursor: configStep === 1 ? 'not-allowed' : 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              ← Previous
+            </button>
+            
+            <button
+              onClick={skipToEnd}
+              style={{
+                padding: '12px 25px',
+                borderRadius: '8px',
+                border: '2px solid #999',
+                background: 'white',
+                color: '#666',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              Skip All →
+            </button>
+            
+            <button
+              onClick={nextStep}
+              style={{
+                padding: '12px 25px',
+                borderRadius: '8px',
+                border: 'none',
+                background: configStep === 4 ? '#4CAF50' : '#667eea',
+                color: 'white',
+                cursor: 'pointer',
+                fontWeight: '600'
+              }}
+            >
+              {configStep === 4 ? '✓ Done' : 'Next →'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div style={{
       padding: '20px',
@@ -414,6 +842,9 @@ function WitnessReport() {
       margin: '0 auto',
       fontFamily: 'Segoe UI, sans-serif'
     }}>
+      {/* Config Modal */}
+      {renderConfigModal()}
+
       {/* Header */}
       <div style={{
         background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
@@ -423,10 +854,10 @@ function WitnessReport() {
         boxShadow: '0 10px 40px rgba(102,126,234,0.3)'
       }}>
         <h1 style={{margin: 0, color: 'white', fontSize: '28px', display: 'flex', alignItems: 'center', gap: '12px'}}>
-          📋 Witness Report Generator (AQL Sampling)
+          📋 Witness Report Generator
         </h1>
         <p style={{margin: '8px 0 0', color: 'rgba(255,255,255,0.85)', fontSize: '14px'}}>
-          Generate PDI Witness Report with AQL based sampling as per IS 2500 / ISO 2859
+          Generate PDI Witness Report - Upload Excel → Configure Module Type, EL/Hipot, RFID, FTR
         </p>
       </div>
 
@@ -509,149 +940,6 @@ function WitnessReport() {
             />
           </div>
 
-          {/* Module Type Selection for FTR */}
-          <div style={{marginBottom: '15px', padding: '12px', background: '#fff3e0', borderRadius: '10px', border: '2px solid #ffb74d'}}>
-            <label style={{display: 'block', fontWeight: '700', marginBottom: '8px', color: '#e65100', fontSize: '13px'}}>
-              ⚡ Module Type (FTR Generation)
-            </label>
-            <select
-              value={selectedModuleType}
-              onChange={(e) => setSelectedModuleType(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '8px',
-                border: '2px solid #ffb74d',
-                fontSize: '13px',
-                background: 'white'
-              }}
-            >
-              <optgroup label="Mono PERC G2B (510W-540W)">
-                {Object.entries(moduleDatabase).filter(([k, m]) => m.series === 'Mono PERC G2B').map(([key, mod]) => (
-                  <option key={key} value={key}>{mod.name} - {mod.power}W</option>
-                ))}
-              </optgroup>
-              <optgroup label="Mono PERC G2X (550W-560W)">
-                {Object.entries(moduleDatabase).filter(([k, m]) => m.series === 'Mono PERC G2X').map(([key, mod]) => (
-                  <option key={key} value={key}>{mod.name} - {mod.power}W</option>
-                ))}
-              </optgroup>
-              <optgroup label="TOPCon G2G (570W-610W)">
-                {Object.entries(moduleDatabase).filter(([k, m]) => m.series === 'TOPCon G2G').map(([key, mod]) => (
-                  <option key={key} value={key}>{mod.name} - {mod.power}W</option>
-                ))}
-              </optgroup>
-              <optgroup label="TOPCon G2G-G12R (615W-660W)">
-                {Object.entries(moduleDatabase).filter(([k, m]) => m.series === 'TOPCon G2G-G12R').map(([key, mod]) => (
-                  <option key={key} value={key}>{mod.name} - {mod.power}W</option>
-                ))}
-              </optgroup>
-            </select>
-            {selectedModuleType && moduleDatabase[selectedModuleType] && (
-              <div style={{marginTop: '8px', fontSize: '11px', color: '#666'}}>
-                <strong>Specs:</strong> Pmax: {moduleDatabase[selectedModuleType].specs.pmax}W, 
-                Voc: {moduleDatabase[selectedModuleType].specs.voc}V, 
-                Isc: {moduleDatabase[selectedModuleType].specs.isc}A,
-                FF: {moduleDatabase[selectedModuleType].specs.ff}%
-              </div>
-            )}
-            <label style={{display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', cursor: 'pointer'}}>
-              <input
-                type="checkbox"
-                checked={useDatabaseFTR}
-                onChange={(e) => setUseDatabaseFTR(e.target.checked)}
-              />
-              <span style={{fontSize: '12px', color: '#666'}}>Use FTR data from database instead</span>
-            </label>
-          </div>
-
-          {/* AQL Settings */}
-          <div style={{marginBottom: '15px', padding: '12px', background: '#e3f2fd', borderRadius: '10px', border: '2px solid #2196f3'}}>
-            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
-              <label style={{fontWeight: '700', color: '#1565c0', fontSize: '13px'}}>
-                📊 AQL Sampling (IS 2500)
-              </label>
-              <label style={{display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer'}}>
-                <input
-                  type="checkbox"
-                  checked={useAQL}
-                  onChange={(e) => setUseAQL(e.target.checked)}
-                />
-                <span style={{fontSize: '12px'}}>Enable</span>
-              </label>
-            </div>
-            
-            {useAQL && (
-              <>
-                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '10px'}}>
-                  <div>
-                    <label style={{display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px'}}>Lot Size</label>
-                    <input
-                      type="number"
-                      value={lotSize}
-                      onChange={(e) => setLotSize(parseInt(e.target.value) || 0)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: '1px solid #90caf9',
-                        fontSize: '13px'
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{display: 'block', fontSize: '11px', color: '#555', marginBottom: '4px'}}>AQL Level</label>
-                    <select
-                      value={aqlLevel}
-                      onChange={(e) => setAqlLevel(e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        borderRadius: '6px',
-                        border: '1px solid #90caf9',
-                        fontSize: '13px'
-                      }}
-                    >
-                      <option value="0.65">0.65%</option>
-                      <option value="1.0">1.0%</option>
-                      <option value="1.5">1.5%</option>
-                      <option value="2.5">2.5% (Standard)</option>
-                      <option value="4.0">4.0%</option>
-                      <option value="6.5">6.5%</option>
-                    </select>
-                  </div>
-                </div>
-                
-                {/* AQL Info Display */}
-                <div style={{
-                  background: 'white',
-                  padding: '10px',
-                  borderRadius: '8px',
-                  border: '1px solid #bbdefb'
-                }}>
-                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '8px', textAlign: 'center'}}>
-                    <div>
-                      <div style={{fontSize: '10px', color: '#666'}}>Code Letter</div>
-                      <div style={{fontSize: '18px', fontWeight: '700', color: '#1565c0'}}>{aqlInfo.code}</div>
-                    </div>
-                    <div>
-                      <div style={{fontSize: '10px', color: '#666'}}>Sample Size</div>
-                      <div style={{fontSize: '18px', fontWeight: '700', color: '#4caf50'}}>{aqlInfo.sample}</div>
-                    </div>
-                    <div>
-                      <div style={{fontSize: '10px', color: '#666'}}>Accept (Ac)</div>
-                      <div style={{fontSize: '18px', fontWeight: '700', color: '#2e7d32'}}>{aqlInfo.accept}</div>
-                    </div>
-                    <div>
-                      <div style={{fontSize: '10px', color: '#666'}}>Reject (Re)</div>
-                      <div style={{fontSize: '18px', fontWeight: '700', color: '#d32f2f'}}>{aqlInfo.reject}</div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
           {/* Input Mode Selection */}
           <div style={{marginBottom: '15px'}}>
             <label style={{display: 'block', fontWeight: '600', marginBottom: '8px', color: '#555', fontSize: '13px'}}>
@@ -732,6 +1020,9 @@ function WitnessReport() {
                   background: '#f8f9ff'
                 }}
               />
+              <p style={{fontSize: '11px', color: '#666', marginTop: '5px'}}>
+                ℹ️ After upload, you'll configure Module Type, EL/Hipot, RFID & FTR data
+              </p>
             </div>
           )}
 
@@ -768,7 +1059,40 @@ function WitnessReport() {
                   fontSize: '12px'
                 }}
               >
-                ✅ Load Serials
+                ✅ Load & Configure
+              </button>
+            </div>
+          )}
+
+          {/* Current Config Summary */}
+          {serialNumbers.length > 0 && !showConfigModal && (
+            <div style={{
+              marginBottom: '15px',
+              padding: '12px',
+              background: '#e8f5e9',
+              borderRadius: '10px',
+              border: '2px solid #4CAF50',
+              fontSize: '12px'
+            }}>
+              <div style={{fontWeight: '700', color: '#2e7d32', marginBottom: '8px'}}>✅ Configuration Complete</div>
+              <div><strong>Module:</strong> {moduleDatabase[selectedModuleType]?.name || selectedModuleType}</div>
+              <div><strong>Size:</strong> {elHipotData.length} x {elHipotData.width} x {elHipotData.thickness} mm</div>
+              <div><strong>RFID Modules:</strong> {rfidSerials.length}</div>
+              <div><strong>FTR:</strong> {hasDeviationData ? `${Object.keys(deviationSerials).length} deviation + auto` : 'All auto-generated'}</div>
+              <button
+                onClick={() => { setShowConfigModal(true); setConfigStep(1); }}
+                style={{
+                  marginTop: '8px',
+                  padding: '5px 10px',
+                  background: '#667eea',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  cursor: 'pointer',
+                  fontSize: '11px'
+                }}
+              >
+                🔄 Re-Configure
               </button>
             </div>
           )}
@@ -832,22 +1156,20 @@ function WitnessReport() {
             marginBottom: '20px'
           }}>
             <div style={{padding: '15px', background: '#e3f2fd', borderRadius: '10px', textAlign: 'center'}}>
-              <div style={{fontSize: '24px', fontWeight: '700', color: '#1565c0'}}>{lotSize.toLocaleString()}</div>
-              <div style={{fontSize: '11px', color: '#666'}}>Lot Size</div>
+              <div style={{fontSize: '24px', fontWeight: '700', color: '#1565c0'}}>{serialNumbers.length}</div>
+              <div style={{fontSize: '11px', color: '#666'}}>Total Modules</div>
             </div>
             <div style={{padding: '15px', background: '#e8f5e9', borderRadius: '10px', textAlign: 'center'}}>
-              <div style={{fontSize: '24px', fontWeight: '700', color: '#2e7d32'}}>
-                {useAQL ? aqlInfo.sample : serialNumbers.length}
-              </div>
-              <div style={{fontSize: '11px', color: '#666'}}>Sample Size</div>
+              <div style={{fontSize: '24px', fontWeight: '700', color: '#2e7d32'}}>{rfidSerials.length}</div>
+              <div style={{fontSize: '11px', color: '#666'}}>RFID Modules</div>
             </div>
             <div style={{padding: '15px', background: '#fff3e0', borderRadius: '10px', textAlign: 'center'}}>
-              <div style={{fontSize: '24px', fontWeight: '700', color: '#e65100'}}>{aqlInfo.code}</div>
-              <div style={{fontSize: '11px', color: '#666'}}>Code Letter</div>
+              <div style={{fontSize: '24px', fontWeight: '700', color: '#e65100'}}>{Object.keys(deviationSerials).length}</div>
+              <div style={{fontSize: '11px', color: '#666'}}>Deviation FTR</div>
             </div>
             <div style={{padding: '15px', background: '#fce4ec', borderRadius: '10px', textAlign: 'center'}}>
-              <div style={{fontSize: '24px', fontWeight: '700', color: '#c2185b'}}>{aqlInfo.accept}/{aqlInfo.reject}</div>
-              <div style={{fontSize: '11px', color: '#666'}}>Ac/Re</div>
+              <div style={{fontSize: '18px', fontWeight: '700', color: '#c2185b'}}>{moduleDatabase[selectedModuleType]?.power || 580}W</div>
+              <div style={{fontSize: '11px', color: '#666'}}>Module Power</div>
             </div>
           </div>
 
@@ -884,11 +1206,11 @@ function WitnessReport() {
             ))}
           </div>
 
-          {/* FTR Preview for selected module */}
-          {selectedModuleType && !useDatabaseFTR && serialNumbers.length > 0 && (
+          {/* FTR Preview */}
+          {serialNumbers.length > 0 && Object.keys(generatedFTRData).length > 0 && (
             <div style={{marginBottom: '20px', padding: '15px', background: '#f5f5f5', borderRadius: '10px'}}>
               <h4 style={{margin: '0 0 10px', fontSize: '14px', color: '#333'}}>
-                ⚡ Generated FTR Data Preview ({moduleDatabase[selectedModuleType]?.name})
+                ⚡ FTR Data Preview ({moduleDatabase[selectedModuleType]?.name})
               </h4>
               <div style={{overflowX: 'auto'}}>
                 <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '11px'}}>
@@ -902,14 +1224,15 @@ function WitnessReport() {
                       <th style={{padding: '8px', border: '1px solid #ddd'}}>Ipm</th>
                       <th style={{padding: '8px', border: '1px solid #ddd'}}>Vpm</th>
                       <th style={{padding: '8px', border: '1px solid #ddd'}}>FF</th>
-                      <th style={{padding: '8px', border: '1px solid #ddd'}}>Eff</th>
+                      <th style={{padding: '8px', border: '1px solid #ddd'}}>Source</th>
                     </tr>
                   </thead>
                   <tbody>
                     {serialNumbers.slice(0, 5).map((serial, idx) => {
                       const ftr = generatedFTRData[serial] || {};
+                      const isDeviation = hasDeviationData && deviationSerials[serial];
                       return (
-                        <tr key={idx} style={{background: idx % 2 === 0 ? 'white' : '#f9f9f9'}}>
+                        <tr key={idx} style={{background: isDeviation ? '#fff3e0' : (idx % 2 === 0 ? 'white' : '#f9f9f9')}}>
                           <td style={{padding: '6px', border: '1px solid #ddd', textAlign: 'center'}}>{idx + 1}</td>
                           <td style={{padding: '6px', border: '1px solid #ddd', fontFamily: 'monospace'}}>{serial}</td>
                           <td style={{padding: '6px', border: '1px solid #ddd', textAlign: 'center'}}>{ftr.pmax}</td>
@@ -918,7 +1241,9 @@ function WitnessReport() {
                           <td style={{padding: '6px', border: '1px solid #ddd', textAlign: 'center'}}>{ftr.ipm}</td>
                           <td style={{padding: '6px', border: '1px solid #ddd', textAlign: 'center'}}>{ftr.vpm}</td>
                           <td style={{padding: '6px', border: '1px solid #ddd', textAlign: 'center'}}>{ftr.ff}</td>
-                          <td style={{padding: '6px', border: '1px solid #ddd', textAlign: 'center'}}>{ftr.efficiency}</td>
+                          <td style={{padding: '6px', border: '1px solid #ddd', textAlign: 'center', fontSize: '10px'}}>
+                            {isDeviation ? '📊 Dev' : '🤖 Auto'}
+                          </td>
                         </tr>
                       );
                     })}
@@ -944,11 +1269,11 @@ function WitnessReport() {
             overflowY: 'auto'
           }}>
             <h4 style={{margin: '0 0 10px', color: '#555', fontSize: '13px'}}>
-              🔢 Serial Numbers ({serialNumbers.length.toLocaleString()} total{useAQL ? `, ${aqlInfo.sample} sampled` : ''})
+              🔢 Serial Numbers ({serialNumbers.length.toLocaleString()} total)
             </h4>
             {serialNumbers.length === 0 ? (
               <p style={{color: '#999', textAlign: 'center', padding: '20px'}}>
-                No serial numbers loaded yet.
+                Upload Excel to load serial numbers. Configuration wizard will open.
               </p>
             ) : (
               <div style={{
@@ -960,12 +1285,12 @@ function WitnessReport() {
                 {serialNumbers.slice(0, 50).map((serial, idx) => (
                   <div key={idx} style={{
                     padding: '5px 8px',
-                    background: 'white',
+                    background: rfidSerials.includes(serial) ? '#e3f2fd' : 'white',
                     borderRadius: '4px',
-                    border: '1px solid #e0e0e0',
+                    border: rfidSerials.includes(serial) ? '1px solid #2196f3' : '1px solid #e0e0e0',
                     fontFamily: 'monospace'
                   }}>
-                    {idx + 1}. {serial}
+                    {idx + 1}. {serial} {rfidSerials.includes(serial) && '📡'}
                   </div>
                 ))}
                 {serialNumbers.length > 50 && (
