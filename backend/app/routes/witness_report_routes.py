@@ -73,11 +73,41 @@ def generate_witness_report():
         report_date = data.get('report_date', datetime.now().strftime('%d/%m/%Y'))
         total_qty = data.get('total_qty', len(serial_numbers))
         
+        # AQL Info
+        use_aql = data.get('use_aql', False)
+        aql_level = data.get('aql_level', '2.5')
+        aql_level_name = data.get('aql_level_name', '')
+        lot_size = data.get('lot_size', 0)
+        sample_size = data.get('sample_size', total_qty)
+        code_letter = data.get('code_letter', '')
+        accept_number = data.get('accept_number', 0)
+        reject_number = data.get('reject_number', 1)
+        
+        # AQL info dict
+        aql_info = {
+            'use_aql': use_aql,
+            'aql_level': aql_level,
+            'aql_level_name': aql_level_name,
+            'lot_size': lot_size,
+            'sample_size': sample_size,
+            'code_letter': code_letter,
+            'accept_number': accept_number,
+            'reject_number': reject_number
+        } if use_aql else None
+        
         if not serial_numbers:
             return jsonify({'success': False, 'error': 'No serial numbers provided'}), 400
         
-        # Get FTR data for all serials
-        ftr_data = get_ftr_data_for_serials(company_id, serial_numbers)
+        # Check if using generated FTR data from frontend or database
+        use_database_ftr = data.get('use_database_ftr', True)
+        generated_ftr_data = data.get('generated_ftr_data', {})
+        
+        # Get FTR data - either from database or use frontend generated data
+        if use_database_ftr:
+            ftr_data = get_ftr_data_for_serials(company_id, serial_numbers)
+        else:
+            # Use frontend generated FTR data based on module type
+            ftr_data = generated_ftr_data
         
         # Create workbook
         wb = openpyxl.Workbook()
@@ -87,7 +117,7 @@ def generate_witness_report():
         
         # ========== SHEET 1: FTR (Inspection) ==========
         ws_ftr = wb.create_sheet("FTR(Inspection)")
-        create_ftr_sheet(ws_ftr, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data)
+        create_ftr_sheet(ws_ftr, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data, aql_info)
         
         # ========== SHEET 2: Bifaciality ==========
         ws_bif = wb.create_sheet("Bifaciality")
@@ -134,7 +164,7 @@ def generate_witness_report():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-def create_header_rows(ws, title, company_name, total_qty, report_date):
+def create_header_rows(ws, title, company_name, total_qty, report_date, aql_info=None):
     """Create standard header rows for all sheets"""
     # Row 1: Company Name
     ws.merge_cells('A1:I1')
@@ -151,9 +181,13 @@ def create_header_rows(ws, title, company_name, total_qty, report_date):
     ws['A2'].alignment = Alignment(horizontal='center')
     ws.row_dimensions[2].height = 20
     
-    # Row 3: Total Qty
+    # Row 3: Total Qty with AQL info
     ws.merge_cells('A3:I3')
-    ws['A3'] = f"Total Qty:- {total_qty} Pcs"
+    if aql_info and aql_info.get('use_aql'):
+        qty_text = f"Lot Size: {aql_info.get('lot_size', 0)} | Sample Size: {total_qty} Pcs | AQL Level: {aql_info.get('aql_level', '2.5')}% | Code: {aql_info.get('code_letter', '')} | Accept/Reject: {aql_info.get('accept_number', 0)}/{aql_info.get('reject_number', 1)}"
+    else:
+        qty_text = f"Total Qty:- {total_qty} Pcs"
+    ws['A3'] = qty_text
     ws['A3'].font = Font(bold=True, size=11)
     ws['A3'].alignment = Alignment(horizontal='center')
     
@@ -164,9 +198,9 @@ def create_header_rows(ws, title, company_name, total_qty, report_date):
     ws['A4'].alignment = Alignment(horizontal='center')
 
 
-def create_ftr_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data):
+def create_ftr_sheet(ws, company_name, party_name, total_qty, report_date, serial_numbers, ftr_data, aql_info=None):
     """Create FTR (Flasher Test Report) sheet"""
-    create_header_rows(ws, "Flasher Test (Power Measurement) Report", company_name, total_qty, report_date)
+    create_header_rows(ws, "Flasher Test (Power Measurement) Report", company_name, total_qty, report_date, aql_info)
     
     # Headers Row 5
     headers = ['Sr.No.', 'Module Sr.No.', 'Pmax', 'Isc', 'Voc', 'Ipm', 'Vpm', 'FF', 'Eff.']
