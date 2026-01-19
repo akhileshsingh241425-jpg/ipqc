@@ -19,6 +19,10 @@ const FTRManagement = () => {
   const [masterSerials, setMasterSerials] = useState([]);
   const [masterSearchTerm, setMasterSearchTerm] = useState('');
   const [loadingMasterView, setLoadingMasterView] = useState(false);
+  const [masterPage, setMasterPage] = useState(1);
+  const [masterTotalPages, setMasterTotalPages] = useState(1);
+  const [masterTotal, setMasterTotal] = useState(0);
+  const PAGE_SIZE = 100;
   
   // Rejection upload (NEW)
   const [showRejectionModal, setShowRejectionModal] = useState(false);
@@ -30,6 +34,9 @@ const FTRManagement = () => {
   const [rejectionSerials, setRejectionSerials] = useState([]);
   const [rejectionSearchTerm, setRejectionSearchTerm] = useState('');
   const [loadingRejectionView, setLoadingRejectionView] = useState(false);
+  const [rejectionPage, setRejectionPage] = useState(1);
+  const [rejectionTotalPages, setRejectionTotalPages] = useState(1);
+  const [rejectionTotal, setRejectionTotal] = useState(0);
   
   // PDI serial assignment
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -258,18 +265,21 @@ const FTRManagement = () => {
   };
 
   // Load Master FTR Serials
-  const loadMasterSerials = async (search = '') => {
+  const loadMasterSerials = async (search = '', page = 1) => {
     if (!selectedCompany) return;
     
     try {
       setLoadingMasterView(true);
       const API_BASE_URL = getAPIBaseURL();
       const response = await axios.get(
-        `${API_BASE_URL}/api/ftr/master-serials/${selectedCompany.id}?search=${encodeURIComponent(search)}`
+        `${API_BASE_URL}/api/ftr/master-serials/${selectedCompany.id}?search=${encodeURIComponent(search)}&page=${page}&page_size=${PAGE_SIZE}`
       );
       
       if (response.data.success) {
         setMasterSerials(response.data.serials);
+        setMasterTotal(response.data.total);
+        setMasterPage(response.data.page);
+        setMasterTotalPages(Math.ceil(response.data.total / PAGE_SIZE));
       }
     } catch (error) {
       console.error('Failed to load master serials:', error);
@@ -280,18 +290,21 @@ const FTRManagement = () => {
   };
 
   // Load Rejection Serials
-  const loadRejectionSerials = async (search = '') => {
+  const loadRejectionSerials = async (search = '', page = 1) => {
     if (!selectedCompany) return;
     
     try {
       setLoadingRejectionView(true);
       const API_BASE_URL = getAPIBaseURL();
       const response = await axios.get(
-        `${API_BASE_URL}/api/ftr/rejection-serials/${selectedCompany.id}?search=${encodeURIComponent(search)}`
+        `${API_BASE_URL}/api/ftr/rejection-serials/${selectedCompany.id}?search=${encodeURIComponent(search)}&page=${page}&page_size=${PAGE_SIZE}`
       );
       
       if (response.data.success) {
         setRejectionSerials(response.data.serials);
+        setRejectionTotal(response.data.total);
+        setRejectionPage(response.data.page);
+        setRejectionTotalPages(Math.ceil(response.data.total / PAGE_SIZE));
       }
     } catch (error) {
       console.error('Failed to load rejection serials:', error);
@@ -1236,7 +1249,8 @@ const FTRManagement = () => {
                 value={masterSearchTerm}
                 onChange={(e) => {
                   setMasterSearchTerm(e.target.value);
-                  loadMasterSerials(e.target.value);
+                  setMasterPage(1);
+                  loadMasterSerials(e.target.value, 1);
                 }}
                 style={{
                   width: '100%',
@@ -1273,20 +1287,20 @@ const FTRManagement = () => {
               <div>
                 <div style={{display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap'}}>
                   <div style={{flex: 1, padding: '12px', background: '#e8f5e9', borderRadius: '8px', textAlign: 'center'}}>
-                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#2e7d32'}}>{masterSerials.length}</div>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#2e7d32'}}>{masterTotal.toLocaleString()}</div>
                     <div style={{fontSize: '12px', color: '#555'}}>Total Serials</div>
                   </div>
                   <div style={{flex: 1, padding: '12px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center'}}>
                     <div style={{fontSize: '24px', fontWeight: 'bold', color: '#1565c0'}}>{masterSerials.filter(s => s.status === 'available').length}</div>
-                    <div style={{fontSize: '12px', color: '#555'}}>Available</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Available (Page)</div>
                   </div>
                   <div style={{flex: 1, padding: '12px', background: '#fff3e0', borderRadius: '8px', textAlign: 'center'}}>
                     <div style={{fontSize: '24px', fontWeight: 'bold', color: '#e65100'}}>{masterSerials.filter(s => s.status === 'assigned').length}</div>
-                    <div style={{fontSize: '12px', color: '#555'}}>Assigned</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Assigned (Page)</div>
                   </div>
                   <div style={{flex: 1, padding: '12px', background: '#ffebee', borderRadius: '8px', textAlign: 'center'}}>
                     <div style={{fontSize: '24px', fontWeight: 'bold', color: '#c62828'}}>{masterSerials.filter(s => s.status === 'used').length}</div>
-                    <div style={{fontSize: '12px', color: '#555'}}>Used</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Used (Page)</div>
                   </div>
                 </div>
                 
@@ -1341,10 +1355,50 @@ const FTRManagement = () => {
                   </table>
                 </div>
                 
+                {/* Pagination Controls */}
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', padding: '10px', background: '#f8f9fa', borderRadius: '8px'}}>
+                  <div style={{fontSize: '14px', color: '#666'}}>
+                    Showing {((masterPage - 1) * PAGE_SIZE) + 1} - {Math.min(masterPage * PAGE_SIZE, masterTotal)} of {masterTotal.toLocaleString()} serials
+                  </div>
+                  <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                    <button 
+                      onClick={() => { setMasterPage(p => p - 1); loadMasterSerials(masterSearchTerm, masterPage - 1); }}
+                      disabled={masterPage <= 1}
+                      style={{
+                        padding: '8px 16px',
+                        background: masterPage <= 1 ? '#ccc' : '#667eea',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: masterPage <= 1 ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      ◀ Prev
+                    </button>
+                    <span style={{fontWeight: '600', color: '#333'}}>Page {masterPage} of {masterTotalPages}</span>
+                    <button 
+                      onClick={() => { setMasterPage(p => p + 1); loadMasterSerials(masterSearchTerm, masterPage + 1); }}
+                      disabled={masterPage >= masterTotalPages}
+                      style={{
+                        padding: '8px 16px',
+                        background: masterPage >= masterTotalPages ? '#ccc' : '#667eea',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: masterPage >= masterTotalPages ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                </div>
+
                 <button 
                   onClick={() => setShowMasterViewModal(false)}
                   style={{
-                    marginTop: '15px',
+                    marginTop: '10px',
                     width: '100%',
                     padding: '12px',
                     background: '#6c757d',
@@ -1378,7 +1432,8 @@ const FTRManagement = () => {
                 value={rejectionSearchTerm}
                 onChange={(e) => {
                   setRejectionSearchTerm(e.target.value);
-                  loadRejectionSerials(e.target.value);
+                  setRejectionPage(1);
+                  loadRejectionSerials(e.target.value, 1);
                 }}
                 style={{
                   width: '100%',
@@ -1415,16 +1470,16 @@ const FTRManagement = () => {
               <div>
                 <div style={{display: 'flex', gap: '15px', marginBottom: '15px', flexWrap: 'wrap'}}>
                   <div style={{flex: 1, padding: '12px', background: '#ffebee', borderRadius: '8px', textAlign: 'center', border: '2px solid #dc3545'}}>
-                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#c62828'}}>{rejectionSerials.length}</div>
+                    <div style={{fontSize: '24px', fontWeight: 'bold', color: '#c62828'}}>{rejectionTotal.toLocaleString()}</div>
                     <div style={{fontSize: '12px', color: '#555'}}>Total Rejections</div>
                   </div>
                   <div style={{flex: 1, padding: '12px', background: '#fff3e0', borderRadius: '8px', textAlign: 'center'}}>
                     <div style={{fontSize: '24px', fontWeight: 'bold', color: '#e65100'}}>{[...new Set(rejectionSerials.map(s => s.pdi_number).filter(p => p && p !== '-'))].length}</div>
-                    <div style={{fontSize: '12px', color: '#555'}}>Assigned to PDIs</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Assigned (Page)</div>
                   </div>
                   <div style={{flex: 1, padding: '12px', background: '#e3f2fd', borderRadius: '8px', textAlign: 'center'}}>
                     <div style={{fontSize: '24px', fontWeight: 'bold', color: '#1565c0'}}>{rejectionSerials.filter(s => !s.pdi_number || s.pdi_number === '-').length}</div>
-                    <div style={{fontSize: '12px', color: '#555'}}>Not Assigned</div>
+                    <div style={{fontSize: '12px', color: '#555'}}>Not Assigned (Page)</div>
                   </div>
                 </div>
                 
@@ -1481,10 +1536,50 @@ const FTRManagement = () => {
                   </table>
                 </div>
                 
+                {/* Pagination Controls */}
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '15px', padding: '10px', background: '#fff5f5', borderRadius: '8px', border: '1px solid #dc3545'}}>
+                  <div style={{fontSize: '14px', color: '#666'}}>
+                    Showing {((rejectionPage - 1) * PAGE_SIZE) + 1} - {Math.min(rejectionPage * PAGE_SIZE, rejectionTotal)} of {rejectionTotal.toLocaleString()} rejections
+                  </div>
+                  <div style={{display: 'flex', gap: '10px', alignItems: 'center'}}>
+                    <button 
+                      onClick={() => { setRejectionPage(p => p - 1); loadRejectionSerials(rejectionSearchTerm, rejectionPage - 1); }}
+                      disabled={rejectionPage <= 1}
+                      style={{
+                        padding: '8px 16px',
+                        background: rejectionPage <= 1 ? '#ccc' : '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: rejectionPage <= 1 ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      ◀ Prev
+                    </button>
+                    <span style={{fontWeight: '600', color: '#333'}}>Page {rejectionPage} of {rejectionTotalPages}</span>
+                    <button 
+                      onClick={() => { setRejectionPage(p => p + 1); loadRejectionSerials(rejectionSearchTerm, rejectionPage + 1); }}
+                      disabled={rejectionPage >= rejectionTotalPages}
+                      style={{
+                        padding: '8px 16px',
+                        background: rejectionPage >= rejectionTotalPages ? '#ccc' : '#dc3545',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: rejectionPage >= rejectionTotalPages ? 'not-allowed' : 'pointer',
+                        fontWeight: '600'
+                      }}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                </div>
+
                 <button 
                   onClick={() => setShowRejectionViewModal(false)}
                   style={{
-                    marginTop: '15px',
+                    marginTop: '10px',
                     width: '100%',
                     padding: '12px',
                     background: '#6c757d',

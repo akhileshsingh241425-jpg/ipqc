@@ -1,0 +1,14 @@
+# Run this command from your backend directory to apply the new table:
+
+alembic upgrade head
+
+# If you have not initialized Alembic, first run:
+# alembic init migrations
+# Then add your models and run:
+# alembic revision --autogenerate -m "add whatsapp_alert_log table"
+# Then run:
+# alembic upgrade head
+
+# If you use Flask-Migrate, use:
+# flask db migrate -m "add whatsapp_alert_log table"
+# flask db upgrade

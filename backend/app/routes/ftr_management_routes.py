@@ -432,26 +432,25 @@ def get_master_serials(company_id):
     """Get all master FTR serial numbers for a company with search"""
     try:
         search = request.args.get('search', '').strip()
-        
-        query = """
-            SELECT serial_number, pmax, binning, class_status, status, 
-                   pdi_number, upload_date, file_name
-            FROM ftr_master_serials
-            WHERE company_id = :company_id
-        """
-        
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 100))
+
+        base_query = "FROM ftr_master_serials WHERE company_id = :company_id"
+        params = {'company_id': company_id}
         if search:
-            query += " AND serial_number LIKE :search"
-            result = db.session.execute(
-                text(query + " ORDER BY upload_date DESC LIMIT 1000"),
-                {'company_id': company_id, 'search': f'%{search}%'}
-            ).fetchall()
-        else:
-            result = db.session.execute(
-                text(query + " ORDER BY upload_date DESC LIMIT 1000"),
-                {'company_id': company_id}
-            ).fetchall()
-        
+            base_query += " AND serial_number LIKE :search"
+            params['search'] = f'%{search}%'
+
+        # Get total count
+        count_result = db.session.execute(text(f"SELECT COUNT(*) {base_query}"), params)
+        total = count_result.scalar() or 0
+
+        # Get paginated data
+        offset = (page - 1) * page_size
+        data_query = f"SELECT serial_number, pmax, binning, class_status, status, pdi_number, upload_date, file_name {base_query} ORDER BY upload_date DESC LIMIT :limit OFFSET :offset"
+        params.update({'limit': page_size, 'offset': offset})
+        result = db.session.execute(text(data_query), params).fetchall()
+
         serials = []
         for row in result:
             serials.append({
@@ -464,11 +463,13 @@ def get_master_serials(company_id):
                 'upload_date': row[6].strftime('%Y-%m-%d %H:%M:%S') if row[6] else None,
                 'file_name': row[7]
             })
-        
+
         return jsonify({
             'success': True,
             'serials': serials,
-            'total': len(serials)
+            'total': total,
+            'page': page,
+            'page_size': page_size
         })
         
     except Exception as e:
@@ -481,27 +482,25 @@ def get_rejection_serials(company_id):
     """Get all rejection serial numbers for a company with search"""
     try:
         search = request.args.get('search', '').strip()
-        
-        query = """
-            SELECT serial_number, pmax, binning, class_status, status, 
-                   pdi_number, upload_date, file_name
-            FROM ftr_master_serials
-            WHERE company_id = :company_id
-            AND class_status IN ('REJECTED', 'REJECT', 'REJ', 'NG', 'FAIL')
-        """
-        
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 100))
+
+        base_query = "FROM ftr_master_serials WHERE company_id = :company_id AND class_status IN ('REJECTED', 'REJECT', 'REJ', 'NG', 'FAIL')"
+        params = {'company_id': company_id}
         if search:
-            query += " AND serial_number LIKE :search"
-            result = db.session.execute(
-                text(query + " ORDER BY upload_date DESC LIMIT 1000"),
-                {'company_id': company_id, 'search': f'%{search}%'}
-            ).fetchall()
-        else:
-            result = db.session.execute(
-                text(query + " ORDER BY upload_date DESC LIMIT 1000"),
-                {'company_id': company_id}
-            ).fetchall()
-        
+            base_query += " AND serial_number LIKE :search"
+            params['search'] = f'%{search}%'
+
+        # Get total count
+        count_result = db.session.execute(text(f"SELECT COUNT(*) {base_query}"), params)
+        total = count_result.scalar() or 0
+
+        # Get paginated data
+        offset = (page - 1) * page_size
+        data_query = f"SELECT serial_number, pmax, binning, class_status, status, pdi_number, upload_date, file_name {base_query} ORDER BY upload_date DESC LIMIT :limit OFFSET :offset"
+        params.update({'limit': page_size, 'offset': offset})
+        result = db.session.execute(text(data_query), params).fetchall()
+
         serials = []
         for row in result:
             serials.append({
@@ -514,11 +513,13 @@ def get_rejection_serials(company_id):
                 'upload_date': row[6].strftime('%Y-%m-%d %H:%M:%S') if row[6] else None,
                 'file_name': row[7]
             })
-        
+
         return jsonify({
             'success': True,
             'serials': serials,
-            'total': len(serials)
+            'total': total,
+            'page': page,
+            'page_size': page_size
         })
         
     except Exception as e:

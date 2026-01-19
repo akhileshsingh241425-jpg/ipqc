@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify, send_file
 from app.models.database import db
+from app.models.whatsapp_alert_log import WhatsAppAlertLog
 from sqlalchemy import text
 import requests
 import os
@@ -4247,12 +4248,18 @@ def download_check_result():
 PACKING_ALERT_NUMBERS = ['9773983859']
 
 def send_packing_alert_whatsapp(caution, party_name, module_no, pallet_no, reason):
-    """Send WhatsApp alert for packing validation issues"""
+    """Send WhatsApp alert for packing validation issues, but only once per serial/alert_type"""
     try:
         results = []
+        alert_type = "rejection" if "REJECTED" in str(caution).upper() else "other"
+        # Prevent duplicate alerts for same serial/alert_type
+        if alert_type == "rejection":
+            existing = WhatsAppAlertLog.query.filter_by(serial_number=module_no, alert_type=alert_type).first()
+            if existing:
+                print(f"⏩ Skipping duplicate WhatsApp alert for {module_no} [{alert_type}]")
+                return [{'recipient': 'ALL', 'success': False, 'skipped': True, 'reason': 'Already sent'}]
         for number in PACKING_ALERT_NUMBERS:
             recipient = '91' + number.replace('+91', '').replace(' ', '')
-            
             payload = {
                 "to": recipient,
                 "type": "template",
@@ -4279,21 +4286,22 @@ def send_packing_alert_whatsapp(caution, party_name, module_no, pallet_no, reaso
                     ]
                 }
             }
-            
             headers = {
                 "Authorization": WHATSAPP_AUTH_TOKEN,
                 "Content-Type": "application/json"
             }
-            
             response = requests.post(WHATSAPP_API_URL, json=payload, headers=headers, timeout=30)
-            
             if response.status_code == 200:
                 print(f"✅ Packing alert sent to {recipient}")
                 results.append({'recipient': recipient, 'success': True})
             else:
                 print(f"❌ Packing alert failed for {recipient}")
                 results.append({'recipient': recipient, 'success': False})
-        
+        # Log only if at least one sent
+        if alert_type == "rejection" and any(r.get('success') for r in results):
+            log = WhatsAppAlertLog(serial_number=module_no, alert_type=alert_type)
+            db.session.add(log)
+            db.session.commit()
         return results
     except Exception as e:
         print(f"❌ Packing alert error: {str(e)}")
