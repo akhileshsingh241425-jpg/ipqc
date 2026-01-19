@@ -48,6 +48,8 @@ const FTRManagement = () => {
   const [serialsToAssign, setSerialsToAssign] = useState('');
   const [uploadingPdiSerials, setUploadingPdiSerials] = useState(false);
   const [selectedPdiFile, setSelectedPdiFile] = useState(null);
+  const [pdiUploadProgress, setPdiUploadProgress] = useState(0);
+  const [pdiUploadStatus, setPdiUploadStatus] = useState('');
   
   // Actual packed modules upload
   const [showPackedModal, setShowPackedModal] = useState(false);
@@ -427,15 +429,23 @@ const FTRManagement = () => {
 
     try {
       setUploadingPdiSerials(true);
+      setPdiUploadProgress(0);
+      setPdiUploadStatus('📖 Reading Excel file...');
       const file = selectedPdiFile;
       
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
+          setPdiUploadProgress(10);
+          setPdiUploadStatus('📊 Parsing Excel data...');
+          
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
           const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+          
+          setPdiUploadProgress(20);
+          setPdiUploadStatus('🔍 Extracting barcodes...');
           
           // Extract serial numbers (first column)
           const serialNumbers = [];
@@ -447,27 +457,74 @@ const FTRManagement = () => {
           
           if (serialNumbers.length === 0) {
             alert('❌ No serial numbers found in Excel');
+            setUploadingPdiSerials(false);
+            setPdiUploadProgress(0);
+            setPdiUploadStatus('');
             return;
           }
           
-          // Upload to backend
-          const API_BASE_URL = getAPIBaseURL();
-          const response = await axios.post(`${API_BASE_URL}/api/ftr/assign-excel`, {
-            company_id: selectedCompany.id,
-            pdi_number: selectedPdiForAssign,
-            serial_numbers: serialNumbers
-          });
+          setPdiUploadProgress(30);
+          setPdiUploadStatus(`📤 Uploading ${serialNumbers.length} barcodes...`);
           
-          if (response.data.success) {
-            alert(`✅ ${serialNumbers.length} barcodes assigned to ${selectedPdiForAssign}`);
+          // Upload to backend in batches for progress tracking
+          const API_BASE_URL = getAPIBaseURL();
+          const BATCH_SIZE = 500;
+          const totalBatches = Math.ceil(serialNumbers.length / BATCH_SIZE);
+          let uploadedCount = 0;
+          let failedCount = 0;
+          
+          for (let i = 0; i < totalBatches; i++) {
+            const batch = serialNumbers.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
+            const progress = 30 + Math.floor((i / totalBatches) * 60);
+            setPdiUploadProgress(progress);
+            setPdiUploadStatus(`📤 Uploading batch ${i + 1}/${totalBatches} (${uploadedCount}/${serialNumbers.length})...`);
+            
+            try {
+              const response = await axios.post(`${API_BASE_URL}/api/ftr/assign-excel`, {
+                company_id: selectedCompany.id,
+                pdi_number: selectedPdiForAssign,
+                serial_numbers: batch
+              });
+              
+              if (response.data.success) {
+                uploadedCount += batch.length;
+              } else {
+                failedCount += batch.length;
+              }
+            } catch (batchError) {
+              console.error(`Batch ${i + 1} failed:`, batchError);
+              failedCount += batch.length;
+            }
+          }
+          
+          setPdiUploadProgress(95);
+          setPdiUploadStatus('✅ Finalizing...');
+          
+          setTimeout(() => {
+            setPdiUploadProgress(100);
+            setPdiUploadStatus('🎉 Complete!');
+            
+            if (failedCount === 0) {
+              alert(`✅ ${uploadedCount} barcodes assigned to ${selectedPdiForAssign}`);
+            } else {
+              alert(`⚠️ Uploaded: ${uploadedCount}, Failed: ${failedCount}`);
+            }
+            
             loadFTRData(selectedCompany.id);
             setShowAssignModal(false);
             setSelectedPdiForAssign(null);
             setSelectedPdiFile(null);
-          }
+            setPdiUploadProgress(0);
+            setPdiUploadStatus('');
+            setUploadingPdiSerials(false);
+          }, 500);
+          
         } catch (error) {
           console.error('Failed to process Excel:', error);
           alert('❌ Failed to process barcode Excel file');
+          setPdiUploadProgress(0);
+          setPdiUploadStatus('');
+          setUploadingPdiSerials(false);
         }
       };
       
@@ -475,7 +532,8 @@ const FTRManagement = () => {
     } catch (error) {
       console.error('Failed to upload PDI barcodes:', error);
       alert('❌ Failed to upload PDI barcodes');
-    } finally {
+      setPdiUploadProgress(0);
+      setPdiUploadStatus('');
       setUploadingPdiSerials(false);
     }
   };
@@ -1172,11 +1230,40 @@ const FTRManagement = () => {
                 <p style={{fontSize: '11px', color: '#666', marginBottom: '12px'}}>
                   Upload specific serial numbers
                 </p>
-                {selectedPdiFile && (
+                {selectedPdiFile && !uploadingPdiSerials && (
                   <p style={{fontSize: '11px', color: '#f687b3', marginBottom: '8px', fontWeight: '600', wordBreak: 'break-all'}}>
                     📄 {selectedPdiFile.name}
                   </p>
                 )}
+                
+                {/* Progress Bar */}
+                {uploadingPdiSerials && (
+                  <div style={{marginBottom: '12px'}}>
+                    <div style={{
+                      width: '100%',
+                      height: '8px',
+                      backgroundColor: '#e0e0e0',
+                      borderRadius: '4px',
+                      overflow: 'hidden',
+                      marginBottom: '6px'
+                    }}>
+                      <div style={{
+                        width: `${pdiUploadProgress}%`,
+                        height: '100%',
+                        backgroundColor: pdiUploadProgress === 100 ? '#4caf50' : '#f687b3',
+                        borderRadius: '4px',
+                        transition: 'width 0.3s ease'
+                      }} />
+                    </div>
+                    <p style={{fontSize: '11px', color: '#333', fontWeight: '600', margin: 0}}>
+                      {pdiUploadStatus}
+                    </p>
+                    <p style={{fontSize: '10px', color: '#666', margin: '4px 0 0 0'}}>
+                      {pdiUploadProgress}% Complete
+                    </p>
+                  </div>
+                )}
+                
                 <input 
                   type="file" 
                   accept=".xlsx,.xls"
@@ -1190,7 +1277,8 @@ const FTRManagement = () => {
                     borderRadius: '6px',
                     cursor: selectedPdiForAssign ? 'pointer' : 'not-allowed',
                     width: '100%',
-                    marginBottom: '8px'
+                    marginBottom: '8px',
+                    display: uploadingPdiSerials ? 'none' : 'block'
                   }}
                 />
                 <button
@@ -1205,7 +1293,8 @@ const FTRManagement = () => {
                     borderRadius: '6px',
                     cursor: (!selectedPdiFile || uploadingPdiSerials || !selectedPdiForAssign) ? 'not-allowed' : 'pointer',
                     fontSize: '12px',
-                    fontWeight: '600'
+                    fontWeight: '600',
+                    display: uploadingPdiSerials ? 'none' : 'block'
                   }}
                 >
                   {uploadingPdiSerials ? '⏳ Uploading...' : '📤 Upload'}
