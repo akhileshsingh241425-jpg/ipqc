@@ -17,7 +17,9 @@ const AIAssistant = () => {
   const [validationLoading, setValidationLoading] = useState(false);
   const [schedulerEnabled, setSchedulerEnabled] = useState(true);
   const [schedulerLoading, setSchedulerLoading] = useState(false);
+  const [binningCheckLoading, setBinningCheckLoading] = useState(false);
   const fileInputRef = useRef(null);
+  const binningFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
@@ -29,7 +31,7 @@ const AIAssistant = () => {
     // Add welcome message
     setMessages([{
       role: 'assistant',
-      content: '👋 Namaste! Main aapka AI FTR Assistant hoon.\n\n📊 **Smart Excel Commands:**\n• "Rays ka R-3 excel do"\n• "L&T ke I-2 packed barcodes"\n• "Sterlin ka dispatched excel do"\n• "50 barcode list do"\n\n📁 **Upload & Check:**\n• Sidebar se Excel upload karke barcode status check karo\n\n❓ **Questions:**\n• "Total packed kitne hai?"\n• "Binning wise breakup batao"'
+      content: '👋 Namaste! Main aapka AI FTR Assistant hoon.\n\n📊 **Smart Excel Commands:**\n• "Rays ka R-3 excel do"\n• "L&T ke I-2 packed barcodes"\n• "Sterlin ka dispatched excel do"\n• "50 barcode list do"\n\n📁 **Upload & Check:**\n• Sidebar se Excel upload karke barcode status check karo\n• 🏷️ **Binning Check:** Serial numbers ki binning check karo\n\n❓ **Questions:**\n• "Total packed kitne hai?"\n• "Binning wise breakup batao"'
     }]);
   }, []);
 
@@ -329,6 +331,78 @@ const AIAssistant = () => {
     } catch (error) {
       console.error('Download error:', error);
       alert('Download failed');
+    }
+  };
+
+  // Binning Check - Upload Excel and check binning from database
+  const handleBinningCheck = async (file) => {
+    if (!file) return;
+    
+    setBinningCheckLoading(true);
+    
+    // Add user message
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: `📤 Uploading ${file.name} to check binning...`
+    }]);
+    
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await axios.post(`${API_BASE_URL}/api/ai/check-binning`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      
+      if (response.data.success) {
+        const { summary, results, excel_base64, message } = response.data;
+        
+        // Create detailed message
+        let resultMessage = message + '\n\n';
+        
+        // Show first 10 results
+        if (results && results.length > 0) {
+          resultMessage += `**Sample Results (first 10):**\n`;
+          results.slice(0, 10).forEach((r, i) => {
+            resultMessage += `${i+1}. ${r.serial_number} - **${r.binning}** | Pmax: ${r.pmax} | ${r.status}\n`;
+          });
+          if (results.length > 10) {
+            resultMessage += `\n... and ${results.length - 10} more. Download Excel for full report.`;
+          }
+        }
+        
+        const excelFilename = `Binning_Report_${new Date().toISOString().slice(0,10)}.xlsx`;
+        
+        // Auto download Excel
+        if (excel_base64) {
+          downloadExcelFromBase64(excel_base64, excelFilename);
+        }
+        
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: resultMessage,
+          hasExcel: !!excel_base64,
+          excelData: excel_base64,
+          excelFilename: excelFilename
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `❌ Error: ${response.data.error}`,
+          isError: true
+        }]);
+      }
+    } catch (error) {
+      console.error('Binning check error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ Binning check failed: ${error.response?.data?.error || error.message}`,
+        isError: true
+      }]);
+    } finally {
+      setBinningCheckLoading(false);
+      if (binningFileInputRef.current) binningFileInputRef.current.value = '';
     }
   };
 
@@ -644,6 +718,41 @@ const AIAssistant = () => {
             {!selectedCompany && <p className="check-warning">⚠️ Select company first</p>}
           </div>
 
+          {/* Binning Check Upload */}
+          <h4>🏷️ Check Serial Binning</h4>
+          <div className="barcode-check-section" style={{ marginBottom: '15px' }}>
+            <p className="check-help">Upload Excel with serial numbers to check current binning from FTR data</p>
+            <input 
+              type="file" 
+              ref={binningFileInputRef}
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => handleBinningCheck(e.target.files[0])}
+              style={{ display: 'none' }}
+              id="binning-file-input"
+            />
+            <button 
+              className="btn-upload-check"
+              onClick={() => binningFileInputRef.current?.click()}
+              disabled={binningCheckLoading}
+              style={{
+                backgroundColor: '#9c27b0',
+                color: 'white',
+                padding: '10px 14px',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: binningCheckLoading ? 'wait' : 'pointer',
+                width: '100%',
+                fontWeight: 'bold',
+                fontSize: '13px'
+              }}
+            >
+              {binningCheckLoading ? '⏳ Checking Binning...' : '📤 Upload & Check Binning'}
+            </button>
+            <p style={{ fontSize: '10px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
+              No company selection needed - checks all FTR data
+            </p>
+          </div>
+
           {/* Packing Validation */}
           <h4>⚠️ Packing Validation</h4>
           <div className="validation-section">
@@ -749,7 +858,18 @@ const AIAssistant = () => {
                   {msg.hasExcel && msg.excelData && (
                     <button 
                       className="btn-download-excel"
-                      onClick={() => downloadExcelFromBase64(msg.excelData, `Barcode_Status_${new Date().toISOString().slice(0,10)}.xlsx`)}
+                      onClick={() => downloadExcelFromBase64(msg.excelData, msg.excelFilename || `Report_${new Date().toISOString().slice(0,10)}.xlsx`)}
+                      style={{
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        padding: '10px 20px',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        marginTop: '10px',
+                        fontSize: '14px'
+                      }}
                     >
                       📥 Download Excel Report
                     </button>

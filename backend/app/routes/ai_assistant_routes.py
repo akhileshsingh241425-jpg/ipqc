@@ -4982,3 +4982,225 @@ def send_bulk_whatsapp():
         
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@ai_assistant_bp.route('/ai/check-binning', methods=['POST'])
+def check_serial_binning():
+    """
+    Check binning of serial numbers from uploaded Excel
+    Returns current binning from FTR master data
+    """
+    try:
+        serial_numbers = []
+        
+        # Check if file uploaded
+        if 'file' in request.files:
+            file = request.files['file']
+            if file.filename.endswith(('.xlsx', '.xls')):
+                try:
+                    import pandas as pd
+                    df = pd.read_excel(file)
+                    # Try to find serial/barcode column
+                    serial_col = None
+                    for col in df.columns:
+                        col_lower = str(col).lower()
+                        if any(x in col_lower for x in ['barcode', 'serial', 'id', 'module', 'sr']):
+                            serial_col = col
+                            break
+                    if serial_col is None:
+                        serial_col = df.columns[0]  # Use first column
+                    
+                    serial_numbers = df[serial_col].dropna().astype(str).tolist()
+                except Exception as e:
+                    return jsonify({'success': False, 'error': f'Excel parsing error: {str(e)}'}), 400
+            elif file.filename.endswith('.csv'):
+                import pandas as pd
+                df = pd.read_csv(file)
+                serial_col = df.columns[0]
+                serial_numbers = df[serial_col].dropna().astype(str).tolist()
+        else:
+            # Get from JSON body
+            data = request.get_json() if request.is_json else {}
+            serial_numbers = data.get('serial_numbers', [])
+        
+        if not serial_numbers:
+            return jsonify({'success': False, 'error': 'No serial numbers provided'}), 400
+        
+        # Clean serial numbers
+        serial_numbers = [str(s).strip() for s in serial_numbers if str(s).strip()]
+        
+        # Query database for binning info
+        results = []
+        binning_counts = {}
+        found_count = 0
+        not_found_count = 0
+        
+        # Query FTR master table for all serials
+        try:
+            placeholders = ','.join([':p' + str(i) for i in range(len(serial_numbers))])
+            params = {f'p{i}': sn for i, sn in enumerate(serial_numbers)}
+            
+            query = text(f"""
+                SELECT serial_number, binning, pmax, efficiency, company_id, pdi_number,
+                       class_status, isc, voc, vpm, ipm, ff
+                FROM ftr_master_serials
+                WHERE serial_number IN ({placeholders})
+            """)
+            
+            result = db.session.execute(query, params)
+            db_data = {row[0]: {
+                'serial_number': row[0],
+                'binning': row[1] or 'Unknown',
+                'pmax': row[2],
+                'efficiency': row[3],
+                'company_id': row[4],
+                'pdi_number': row[5],
+                'class_status': row[6],
+                'isc': row[7],
+                'voc': row[8],
+                'vpm': row[9],
+                'ipm': row[10],
+                'ff': row[11]
+            } for row in result.fetchall()}
+        except Exception as e:
+            print(f"Database query error: {e}")
+            db_data = {}
+        
+        # Process each serial
+        for serial in serial_numbers:
+            if serial in db_data:
+                info = db_data[serial]
+                binning = info['binning']
+                found_count += 1
+                
+                # Count binning distribution
+                binning_counts[binning] = binning_counts.get(binning, 0) + 1
+                
+                results.append({
+                    'serial_number': serial,
+                    'binning': binning,
+                    'pmax': info['pmax'],
+                    'efficiency': info['efficiency'],
+                    'class_status': info['class_status'] or '-',
+                    'pdi_number': info['pdi_number'] or '-',
+                    'status': '✅ Found'
+                })
+            else:
+                not_found_count += 1
+                results.append({
+                    'serial_number': serial,
+                    'binning': '-',
+                    'pmax': '-',
+                    'efficiency': '-',
+                    'class_status': '-',
+                    'pdi_number': '-',
+                    'status': '❌ Not Found'
+                })
+        
+        # Generate summary message
+        summary = {
+            'total': len(serial_numbers),
+            'found': found_count,
+            'not_found': not_found_count,
+            'binning_distribution': binning_counts
+        }
+        
+        # Format binning distribution text
+        binning_text = ""
+        for binning, count in sorted(binning_counts.items()):
+            binning_text += f"  • {binning}: {count}\n"
+        
+        message = f"📊 **Binning Check Complete!**\n\n"
+        message += f"✅ Found: {found_count}\n"
+        message += f"❌ Not Found: {not_found_count}\n"
+        message += f"📦 Total: {len(serial_numbers)}\n\n"
+        if binning_counts:
+            message += f"**Binning Distribution:**\n{binning_text}"
+        
+        # Generate Excel report
+        excel_base64 = None
+        if EXCEL_AVAILABLE:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Binning Report"
+            
+            # Styles
+            header_font = Font(bold=True, color="FFFFFF")
+            header_fill = PatternFill(start_color="1565C0", end_color="1565C0", fill_type="solid")
+            found_fill = PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid")
+            not_found_fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
+            thin_border = Border(
+                left=Side(style='thin'), right=Side(style='thin'),
+                top=Side(style='thin'), bottom=Side(style='thin')
+            )
+            
+            # Headers
+            headers = ["S.No", "Serial Number", "Binning", "Pmax", "Efficiency", "Class", "PDI Number", "Status"]
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = thin_border
+                cell.alignment = Alignment(horizontal='center')
+            
+            # Data rows
+            for idx, r in enumerate(results, 1):
+                ws.cell(row=idx+1, column=1, value=idx).border = thin_border
+                ws.cell(row=idx+1, column=2, value=r['serial_number']).border = thin_border
+                ws.cell(row=idx+1, column=3, value=r['binning']).border = thin_border
+                ws.cell(row=idx+1, column=4, value=r['pmax']).border = thin_border
+                ws.cell(row=idx+1, column=5, value=r['efficiency']).border = thin_border
+                ws.cell(row=idx+1, column=6, value=r['class_status']).border = thin_border
+                ws.cell(row=idx+1, column=7, value=r['pdi_number']).border = thin_border
+                ws.cell(row=idx+1, column=8, value=r['status']).border = thin_border
+                
+                # Apply fill based on status
+                fill = found_fill if '✅' in r['status'] else not_found_fill
+                for col in range(1, 9):
+                    ws.cell(row=idx+1, column=col).fill = fill
+                    ws.cell(row=idx+1, column=col).alignment = Alignment(horizontal='center')
+            
+            # Binning Summary sheet
+            ws2 = wb.create_sheet("Binning Summary")
+            ws2['A1'] = "Binning"
+            ws2['B1'] = "Count"
+            ws2['A1'].font = header_font
+            ws2['A1'].fill = header_fill
+            ws2['B1'].font = header_font
+            ws2['B1'].fill = header_fill
+            
+            row = 2
+            for binning, count in sorted(binning_counts.items()):
+                ws2.cell(row=row, column=1, value=binning)
+                ws2.cell(row=row, column=2, value=count)
+                row += 1
+            
+            # Column widths
+            ws.column_dimensions['A'].width = 8
+            ws.column_dimensions['B'].width = 25
+            ws.column_dimensions['C'].width = 12
+            ws.column_dimensions['D'].width = 12
+            ws.column_dimensions['E'].width = 12
+            ws.column_dimensions['F'].width = 10
+            ws.column_dimensions['G'].width = 15
+            ws.column_dimensions['H'].width = 15
+            
+            # Save to buffer
+            import base64
+            buffer = io.BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            excel_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        
+        return jsonify({
+            'success': True,
+            'summary': summary,
+            'results': results,
+            'message': message,
+            'excel_base64': excel_base64
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
