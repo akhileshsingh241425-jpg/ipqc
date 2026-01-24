@@ -972,6 +972,27 @@ const AIAssistant = () => {
           <h4>📋 PDI Dispatch Status</h4>
           <div className="validation-section" style={{ marginBottom: '15px' }}>
             <p className="check-help">Check how much dispatched from a specific PDI</p>
+
+            {/* Company Selector */}
+            <select
+              value={selectedCompany}
+              onChange={(e) => setSelectedCompany(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                fontSize: '13px',
+                marginBottom: '8px',
+                backgroundColor: '#fff'
+              }}
+            >
+              <option value="">-- Select Company --</option>
+              {ftrData?.companies?.map((c, idx) => (
+                <option key={idx} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+
             <input
               type="text"
               value={pdiNumber}
