@@ -400,6 +400,12 @@ def check_mix_packing(company):
 def get_dispatch_history(party_id, from_date, to_date, page=1, limit=100):
     """Fetch dispatch history from MRP API for a specific party"""
     try:
+        print(f"\n🔍 Calling Dispatch History API:")
+        print(f"   URL: {DISPATCH_HISTORY_API}")
+        print(f"   party_id: {party_id}")
+        print(f"   from_date: {from_date}")
+        print(f"   to_date: {to_date}")
+        
         response = requests.post(
             DISPATCH_HISTORY_API,
             json={
@@ -411,11 +417,24 @@ def get_dispatch_history(party_id, from_date, to_date, page=1, limit=100):
             },
             timeout=60
         )
+        
+        print(f"   Status Code: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
-            return {'success': True, 'data': data.get('data', []), 'raw': data}
+            print(f"   Response Keys: {data.keys() if isinstance(data, dict) else 'Not a dict'}")
+            
+            # API returns data in 'dispatch_summary' not 'data'
+            dispatch_data = data.get('dispatch_summary', data.get('data', []))
+            print(f"   Dispatch Count: {len(dispatch_data)}")
+            
+            return {'success': True, 'data': dispatch_data, 'raw': data}
+        
+        print(f"   ❌ API Error: Status {response.status_code}")
+        print(f"   Response: {response.text[:500]}")
         return {'success': False, 'data': [], 'error': f'API returned {response.status_code}'}
     except Exception as e:
+        print(f"   ❌ Exception: {str(e)}")
         return {'success': False, 'data': [], 'error': str(e)}
 
 def get_all_dispatch_history(from_date, to_date):
@@ -444,9 +463,16 @@ def validate_vehicle_loading(from_date=None, to_date=None):
     """
     Validate vehicle loading to check:
     1. No two companies' goods loaded in same vehicle (Wrong Party Check)
-    2. No mix binning in same vehicle (Binning should be uniform)
     
-    Returns issues found during loading
+    API Response Structure per dispatch:
+    {
+        "dispatch_id": 6920,
+        "dispatch_date": "2026-01-20",
+        "vehicle_no": "RJ18GC3867",
+        "factory_name": "Bhiwani",
+        "total_qty": 640,
+        "pallet_nos": ["1217", "1229", ...]
+    }
     """
     from datetime import datetime, timedelta
     
@@ -458,7 +484,7 @@ def validate_vehicle_loading(from_date=None, to_date=None):
     
     print(f"🔍 Validating vehicle loading from {from_date} to {to_date}")
     
-    # Fetch all dispatch history
+    # Fetch all dispatch history from all companies
     all_dispatches = get_all_dispatch_history(from_date, to_date)
     
     if not all_dispatches:
@@ -470,114 +496,93 @@ def validate_vehicle_loading(from_date=None, to_date=None):
             'total_dispatches': 0
         }
     
-    # Group by vehicle/challan number to find same vehicle loads
-    # Using dispatch_date + vehicle_no as key (or pallet_no if vehicle not available)
-    vehicle_loads = {}  # {vehicle_key: [list of records]}
+    # Group by vehicle_no + date to find if same vehicle used by multiple companies
+    vehicle_loads = {}  # {vehicle_key: [list of dispatch records]}
+    
+    total_modules = 0
+    total_pallets = 0
     
     for record in all_dispatches:
-        # Try to identify vehicle - use combination of date + vehicle_no or challan
-        dispatch_date = record.get('dispatch_date', record.get('date', ''))
-        vehicle_no = record.get('vehicle_no', record.get('challan_no', record.get('pallet_no', '')))
+        dispatch_date = record.get('dispatch_date', '')
+        vehicle_no = record.get('vehicle_no', '')
+        company = record.get('company', 'Unknown')
+        pallet_nos = record.get('pallet_nos', [])
+        total_qty = record.get('total_qty', 0)
         
-        # Create vehicle key
+        total_modules += total_qty
+        total_pallets += len(pallet_nos)
+        
+        if not vehicle_no:
+            continue
+        
+        # Create vehicle key (date + vehicle)
         vehicle_key = f"{dispatch_date}_{vehicle_no}"
         
         if vehicle_key not in vehicle_loads:
             vehicle_loads[vehicle_key] = []
         
-        vehicle_loads[vehicle_key].append(record)
+        vehicle_loads[vehicle_key].append({
+            'company': company,
+            'dispatch_id': record.get('dispatch_id'),
+            'pallet_nos': pallet_nos,
+            'total_qty': total_qty,
+            'factory_name': record.get('factory_name', ''),
+            'vehicle_no': vehicle_no,
+            'dispatch_date': dispatch_date
+        })
     
-    # Check for issues
-    issues = []
+    # Check for wrong party issues
     wrong_party_issues = []
-    mix_binning_issues = []
     
     for vehicle_key, records in vehicle_loads.items():
-        if len(records) < 2:
-            continue  # Need at least 2 records to have an issue
-        
-        # Check 1: Multiple companies in same vehicle
         companies_in_vehicle = set(r.get('company', 'Unknown') for r in records)
+        
         if len(companies_in_vehicle) > 1:
+            all_pallets = []
+            for r in records:
+                all_pallets.extend(r.get('pallet_nos', []))
+            
             wrong_party_issues.append({
                 'vehicle_key': vehicle_key,
+                'vehicle_no': records[0].get('vehicle_no', ''),
+                'dispatch_date': records[0].get('dispatch_date', ''),
                 'companies': list(companies_in_vehicle),
-                'pallets': [r.get('pallet_no', '') for r in records],
-                'count': len(records),
+                'pallets': all_pallets[:10],
+                'total_pallets': len(all_pallets),
                 'issue_type': 'Wrong Party Loading',
                 'severity': 'CRITICAL'
             })
-        
-        # Check 2: Mix binning in same vehicle
-        binnings_in_vehicle = set()
-        for r in records:
-            # Extract binning from running_order or binning field
-            binning = r.get('binning', '')
-            if not binning:
-                ro = r.get('running_order', '')
-                binning = extract_binning_from_ro(ro) if ro else ''
-            if binning:
-                binnings_in_vehicle.add(binning)
-        
-        if len(binnings_in_vehicle) > 1:
-            mix_binning_issues.append({
-                'vehicle_key': vehicle_key,
-                'binnings': list(binnings_in_vehicle),
-                'pallets': [r.get('pallet_no', '') for r in records],
-                'count': len(records),
-                'issue_type': 'Mix Binning Loading',
-                'severity': 'WARNING'
-            })
-    
-    # Combine all issues
-    issues = wrong_party_issues + mix_binning_issues
     
     # Build answer
     answer_parts = []
     answer_parts.append(f"**🚚 Vehicle Loading Validation Report**\n")
     answer_parts.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
     answer_parts.append(f"📅 **Period:** {from_date} to {to_date}")
-    answer_parts.append(f"📦 **Total Dispatches Checked:** {len(all_dispatches):,}")
-    answer_parts.append(f"🚗 **Total Vehicles/Loads:** {len(vehicle_loads):,}")
-    answer_parts.append(f"⚠️ **Total Issues Found:** {len(issues):,}")
+    answer_parts.append(f"📦 **Total Dispatches:** {len(all_dispatches):,}")
+    answer_parts.append(f"🚗 **Total Vehicles:** {len(vehicle_loads):,}")
+    answer_parts.append(f"📊 **Total Pallets:** {total_pallets:,}")
+    answer_parts.append(f"🔢 **Total Modules:** {total_modules:,}")
+    answer_parts.append(f"⚠️ **Wrong Party Issues:** {len(wrong_party_issues):,}")
     
-    # Wrong Party Issues
     if wrong_party_issues:
-        answer_parts.append(f"\n\n**🚫 CRITICAL - Wrong Party Loading ({len(wrong_party_issues)} issues):**")
-        answer_parts.append(f"Same vehicle loading multiple companies' goods!\n")
+        answer_parts.append(f"\n\n**🚫 CRITICAL - Wrong Party Loading:**\n")
         for issue in wrong_party_issues[:10]:
-            answer_parts.append(f"🔴 **{issue['vehicle_key']}**")
+            answer_parts.append(f"🔴 **Vehicle: {issue['vehicle_no']}** ({issue['dispatch_date']})")
             answer_parts.append(f"   Companies: {', '.join(issue['companies'])}")
-            answer_parts.append(f"   Pallets: {', '.join(issue['pallets'][:5])}")
-        if len(wrong_party_issues) > 10:
-            answer_parts.append(f"\n   ... and {len(wrong_party_issues) - 10} more wrong party issues")
+            answer_parts.append(f"   Pallets: {', '.join(str(p) for p in issue['pallets'])}")
     else:
         answer_parts.append(f"\n\n✅ **No wrong party loading issues found!**")
-    
-    # Mix Binning Issues
-    if mix_binning_issues:
-        answer_parts.append(f"\n\n**⚠️ WARNING - Mix Binning Loading ({len(mix_binning_issues)} issues):**")
-        answer_parts.append(f"Same vehicle loading different binning types!\n")
-        for issue in mix_binning_issues[:10]:
-            answer_parts.append(f"🟠 **{issue['vehicle_key']}**")
-            answer_parts.append(f"   Binnings: {', '.join(issue['binnings'])}")
-            answer_parts.append(f"   Pallets: {', '.join(issue['pallets'][:5])}")
-        if len(mix_binning_issues) > 10:
-            answer_parts.append(f"\n   ... and {len(mix_binning_issues) - 10} more mix binning issues")
-    else:
-        answer_parts.append(f"\n\n✅ **No mix binning loading issues found!**")
     
     return {
         'success': True,
         'has_answer': True,
         'answer': "\n".join(answer_parts),
-        'issues': issues,
+        'issues': wrong_party_issues,
         'wrong_party_count': len(wrong_party_issues),
-        'mix_binning_count': len(mix_binning_issues),
         'total_dispatches': len(all_dispatches),
         'total_vehicles': len(vehicle_loads),
-        'wrong_party_issues': wrong_party_issues,
-        'mix_binning_issues': mix_binning_issues
+        'total_modules': total_modules,
+        'total_pallets': total_pallets
     }
 
 # ============================================
