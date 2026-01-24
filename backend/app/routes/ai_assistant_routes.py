@@ -27,6 +27,36 @@ GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
 # External Barcode Tracking API
 BARCODE_TRACKING_API = 'https://umanmrp.in/api/get_barcode_tracking.php'
 
+# Party Dispatch History API - For vehicle loading validation
+DISPATCH_HISTORY_API = 'https://umanmrp.in/api/party-dispatch-history.php'
+
+# Party IDs for dispatch history API
+PARTY_IDS = {
+    'Rays Power': '931db2c5-b016-4914-b378-69e9f22562a7',
+    'rays power': '931db2c5-b016-4914-b378-69e9f22562a7',
+    'RAYS POWER': '931db2c5-b016-4914-b378-69e9f22562a7',
+    
+    'Larsen & Toubro': 'a005562f-568a-46e9-bf2e-700affb171e8',
+    'L&T': 'a005562f-568a-46e9-bf2e-700affb171e8',
+    'l&t': 'a005562f-568a-46e9-bf2e-700affb171e8',
+    
+    'Sterlin and Wilson': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'Sterling and Wilson': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'S&W': '141b81a0-2bab-4790-b825-3c8734d41484',
+    's&w': '141b81a0-2bab-4790-b825-3c8734d41484',
+}
+
+def get_party_id(company_name):
+    """Get party ID for dispatch history API"""
+    if company_name in PARTY_IDS:
+        return PARTY_IDS[company_name]
+    # Try lowercase match
+    for key, value in PARTY_IDS.items():
+        if key.lower() == company_name.lower():
+            return value
+    return None
+
+
 # ============================================
 # UTILITY FUNCTIONS - Julian Date & Barcode
 # ============================================
@@ -81,21 +111,55 @@ def get_julian_from_barcode(barcode):
     return None
 
 def get_all_mrp_data(company):
-    """Get all MRP data for a company with full details"""
+    """Get all MRP data for a company with full details
+    
+    NOTE: For Sterling and Wilson, we fetch from TWO party names:
+    1. STERLING AND WILSON RENEWABLE ENERGY LIMITED
+    2. S&W
+    Both are different parties in MRP but we treat them as one.
+    """
     mrp_party_name = get_mrp_party_name(company)
+    
+    # Check if this is Sterling and Wilson - need to fetch from BOTH party names
+    is_sterling_wilson = 'sterling' in mrp_party_name.lower() or 'sterlin' in company.lower() or 's&w' in company.lower()
+    
+    all_data = []
+    
+    # Party names to fetch from
+    party_names_to_fetch = [mrp_party_name]
+    
+    # For Sterling and Wilson, also fetch from "S&W" party
+    if is_sterling_wilson:
+        party_names_to_fetch = [
+            'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+            'S&W'
+        ]
+    
     try:
-        response = requests.post(
-            BARCODE_TRACKING_API,
-            json={'party_name': mrp_party_name},
-            timeout=60
-        )
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('status') == 'success':
-                return {'success': True, 'data': data.get('data', [])}
+        for party_name in party_names_to_fetch:
+            try:
+                response = requests.post(
+                    BARCODE_TRACKING_API,
+                    json={'party_name': party_name},
+                    timeout=60
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('status') == 'success':
+                        party_data = data.get('data', [])
+                        all_data.extend(party_data)
+                        print(f"✅ Fetched {len(party_data)} records from party: {party_name}")
+            except Exception as e:
+                print(f"⚠️ Error fetching from {party_name}: {str(e)}")
+                continue
+        
+        if all_data:
+            return {'success': True, 'data': all_data}
         return {'success': False, 'data': []}
     except Exception as e:
         return {'success': False, 'error': str(e), 'data': []}
+
+
 
 def extract_binning_from_ro(running_order):
     """Extract binning (I1, I2, I3) from running_order field"""
@@ -135,6 +199,10 @@ COMPANY_NAME_MAPPING = {
     'sterlin and wilson': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
     'STERLIN AND WILSON': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
     'Sterling and Wilson': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    
+    # S&W Alias (also maps to Sterling and Wilson)
+    'S&W': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    's&w': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
 }
 
 def get_mrp_party_name(db_company_name):
@@ -323,6 +391,194 @@ def check_mix_packing(company):
         import traceback
         traceback.print_exc()
         return {'success': False, 'has_answer': False, 'error': str(e)}
+
+# ============================================
+# VEHICLE LOADING VALIDATION
+# Check for wrong party loading and mix binning during dispatch
+# ============================================
+
+def get_dispatch_history(party_id, from_date, to_date, page=1, limit=100):
+    """Fetch dispatch history from MRP API for a specific party"""
+    try:
+        response = requests.post(
+            DISPATCH_HISTORY_API,
+            json={
+                'party_id': party_id,
+                'from_date': from_date,
+                'to_date': to_date,
+                'page': page,
+                'limit': limit
+            },
+            timeout=60
+        )
+        if response.status_code == 200:
+            data = response.json()
+            return {'success': True, 'data': data.get('data', []), 'raw': data}
+        return {'success': False, 'data': [], 'error': f'API returned {response.status_code}'}
+    except Exception as e:
+        return {'success': False, 'data': [], 'error': str(e)}
+
+def get_all_dispatch_history(from_date, to_date):
+    """Fetch dispatch history from ALL companies and combine"""
+    all_companies = [
+        {'name': 'Rays Power', 'party_id': '931db2c5-b016-4914-b378-69e9f22562a7'},
+        {'name': 'L&T', 'party_id': 'a005562f-568a-46e9-bf2e-700affb171e8'},
+        {'name': 'Sterlin and Wilson', 'party_id': '141b81a0-2bab-4790-b825-3c8734d41484'},
+    ]
+    
+    all_data = []
+    for company in all_companies:
+        result = get_dispatch_history(company['party_id'], from_date, to_date)
+        if result.get('success'):
+            for record in result.get('data', []):
+                record['company'] = company['name']
+                record['party_id'] = company['party_id']
+            all_data.extend(result.get('data', []))
+            print(f"✅ Fetched {len(result.get('data', []))} dispatch records from {company['name']}")
+        else:
+            print(f"⚠️ Failed to fetch from {company['name']}: {result.get('error')}")
+    
+    return all_data
+
+def validate_vehicle_loading(from_date=None, to_date=None):
+    """
+    Validate vehicle loading to check:
+    1. No two companies' goods loaded in same vehicle (Wrong Party Check)
+    2. No mix binning in same vehicle (Binning should be uniform)
+    
+    Returns issues found during loading
+    """
+    from datetime import datetime, timedelta
+    
+    # Default to last 7 days if no dates provided
+    if not to_date:
+        to_date = datetime.now().strftime('%Y-%m-%d')
+    if not from_date:
+        from_date = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')
+    
+    print(f"🔍 Validating vehicle loading from {from_date} to {to_date}")
+    
+    # Fetch all dispatch history
+    all_dispatches = get_all_dispatch_history(from_date, to_date)
+    
+    if not all_dispatches:
+        return {
+            'success': True,
+            'has_answer': True,
+            'answer': f"📊 No dispatch data found from {from_date} to {to_date}",
+            'issues': [],
+            'total_dispatches': 0
+        }
+    
+    # Group by vehicle/challan number to find same vehicle loads
+    # Using dispatch_date + vehicle_no as key (or pallet_no if vehicle not available)
+    vehicle_loads = {}  # {vehicle_key: [list of records]}
+    
+    for record in all_dispatches:
+        # Try to identify vehicle - use combination of date + vehicle_no or challan
+        dispatch_date = record.get('dispatch_date', record.get('date', ''))
+        vehicle_no = record.get('vehicle_no', record.get('challan_no', record.get('pallet_no', '')))
+        
+        # Create vehicle key
+        vehicle_key = f"{dispatch_date}_{vehicle_no}"
+        
+        if vehicle_key not in vehicle_loads:
+            vehicle_loads[vehicle_key] = []
+        
+        vehicle_loads[vehicle_key].append(record)
+    
+    # Check for issues
+    issues = []
+    wrong_party_issues = []
+    mix_binning_issues = []
+    
+    for vehicle_key, records in vehicle_loads.items():
+        if len(records) < 2:
+            continue  # Need at least 2 records to have an issue
+        
+        # Check 1: Multiple companies in same vehicle
+        companies_in_vehicle = set(r.get('company', 'Unknown') for r in records)
+        if len(companies_in_vehicle) > 1:
+            wrong_party_issues.append({
+                'vehicle_key': vehicle_key,
+                'companies': list(companies_in_vehicle),
+                'pallets': [r.get('pallet_no', '') for r in records],
+                'count': len(records),
+                'issue_type': 'Wrong Party Loading',
+                'severity': 'CRITICAL'
+            })
+        
+        # Check 2: Mix binning in same vehicle
+        binnings_in_vehicle = set()
+        for r in records:
+            # Extract binning from running_order or binning field
+            binning = r.get('binning', '')
+            if not binning:
+                ro = r.get('running_order', '')
+                binning = extract_binning_from_ro(ro) if ro else ''
+            if binning:
+                binnings_in_vehicle.add(binning)
+        
+        if len(binnings_in_vehicle) > 1:
+            mix_binning_issues.append({
+                'vehicle_key': vehicle_key,
+                'binnings': list(binnings_in_vehicle),
+                'pallets': [r.get('pallet_no', '') for r in records],
+                'count': len(records),
+                'issue_type': 'Mix Binning Loading',
+                'severity': 'WARNING'
+            })
+    
+    # Combine all issues
+    issues = wrong_party_issues + mix_binning_issues
+    
+    # Build answer
+    answer_parts = []
+    answer_parts.append(f"**🚚 Vehicle Loading Validation Report**\n")
+    answer_parts.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+    answer_parts.append(f"📅 **Period:** {from_date} to {to_date}")
+    answer_parts.append(f"📦 **Total Dispatches Checked:** {len(all_dispatches):,}")
+    answer_parts.append(f"🚗 **Total Vehicles/Loads:** {len(vehicle_loads):,}")
+    answer_parts.append(f"⚠️ **Total Issues Found:** {len(issues):,}")
+    
+    # Wrong Party Issues
+    if wrong_party_issues:
+        answer_parts.append(f"\n\n**🚫 CRITICAL - Wrong Party Loading ({len(wrong_party_issues)} issues):**")
+        answer_parts.append(f"Same vehicle loading multiple companies' goods!\n")
+        for issue in wrong_party_issues[:10]:
+            answer_parts.append(f"🔴 **{issue['vehicle_key']}**")
+            answer_parts.append(f"   Companies: {', '.join(issue['companies'])}")
+            answer_parts.append(f"   Pallets: {', '.join(issue['pallets'][:5])}")
+        if len(wrong_party_issues) > 10:
+            answer_parts.append(f"\n   ... and {len(wrong_party_issues) - 10} more wrong party issues")
+    else:
+        answer_parts.append(f"\n\n✅ **No wrong party loading issues found!**")
+    
+    # Mix Binning Issues
+    if mix_binning_issues:
+        answer_parts.append(f"\n\n**⚠️ WARNING - Mix Binning Loading ({len(mix_binning_issues)} issues):**")
+        answer_parts.append(f"Same vehicle loading different binning types!\n")
+        for issue in mix_binning_issues[:10]:
+            answer_parts.append(f"🟠 **{issue['vehicle_key']}**")
+            answer_parts.append(f"   Binnings: {', '.join(issue['binnings'])}")
+            answer_parts.append(f"   Pallets: {', '.join(issue['pallets'][:5])}")
+        if len(mix_binning_issues) > 10:
+            answer_parts.append(f"\n   ... and {len(mix_binning_issues) - 10} more mix binning issues")
+    else:
+        answer_parts.append(f"\n\n✅ **No mix binning loading issues found!**")
+    
+    return {
+        'success': True,
+        'has_answer': True,
+        'answer': "\n".join(answer_parts),
+        'issues': issues,
+        'wrong_party_count': len(wrong_party_issues),
+        'mix_binning_count': len(mix_binning_issues),
+        'total_dispatches': len(all_dispatches),
+        'total_vehicles': len(vehicle_loads),
+        'wrong_party_issues': wrong_party_issues,
+        'mix_binning_issues': mix_binning_issues
+    }
 
 # ============================================
 # QUALITY CHECK FUNCTIONS
@@ -4760,8 +5016,51 @@ def run_validation_now():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@ai_assistant_bp.route('/ai/validate-vehicle-loading', methods=['POST', 'OPTIONS'])
+def api_validate_vehicle_loading():
+    """
+    API endpoint for vehicle loading validation
+    Check for:
+    1. Wrong party loading (multiple companies in same vehicle)
+    2. Mix binning loading (different binnings in same vehicle)
+    
+    Body: {
+        "from_date": "2025-01-01",  // optional, defaults to 7 days ago
+        "to_date": "2025-01-24"     // optional, defaults to today
+    }
+    """
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        return jsonify({'success': True}), 200
+    
+    try:
+        data = request.get_json() or {}
+        from_date = data.get('from_date')
+        to_date = data.get('to_date')
+        
+        result = validate_vehicle_loading(from_date, to_date)
+        
+        return jsonify({
+            'success': result.get('success', False),
+            'answer': result.get('answer', ''),
+            'issues': result.get('issues', []),
+            'wrong_party_count': result.get('wrong_party_count', 0),
+            'mix_binning_count': result.get('mix_binning_count', 0),
+            'total_dispatches': result.get('total_dispatches', 0),
+            'total_vehicles': result.get('total_vehicles', 0),
+            'wrong_party_issues': result.get('wrong_party_issues', []),
+            'mix_binning_issues': result.get('mix_binning_issues', [])
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @ai_assistant_bp.route('/ai/scheduler-control', methods=['POST', 'OPTIONS'])
 def scheduler_control():
+
     """
     Control the auto packing validation scheduler
     Body: { "action": "start" | "stop" }

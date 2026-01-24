@@ -18,6 +18,7 @@ const AIAssistant = () => {
   const [schedulerEnabled, setSchedulerEnabled] = useState(true);
   const [schedulerLoading, setSchedulerLoading] = useState(false);
   const [binningCheckLoading, setBinningCheckLoading] = useState(false);
+  const [vehicleLoadingLoading, setVehicleLoadingLoading] = useState(false);
   const fileInputRef = useRef(null);
   const binningFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -70,22 +71,22 @@ const AIAssistant = () => {
 
     const userMessage = input.trim();
     setInput('');
-    
+
     // Add user message
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-    
+
     setLoading(true);
-    
+
     try {
       const API_BASE_URL = getAPIBaseURL();
       const response = await axios.post(`${API_BASE_URL}/api/ai/chat`, {
         message: userMessage
       });
-      
+
       if (response.data.success) {
         // Check if response has Excel data
         const hasExcel = response.data.has_excel && response.data.excel_base64;
-        
+
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: response.data.response,
@@ -130,7 +131,7 @@ const AIAssistant = () => {
       const response = await axios.post(`${API_BASE_URL}/api/ai/config`, {
         api_key: apiKey.trim()
       });
-      
+
       if (response.data.success) {
         setApiKeyConfigured(true);
         setShowApiKeyModal(false);
@@ -211,17 +212,17 @@ const AIAssistant = () => {
       }, {
         responseType: 'blob'
       });
-      
+
       // Create download link
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${exportType}_${targetCompany}_${new Date().toISOString().slice(0,10)}.xlsx`);
+      link.setAttribute('download', `${exportType}_${targetCompany}_${new Date().toISOString().slice(0, 10)}.xlsx`);
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-      
+
       // Add success message to chat
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -242,38 +243,38 @@ const AIAssistant = () => {
   // Barcode check - upload Excel and check status
   const handleBarcodeCheck = async (file) => {
     if (!file) return;
-    
+
     const targetCompany = selectedCompany || 'Rays Power';
     setUploadingFile(true);
-    
+
     // Add user message
     setMessages(prev => [...prev, {
       role: 'user',
       content: `📤 Uploading ${file.name} to check barcode status for ${targetCompany}...`
     }]);
-    
+
     try {
       const API_BASE_URL = getAPIBaseURL();
       const formData = new FormData();
       formData.append('file', file);
       formData.append('company_name', targetCompany);
-      
+
       const response = await axios.post(`${API_BASE_URL}/api/ai/check-barcodes`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       if (response.data.success) {
         const { summary, results, excel_base64, message } = response.data;
         setCheckResults({ summary, results, excel_base64 });
-        
+
         // Create detailed message
         let resultMessage = `📊 **Barcode Status Check Complete!**\n\n${message}\n\n`;
-        
+
         // Show first 10 results
         if (results && results.length > 0) {
           resultMessage += `\n**Sample Results (first 10):**\n`;
           results.slice(0, 10).forEach((r, i) => {
-            resultMessage += `${i+1}. ${r.barcode} - ${r.status}`;
+            resultMessage += `${i + 1}. ${r.barcode} - ${r.status}`;
             if (r.running_order) resultMessage += ` | ${r.running_order}`;
             if (r.binning) resultMessage += ` | ${r.binning}`;
             resultMessage += '\n';
@@ -282,7 +283,7 @@ const AIAssistant = () => {
             resultMessage += `\n... and ${results.length - 10} more. Download Excel for full report.`;
           }
         }
-        
+
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: resultMessage,
@@ -319,7 +320,7 @@ const AIAssistant = () => {
       }
       const byteArray = new Uint8Array(byteNumbers);
       const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      
+
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -337,48 +338,48 @@ const AIAssistant = () => {
   // Binning Check - Upload Excel and check binning from database
   const handleBinningCheck = async (file) => {
     if (!file) return;
-    
+
     setBinningCheckLoading(true);
-    
+
     // Add user message
     setMessages(prev => [...prev, {
       role: 'user',
       content: `📤 Uploading ${file.name} to check binning...`
     }]);
-    
+
     try {
       const API_BASE_URL = getAPIBaseURL();
       const formData = new FormData();
       formData.append('file', file);
-      
+
       const response = await axios.post(`${API_BASE_URL}/api/ai/check-binning`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      
+
       if (response.data.success) {
         const { summary, results, excel_base64, message } = response.data;
-        
+
         // Create detailed message
         let resultMessage = message + '\n\n';
-        
+
         // Show first 10 results
         if (results && results.length > 0) {
           resultMessage += `**Sample Results (first 10):**\n`;
           results.slice(0, 10).forEach((r, i) => {
-            resultMessage += `${i+1}. ${r.serial_number} - **${r.binning}** | Pmax: ${r.pmax} | ${r.status}\n`;
+            resultMessage += `${i + 1}. ${r.serial_number} - **${r.binning}** | Pmax: ${r.pmax} | ${r.status}\n`;
           });
           if (results.length > 10) {
             resultMessage += `\n... and ${results.length - 10} more. Download Excel for full report.`;
           }
         }
-        
-        const excelFilename = `Binning_Report_${new Date().toISOString().slice(0,10)}.xlsx`;
-        
+
+        const excelFilename = `Binning_Report_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
         // Auto download Excel
         if (excel_base64) {
           downloadExcelFromBase64(excel_base64, excelFilename);
         }
-        
+
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: resultMessage,
@@ -409,41 +410,41 @@ const AIAssistant = () => {
   // Run Packing Validation - Check all issues
   const handleRunValidation = async () => {
     setValidationLoading(true);
-    
+
     // Add user message
     setMessages(prev => [...prev, {
       role: 'user',
       content: `🔍 Running Packing Validation${selectedCompany ? ` for ${selectedCompany}` : ' for all companies'}...`
     }]);
-    
+
     try {
       const API_BASE_URL = getAPIBaseURL();
       const response = await axios.post(`${API_BASE_URL}/api/ai/run-validation-now`, {
         company: selectedCompany || null
       });
-      
+
       if (response.data.success) {
         const { results, total_issues, whatsapp_alerts_sent } = response.data;
-        
+
         let resultMessage = `📊 **Packing Validation Complete!**\n\n`;
         resultMessage += `🔔 WhatsApp Alerts Sent: ${whatsapp_alerts_sent}\n`;
         resultMessage += `⚠️ Total Issues Found: ${total_issues}\n\n`;
-        
+
         // Show results for each company
         results.forEach(companyResult => {
           const issues = companyResult.issues || [];
           const issueCount = issues.length;
           const status = issueCount === 0 ? '✅' : '⚠️';
-          
+
           resultMessage += `${status} **${companyResult.company}**: ${issueCount} issues\n`;
-          
+
           if (issueCount > 0) {
             // Group by issue type
             const rejected = issues.filter(i => i.issue_type === 'Rejected Module Packed');
             const mixBinning = issues.filter(i => i.issue_type === 'Mix Binning');
             const wrongParty = issues.filter(i => i.issue_type === 'Wrong Party');
             const duplicates = issues.filter(i => i.issue_type === 'Duplicate Barcode');
-            
+
             if (rejected.length > 0) {
               resultMessage += `  ❌ Rejected Packed: ${rejected.length}\n`;
               rejected.slice(0, 3).forEach(r => {
@@ -475,7 +476,7 @@ const AIAssistant = () => {
           }
           resultMessage += '\n';
         });
-        
+
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: resultMessage
@@ -516,18 +517,18 @@ const AIAssistant = () => {
   const handleToggleScheduler = async () => {
     setSchedulerLoading(true);
     const action = schedulerEnabled ? 'stop' : 'start';
-    
+
     setMessages(prev => [...prev, {
       role: 'user',
       content: `${schedulerEnabled ? '⏸️ Stopping' : '▶️ Starting'} auto validation scheduler...`
     }]);
-    
+
     try {
       const API_BASE_URL = getAPIBaseURL();
       const response = await axios.post(`${API_BASE_URL}/api/ai/scheduler-control`, {
         action: action
       });
-      
+
       if (response.data.success) {
         setSchedulerEnabled(!schedulerEnabled);
         setMessages(prev => [...prev, {
@@ -550,6 +551,46 @@ const AIAssistant = () => {
       }]);
     } finally {
       setSchedulerLoading(false);
+    }
+  };
+
+  // Vehicle Loading Validation - Check for wrong party and mix binning during dispatch
+  const handleVehicleLoadingValidation = async () => {
+    setVehicleLoadingLoading(true);
+
+    // Add user message
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: `🚚 Running Vehicle Loading Validation (Last 7 days)...`
+    }]);
+
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.post(`${API_BASE_URL}/api/ai/validate-vehicle-loading`, {});
+
+      if (response.data.success) {
+        const { answer, wrong_party_count, mix_binning_count, total_dispatches, total_vehicles } = response.data;
+
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: answer
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `❌ Vehicle Loading Validation Error: ${response.data.error}`,
+          isError: true
+        }]);
+      }
+    } catch (error) {
+      console.error('Vehicle loading validation error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ Vehicle Loading Validation failed: ${error.response?.data?.error || error.message}`,
+        isError: true
+      }]);
+    } finally {
+      setVehicleLoadingLoading(false);
     }
   };
 
@@ -601,7 +642,7 @@ const AIAssistant = () => {
                   <span className="value warning">{ftrData.summary.total_pending_pack?.toLocaleString() || 0}</span>
                 </div>
               </div>
-              
+
               <h4>🏭 Companies</h4>
               <div className="company-list">
                 {ftrData.companies.map((c, idx) => (
@@ -617,18 +658,18 @@ const AIAssistant = () => {
           ) : (
             <p>Loading data...</p>
           )}
-          
+
           <button className="btn-refresh" onClick={loadFTRData}>
             🔄 Refresh Data
           </button>
-          
+
           {/* Excel Export Buttons */}
           <h4>📥 Export Excel</h4>
-          
+
           {/* Company Selector for Export */}
           <div className="company-selector">
-            <select 
-              value={selectedCompany} 
+            <select
+              value={selectedCompany}
               onChange={(e) => setSelectedCompany(e.target.value)}
               className="company-dropdown"
             >
@@ -638,54 +679,54 @@ const AIAssistant = () => {
               ))}
             </select>
           </div>
-          
+
           <div className="export-buttons">
-            <button 
-              className="btn-export" 
+            <button
+              className="btn-export"
               onClick={() => handleExcelDownload('all')}
               disabled={exportLoading}
             >
               📊 Summary Report
             </button>
-            <button 
-              className="btn-export" 
+            <button
+              className="btn-export"
               onClick={() => handleExcelDownload('packed')}
               disabled={exportLoading || !selectedCompany}
               title={!selectedCompany ? 'Select company first' : ''}
             >
               📦 Packed Modules
             </button>
-            <button 
-              className="btn-export" 
+            <button
+              className="btn-export"
               onClick={() => handleExcelDownload('dispatched')}
               disabled={exportLoading || !selectedCompany}
               title={!selectedCompany ? 'Select company first' : ''}
             >
               🚚 Dispatched Modules
             </button>
-            <button 
-              className="btn-export" 
+            <button
+              className="btn-export"
               onClick={() => handleExcelDownload('pending')}
               disabled={exportLoading}
             >
               ⏳ Pending Pack
             </button>
-            <button 
-              className="btn-export" 
+            <button
+              className="btn-export"
               onClick={() => handleExcelDownload('rejected')}
               disabled={exportLoading}
             >
               ❌ Rejected
             </button>
-            <button 
-              className="btn-export" 
+            <button
+              className="btn-export"
               onClick={() => handleExcelDownload('binning')}
               disabled={exportLoading}
             >
               🏷️ Binning Data
             </button>
-            <button 
-              className="btn-export btn-packed-not-pdi" 
+            <button
+              className="btn-export btn-packed-not-pdi"
               onClick={() => handleExcelDownload('packed_not_pdi')}
               disabled={exportLoading || !selectedCompany}
               title={!selectedCompany ? 'Select company first' : 'Packed modules not in any PDI and not rejected'}
@@ -694,20 +735,20 @@ const AIAssistant = () => {
             </button>
           </div>
           {exportLoading && <p className="export-loading">⏳ Downloading...</p>}
-          
+
           {/* Barcode Check Upload */}
           <h4>🔍 Check Barcode Status</h4>
           <div className="barcode-check-section">
             <p className="check-help">Upload Excel with serial numbers to check packed/dispatched status</p>
-            <input 
-              type="file" 
+            <input
+              type="file"
               ref={fileInputRef}
               accept=".xlsx,.xls,.csv"
               onChange={(e) => handleBarcodeCheck(e.target.files[0])}
               style={{ display: 'none' }}
               id="barcode-file-input"
             />
-            <button 
+            <button
               className="btn-upload-check"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadingFile || !selectedCompany}
@@ -722,15 +763,15 @@ const AIAssistant = () => {
           <h4>🏷️ Check Serial Binning</h4>
           <div className="barcode-check-section" style={{ marginBottom: '15px' }}>
             <p className="check-help">Upload Excel with serial numbers to check current binning from FTR data</p>
-            <input 
-              type="file" 
+            <input
+              type="file"
               ref={binningFileInputRef}
               accept=".xlsx,.xls,.csv"
               onChange={(e) => handleBinningCheck(e.target.files[0])}
               style={{ display: 'none' }}
               id="binning-file-input"
             />
-            <button 
+            <button
               className="btn-upload-check"
               onClick={() => binningFileInputRef.current?.click()}
               disabled={binningCheckLoading}
@@ -757,7 +798,7 @@ const AIAssistant = () => {
           <h4>⚠️ Packing Validation</h4>
           <div className="validation-section">
             <p className="check-help">Check for: Rejected packed, Mix binning, Wrong party dispatch, Duplicates</p>
-            <button 
+            <button
               className="btn-validation"
               onClick={handleRunValidation}
               disabled={validationLoading}
@@ -779,13 +820,13 @@ const AIAssistant = () => {
             <p style={{ fontSize: '11px', color: '#888', marginTop: '5px', textAlign: 'center' }}>
               {selectedCompany ? `For: ${selectedCompany}` : 'All Companies: Rays, L&T, S&W'}
             </p>
-            
+
             {/* Auto Scheduler Control */}
             <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #ddd' }}>
               <p style={{ fontSize: '12px', color: '#555', marginBottom: '8px', textAlign: 'center' }}>
                 🤖 Auto Scheduler (Every 10 min)
               </p>
-              <button 
+              <button
                 onClick={handleToggleScheduler}
                 disabled={schedulerLoading}
                 style={{
@@ -802,16 +843,43 @@ const AIAssistant = () => {
               >
                 {schedulerLoading ? '⏳ Processing...' : (schedulerEnabled ? '⏸️ Stop Scheduler' : '▶️ Start Scheduler')}
               </button>
-              <p style={{ 
-                fontSize: '10px', 
-                color: schedulerEnabled ? '#27ae60' : '#e74c3c', 
-                marginTop: '5px', 
+              <p style={{
+                fontSize: '10px',
+                color: schedulerEnabled ? '#27ae60' : '#e74c3c',
+                marginTop: '5px',
                 textAlign: 'center',
                 fontWeight: 'bold'
               }}>
                 Status: {schedulerEnabled ? '🟢 Running' : '🔴 Stopped'}
               </p>
             </div>
+          </div>
+
+          {/* Vehicle Loading Validation */}
+          <h4>🚚 Vehicle Loading Check</h4>
+          <div className="validation-section" style={{ marginBottom: '15px' }}>
+            <p className="check-help">Check for: Wrong party loading, Mix binning in same vehicle</p>
+            <button
+              onClick={handleVehicleLoadingValidation}
+              disabled={vehicleLoadingLoading}
+              style={{
+                backgroundColor: '#3498db',
+                color: 'white',
+                padding: '12px 16px',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: vehicleLoadingLoading ? 'wait' : 'pointer',
+                width: '100%',
+                fontWeight: 'bold',
+                fontSize: '14px',
+                marginTop: '8px'
+              }}
+            >
+              {vehicleLoadingLoading ? '⏳ Checking...' : '🚚 Validate Vehicle Loading'}
+            </button>
+            <p style={{ fontSize: '10px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
+              Checks last 7 days dispatch data
+            </p>
           </div>
         </div>
 
@@ -831,12 +899,12 @@ const AIAssistant = () => {
                 </button>
               ))}
             </div>
-            
+
             {/* Questions for Active Category */}
             <div className="category-questions">
               {suggestedQuestions[activeCategory]?.questions.map((q, idx) => (
-                <button 
-                  key={idx} 
+                <button
+                  key={idx}
                   className="quick-q-btn"
                   onClick={() => setInput(q)}
                 >
@@ -856,9 +924,9 @@ const AIAssistant = () => {
                 <div className="message-content">
                   <pre>{msg.content}</pre>
                   {msg.hasExcel && msg.excelData && (
-                    <button 
+                    <button
                       className="btn-download-excel"
-                      onClick={() => downloadExcelFromBase64(msg.excelData, msg.excelFilename || `Report_${new Date().toISOString().slice(0,10)}.xlsx`)}
+                      onClick={() => downloadExcelFromBase64(msg.excelData, msg.excelFilename || `Report_${new Date().toISOString().slice(0, 10)}.xlsx`)}
                       style={{
                         backgroundColor: '#4CAF50',
                         color: 'white',
@@ -877,7 +945,7 @@ const AIAssistant = () => {
                 </div>
               </div>
             ))}
-            
+
             {loading && (
               <div className="message assistant loading">
                 <div className="message-avatar">🤖</div>
@@ -890,7 +958,7 @@ const AIAssistant = () => {
                 </div>
               </div>
             )}
-            
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -904,8 +972,8 @@ const AIAssistant = () => {
               disabled={loading}
               rows={1}
             />
-            <button 
-              className="btn-send" 
+            <button
+              className="btn-send"
               onClick={handleSendMessage}
               disabled={loading || !input.trim()}
             >
@@ -921,7 +989,7 @@ const AIAssistant = () => {
           <div className="modal-content" onClick={e => e.stopPropagation()}>
             <h2>🔑 Configure Groq API Key</h2>
             <p>Get your FREE API key from <a href="https://console.groq.com/" target="_blank" rel="noopener noreferrer">console.groq.com</a></p>
-            
+
             <div className="api-key-input">
               <input
                 type="password"
@@ -930,7 +998,7 @@ const AIAssistant = () => {
                 placeholder="gsk_xxxxxxxxxxxxxxxx"
               />
             </div>
-            
+
             <div className="modal-actions">
               <button className="btn-cancel" onClick={() => setShowApiKeyModal(false)}>
                 Cancel
