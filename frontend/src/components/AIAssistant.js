@@ -21,6 +21,8 @@ const AIAssistant = () => {
   const [vehicleLoadingLoading, setVehicleLoadingLoading] = useState(false);
   const [vehicleFromDate, setVehicleFromDate] = useState('');
   const [vehicleToDate, setVehicleToDate] = useState('');
+  const [pdiNumber, setPdiNumber] = useState('');
+  const [pdiStatusLoading, setPdiStatusLoading] = useState(false);
   const fileInputRef = useRef(null);
   const binningFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -603,6 +605,51 @@ const AIAssistant = () => {
     }
   };
 
+  // PDI Dispatch Status Check
+  const handlePdiDispatchStatus = async () => {
+    if (!pdiNumber.trim()) {
+      alert('Please enter a PDI number');
+      return;
+    }
+
+    setPdiStatusLoading(true);
+
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: `📋 Checking dispatch status for PDI: ${pdiNumber}...`
+    }]);
+
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.post(`${API_BASE_URL}/api/ai/pdi-dispatch-status`, {
+        pdi_number: pdiNumber,
+        company: selectedCompany || null
+      });
+
+      if (response.data.success) {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: response.data.answer
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `❌ Error: ${response.data.error}`,
+          isError: true
+        }]);
+      }
+    } catch (error) {
+      console.error('PDI status error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ PDI Status Check failed: ${error.response?.data?.error || error.message}`,
+        isError: true
+      }]);
+    } finally {
+      setPdiStatusLoading(false);
+    }
+  };
+
   return (
     <div className="ai-assistant-container">
       {/* Header */}
@@ -918,6 +965,48 @@ const AIAssistant = () => {
             </button>
             <p style={{ fontSize: '10px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
               {vehicleFromDate && vehicleToDate ? `${vehicleFromDate} to ${vehicleToDate}` : 'Leave empty for last 7 days'}
+            </p>
+          </div>
+
+          {/* PDI Dispatch Status */}
+          <h4>📋 PDI Dispatch Status</h4>
+          <div className="validation-section" style={{ marginBottom: '15px' }}>
+            <p className="check-help">Check how much dispatched from a specific PDI</p>
+            <input
+              type="text"
+              value={pdiNumber}
+              onChange={(e) => setPdiNumber(e.target.value)}
+              placeholder="Enter PDI Number (e.g. PDI-001)"
+              style={{
+                width: '100%',
+                padding: '10px',
+                borderRadius: '6px',
+                border: '1px solid #ddd',
+                fontSize: '13px',
+                marginBottom: '8px',
+                boxSizing: 'border-box'
+              }}
+            />
+            <button
+              onClick={handlePdiDispatchStatus}
+              disabled={pdiStatusLoading || !pdiNumber.trim()}
+              style={{
+                backgroundColor: '#9b59b6',
+                color: 'white',
+                padding: '12px 16px',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: (pdiStatusLoading || !pdiNumber.trim()) ? 'not-allowed' : 'pointer',
+                width: '100%',
+                fontWeight: 'bold',
+                fontSize: '14px',
+                opacity: !pdiNumber.trim() ? 0.6 : 1
+              }}
+            >
+              {pdiStatusLoading ? '⏳ Checking...' : '📋 Check PDI Status'}
+            </button>
+            <p style={{ fontSize: '10px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
+              Shows dispatched, packed & pending count
             </p>
           </div>
         </div>

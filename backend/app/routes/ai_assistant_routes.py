@@ -586,6 +586,144 @@ def validate_vehicle_loading(from_date=None, to_date=None):
     }
 
 # ============================================
+# PDI DISPATCH STATUS CHECK
+# ============================================
+
+def check_pdi_dispatch_status(pdi_number, company=None):
+    """
+    Check dispatch status for a specific PDI
+    Returns how many modules from that PDI are packed/dispatched
+    """
+    try:
+        # Step 1: Get all serials assigned to this PDI from database
+        if company:
+            pdi_result = db.session.execute(text("""
+                SELECT m.serial_number, m.binning, m.status, c.company_name
+                FROM ftr_master_serials m
+                JOIN companies c ON m.company_id = c.id
+                WHERE m.pdi_number = :pdi 
+                AND c.company_name LIKE :company
+            """), {'pdi': pdi_number, 'company': f'%{company}%'})
+        else:
+            pdi_result = db.session.execute(text("""
+                SELECT m.serial_number, m.binning, m.status, c.company_name
+                FROM ftr_master_serials m
+                JOIN companies c ON m.company_id = c.id
+                WHERE m.pdi_number = :pdi
+            """), {'pdi': pdi_number})
+        
+        pdi_serials = []
+        company_name = None
+        for row in pdi_result.fetchall():
+            pdi_serials.append({
+                'serial': row[0],
+                'binning': row[1],
+                'status': row[2],
+                'company': row[3]
+            })
+            if not company_name:
+                company_name = row[3]
+        
+        if not pdi_serials:
+            return {
+                'success': True,
+                'has_answer': True,
+                'answer': f"❌ PDI **{pdi_number}** not found in database or has no serial numbers assigned."
+            }
+        
+        # Step 2: Get MRP data for this company to check packed/dispatched status
+        if not company_name:
+            company_name = 'Rays Power'  # Default
+        
+        mrp_result = get_all_mrp_data(company_name)
+        
+        # Create lookup of packed/dispatched barcodes
+        packed_barcodes = {}  # {barcode: {pallet, status, dispatch_party}}
+        for b in mrp_result.get('data', []):
+            barcode = b.get('barcode', '')
+            if barcode:
+                packed_barcodes[barcode] = {
+                    'pallet_no': b.get('pallet_no', ''),
+                    'status': 'Dispatched' if b.get('dispatch_party') else 'Packed',
+                    'dispatch_party': b.get('dispatch_party', ''),
+                    'running_order': b.get('running_order', '')
+                }
+        
+        # Step 3: Check each PDI serial
+        total_in_pdi = len(pdi_serials)
+        packed_count = 0
+        dispatched_count = 0
+        pending_count = 0
+        packed_list = []
+        dispatched_list = []
+        pending_list = []
+        
+        for item in pdi_serials:
+            serial = item['serial']
+            if serial in packed_barcodes:
+                info = packed_barcodes[serial]
+                if info['status'] == 'Dispatched':
+                    dispatched_count += 1
+                    dispatched_list.append({'serial': serial, 'pallet': info['pallet_no']})
+                else:
+                    packed_count += 1
+                    packed_list.append({'serial': serial, 'pallet': info['pallet_no']})
+            else:
+                pending_count += 1
+                pending_list.append({'serial': serial, 'binning': item['binning']})
+        
+        # Step 4: Build answer
+        answer_parts = []
+        answer_parts.append(f"**📋 PDI Dispatch Status: {pdi_number}**\n")
+        answer_parts.append(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        answer_parts.append(f"🏭 **Company:** {company_name}")
+        answer_parts.append(f"📦 **Total in PDI:** {total_in_pdi:,}")
+        answer_parts.append(f"🚚 **Dispatched:** {dispatched_count:,} ({(dispatched_count/total_in_pdi*100):.1f}%)")
+        answer_parts.append(f"📦 **Packed (Not Dispatched):** {packed_count:,} ({(packed_count/total_in_pdi*100):.1f}%)")
+        answer_parts.append(f"⏳ **Pending (Not Packed):** {pending_count:,} ({(pending_count/total_in_pdi*100):.1f}%)")
+        
+        # Show some dispatched samples
+        if dispatched_list:
+            answer_parts.append(f"\n\n**🚚 Dispatched Samples:**")
+            for d in dispatched_list[:5]:
+                answer_parts.append(f"   • {d['serial']} | Pallet: {d['pallet']}")
+            if len(dispatched_list) > 5:
+                answer_parts.append(f"   ... and {len(dispatched_list) - 5} more")
+        
+        # Show some packed samples
+        if packed_list:
+            answer_parts.append(f"\n\n**📦 Packed (Ready for Dispatch):**")
+            for p in packed_list[:5]:
+                answer_parts.append(f"   • {p['serial']} | Pallet: {p['pallet']}")
+            if len(packed_list) > 5:
+                answer_parts.append(f"   ... and {len(packed_list) - 5} more")
+        
+        # Show pending samples
+        if pending_list:
+            answer_parts.append(f"\n\n**⏳ Pending (Not Yet Packed):**")
+            for p in pending_list[:5]:
+                answer_parts.append(f"   • {p['serial']} | Binning: {p['binning']}")
+            if len(pending_list) > 5:
+                answer_parts.append(f"   ... and {len(pending_list) - 5} more")
+        
+        return {
+            'success': True,
+            'has_answer': True,
+            'answer': "\n".join(answer_parts),
+            'total': total_in_pdi,
+            'dispatched': dispatched_count,
+            'packed': packed_count,
+            'pending': pending_count,
+            'company': company_name
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {'success': False, 'error': str(e)}
+
+
+# ============================================
 # QUALITY CHECK FUNCTIONS
 # ============================================
 
@@ -5055,6 +5193,45 @@ def api_validate_vehicle_loading():
             'total_vehicles': result.get('total_vehicles', 0),
             'wrong_party_issues': result.get('wrong_party_issues', []),
             'mix_binning_issues': result.get('mix_binning_issues', [])
+        })
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@ai_assistant_bp.route('/ai/pdi-dispatch-status', methods=['POST', 'OPTIONS'])
+def api_pdi_dispatch_status():
+    """
+    API endpoint to check PDI dispatch status
+    Body: {
+        "pdi_number": "PDI-001",
+        "company": "Rays Power"  // optional
+    }
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({'success': True}), 200
+    
+    try:
+        data = request.get_json() or {}
+        pdi_number = data.get('pdi_number', '').strip()
+        company = data.get('company')
+        
+        if not pdi_number:
+            return jsonify({'success': False, 'error': 'PDI number is required'}), 400
+        
+        result = check_pdi_dispatch_status(pdi_number, company)
+        
+        return jsonify({
+            'success': result.get('success', False),
+            'answer': result.get('answer', ''),
+            'total': result.get('total', 0),
+            'dispatched': result.get('dispatched', 0),
+            'packed': result.get('packed', 0),
+            'pending': result.get('pending', 0),
+            'company': result.get('company', ''),
+            'error': result.get('error')
         })
         
     except Exception as e:
