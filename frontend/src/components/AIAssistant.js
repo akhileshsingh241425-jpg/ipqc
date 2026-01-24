@@ -19,6 +19,8 @@ const AIAssistant = () => {
   const [schedulerLoading, setSchedulerLoading] = useState(false);
   const [binningCheckLoading, setBinningCheckLoading] = useState(false);
   const [vehicleLoadingLoading, setVehicleLoadingLoading] = useState(false);
+  const [vehicleFromDate, setVehicleFromDate] = useState('');
+  const [vehicleToDate, setVehicleToDate] = useState('');
   const fileInputRef = useRef(null);
   const binningFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -558,18 +560,25 @@ const AIAssistant = () => {
   const handleVehicleLoadingValidation = async () => {
     setVehicleLoadingLoading(true);
 
+    const dateRange = vehicleFromDate && vehicleToDate
+      ? `${vehicleFromDate} to ${vehicleToDate}`
+      : 'Last 7 days';
+
     // Add user message
     setMessages(prev => [...prev, {
       role: 'user',
-      content: `🚚 Running Vehicle Loading Validation (Last 7 days)...`
+      content: `🚚 Running Vehicle Loading Validation (${dateRange})...`
     }]);
 
     try {
       const API_BASE_URL = getAPIBaseURL();
-      const response = await axios.post(`${API_BASE_URL}/api/ai/validate-vehicle-loading`, {});
+      const response = await axios.post(`${API_BASE_URL}/api/ai/validate-vehicle-loading`, {
+        from_date: vehicleFromDate || null,
+        to_date: vehicleToDate || null
+      });
 
       if (response.data.success) {
-        const { answer, wrong_party_count, mix_binning_count, total_dispatches, total_vehicles } = response.data;
+        const { answer } = response.data;
 
         setMessages(prev => [...prev, {
           role: 'assistant',
@@ -858,7 +867,38 @@ const AIAssistant = () => {
           {/* Vehicle Loading Validation */}
           <h4>🚚 Vehicle Loading Check</h4>
           <div className="validation-section" style={{ marginBottom: '15px' }}>
-            <p className="check-help">Check for: Wrong party loading, Mix binning in same vehicle</p>
+            <p className="check-help">Check for: Wrong party loading in same vehicle</p>
+
+            {/* Date Range Selection */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+              <input
+                type="date"
+                value={vehicleFromDate}
+                onChange={(e) => setVehicleFromDate(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: '1px solid #ddd',
+                  fontSize: '12px'
+                }}
+                placeholder="From Date"
+              />
+              <input
+                type="date"
+                value={vehicleToDate}
+                onChange={(e) => setVehicleToDate(e.target.value)}
+                style={{
+                  flex: 1,
+                  padding: '8px',
+                  borderRadius: '6px',
+                  border: '1px solid #ddd',
+                  fontSize: '12px'
+                }}
+                placeholder="To Date"
+              />
+            </div>
+
             <button
               onClick={handleVehicleLoadingValidation}
               disabled={vehicleLoadingLoading}
@@ -871,14 +911,13 @@ const AIAssistant = () => {
                 cursor: vehicleLoadingLoading ? 'wait' : 'pointer',
                 width: '100%',
                 fontWeight: 'bold',
-                fontSize: '14px',
-                marginTop: '8px'
+                fontSize: '14px'
               }}
             >
               {vehicleLoadingLoading ? '⏳ Checking...' : '🚚 Validate Vehicle Loading'}
             </button>
             <p style={{ fontSize: '10px', color: '#666', marginTop: '5px', textAlign: 'center' }}>
-              Checks last 7 days dispatch data
+              {vehicleFromDate && vehicleToDate ? `${vehicleFromDate} to ${vehicleToDate}` : 'Leave empty for last 7 days'}
             </p>
           </div>
         </div>
