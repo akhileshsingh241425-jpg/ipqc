@@ -4343,17 +4343,13 @@ function DailyReport() {
                             }
                           });
 
-                          // Calculate brand-wise USED cells proportionally
-                          effGrades.forEach(eff => {
-                            const totalReceivedForEff = Object.values(brandTotalsExcel).reduce((sum, b) => sum + (b.efficiencies[eff] || 0), 0);
-                            const usedForEff = usedByEff[eff] || 0;
-                            
-                            if (totalReceivedForEff > 0) {
-                              Object.keys(brandTotalsExcel).forEach(brand => {
-                                const brandReceivedForEff = brandTotalsExcel[brand].efficiencies[eff] || 0;
-                                const brandRatio = brandReceivedForEff / totalReceivedForEff;
-                                brandTotalsExcel[brand].used += Math.round(usedForEff * brandRatio);
-                              });
+                          // SOLAR SPACE gets ALL the used cells (PT BINTA was never used)
+                          const solarSpaceBrandExcel = 'SOLAR SPACE';
+                          Object.keys(brandTotalsExcel).forEach(brand => {
+                            if (brand.toUpperCase() === solarSpaceBrandExcel) {
+                              brandTotalsExcel[brand].used = grandTotalUsed;
+                            } else {
+                              brandTotalsExcel[brand].used = 0;
                             }
                           });
 
@@ -4726,18 +4722,16 @@ function DailyReport() {
                       }
                     });
 
-                    // Calculate brand-wise USED cells proportionally
-                    // For each efficiency, distribute used cells based on received ratio
-                    efficiencyGrades.forEach(eff => {
-                      const totalReceivedForEff = Object.values(brandTotals).reduce((sum, b) => sum + (b.efficiencies[eff] || 0), 0);
-                      const usedForEff = usedByEfficiency[eff] || 0;
-                      
-                      if (totalReceivedForEff > 0) {
-                        Object.keys(brandTotals).forEach(brand => {
-                          const brandReceivedForEff = brandTotals[brand].efficiencies[eff] || 0;
-                          const brandRatio = brandReceivedForEff / totalReceivedForEff;
-                          brandTotals[brand].used += Math.round(usedForEff * brandRatio);
-                        });
+                    // SOLAR SPACE gets ALL the used cells (PT BINTA was never used)
+                    // Assign all usage to SOLAR SPACE brand
+                    const solarSpaceBrand = 'SOLAR SPACE';
+                    Object.keys(brandTotals).forEach(brand => {
+                      if (brand.toUpperCase() === solarSpaceBrand) {
+                        // SOLAR SPACE gets ALL the used cells
+                        brandTotals[brand].used = grandTotalUsed;
+                      } else {
+                        // Other brands (like PT BINTA) have 0 usage
+                        brandTotals[brand].used = 0;
                       }
                     });
 
