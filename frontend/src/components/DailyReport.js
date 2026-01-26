@@ -2752,17 +2752,17 @@ function DailyReport() {
     // 3. OK (A-grade) Cells Used
     const okCellsUsed = okModules * 66;
 
-    // 4. B-grade Calculation
-    let weightedModRejSum = 0;
-    let totalProdForWeight = 0;
+    // 4. B-grade Calculation - Simple average of non-zero values
+    let modRejSum2 = 0;
+    let modRejCount2 = 0;
     dateRecords.forEach(r => {
-      const prod = (r.dayProduction || 0) + (r.nightProduction || 0);
-      if (prod > 0) {
-        weightedModRejSum += prod * (r.moduleRejectionPercent || 0);
-        totalProdForWeight += prod;
+      const modRej = parseFloat(r.moduleRejectionPercent) || 0;
+      if (modRej > 0) {
+        modRejSum2 += modRej;
+        modRejCount2++;
       }
     });
-    const avgModRejPct = totalProdForWeight > 0 ? (weightedModRejSum / totalProdForWeight) : 0;
+    const avgModRejPct = modRejCount2 > 0 ? (modRejSum2 / modRejCount2) : 0;
 
     const bGradeModules = Math.round(okModules * (avgModRejPct / 100));
     const bGradeCellsUsed = bGradeModules * 66;
@@ -2775,15 +2775,17 @@ function DailyReport() {
     // 6. Total Processed Cells
     const totalProcessedCells = okCellsUsed + bGradeCellsUsed + rGradeCellsUsed;
 
-    // 7. Cell Rejection
-    let weightedCellRejSum = 0;
+    // 7. Cell Rejection - Simple average of non-zero values
+    let cellRejSum2 = 0;
+    let cellRejCount2 = 0;
     dateRecords.forEach(r => {
-      const prod = (r.dayProduction || 0) + (r.nightProduction || 0);
-      if (prod > 0) {
-        weightedCellRejSum += prod * (r.cellRejectionPercent || 0);
+      const cellRej = parseFloat(r.cellRejectionPercent) || 0;
+      if (cellRej > 0) {
+        cellRejSum2 += cellRej;
+        cellRejCount2++;
       }
     });
-    const avgCellRejPct = totalProdForWeight > 0 ? (weightedCellRejSum / totalProdForWeight) : 0;
+    const avgCellRejPct = cellRejCount2 > 0 ? (cellRejSum2 / cellRejCount2) : 0;
 
     const cellRejectionQty = Math.round(totalProcessedCells * (avgCellRejPct / 100));
 
@@ -3946,24 +3948,34 @@ function DailyReport() {
                 return isNaN(num) ? null : num.toFixed(1);
               };
 
-              // 1. Calculate weighted averages and OK Modules
+              // 1. Calculate SIMPLE averages (only non-zero values) and OK Modules
               let okModules = 0;
-              let weightedModRejSum = 0;
-              let weightedCellRejSum = 0;
-              let totalProdForWeight = 0;
+              let modRejSum = 0;
+              let modRejCount = 0;
+              let cellRejSum = 0;
+              let cellRejCount = 0;
 
               records.forEach(r => {
                 const prod = (r.dayProduction || 0) + (r.nightProduction || 0);
                 okModules += prod;
-                if (prod > 0) {
-                  weightedModRejSum += prod * (r.moduleRejectionPercent || 0);
-                  weightedCellRejSum += prod * (r.cellRejectionPercent || 0);
-                  totalProdForWeight += prod;
+                
+                // Simple average: count only non-zero rejection entries
+                const modRej = parseFloat(r.moduleRejectionPercent) || 0;
+                const cellRej = parseFloat(r.cellRejectionPercent) || 0;
+                
+                if (modRej > 0) {
+                  modRejSum += modRej;
+                  modRejCount++;
+                }
+                if (cellRej > 0) {
+                  cellRejSum += cellRej;
+                  cellRejCount++;
                 }
               });
 
-              const avgModRejPct = totalProdForWeight > 0 ? (weightedModRejSum / totalProdForWeight) : 0;
-              const avgCellRejPct = totalProdForWeight > 0 ? (weightedCellRejSum / totalProdForWeight) : 0;
+              // Simple average of non-zero rejection values
+              const avgModRejPct = modRejCount > 0 ? (modRejSum / modRejCount) : 0;
+              const avgCellRejPct = cellRejCount > 0 ? (cellRejSum / cellRejCount) : 0;
               const rGradePct = 0.7; // Fixed scrap rate as requested
 
               const okCellsUsed = okModules * cellsPerModule;
