@@ -2737,6 +2737,63 @@ function DailyReport() {
 
     const dateRecords = getDateRange();
 
+    // ======== CALCULATIONS FOR DETAILED INVENTORY UI ========
+    // 1. Total Received
+    const grandTotalReceived = Object.values(cellEfficiencyReceived)
+      .flatMap(eff => Object.values(eff))
+      .reduce((a, b) => a + (b || 0), 0);
+
+    // 2. OK (A-grade) Modules
+    const okModules = dateRecords.reduce((s, r) => s + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
+
+    // 3. OK (A-grade) Cells Used
+    const okCellsUsed = okModules * 66;
+
+    // 4. B-grade Calculation
+    let weightedModRejSum = 0;
+    let totalProdForWeight = 0;
+    dateRecords.forEach(r => {
+      const prod = (r.dayProduction || 0) + (r.nightProduction || 0);
+      if (prod > 0) {
+        weightedModRejSum += prod * (r.moduleRejectionPercent || 0);
+        totalProdForWeight += prod;
+      }
+    });
+    const avgModRejPct = totalProdForWeight > 0 ? (weightedModRejSum / totalProdForWeight) : 0;
+
+    const bGradeModules = Math.round(okModules * (avgModRejPct / 100));
+    const bGradeCellsUsed = bGradeModules * 66;
+
+    // 5. R-grade Calculation (Scrap)
+    const rGradePct = 0.7;
+    const rGradeModules = Math.round(okModules * (rGradePct / 100));
+    const rGradeCellsUsed = rGradeModules * 66;
+
+    // 6. Total Processed Cells
+    const totalProcessedCells = okCellsUsed + bGradeCellsUsed + rGradeCellsUsed;
+
+    // 7. Cell Rejection
+    let weightedCellRejSum = 0;
+    dateRecords.forEach(r => {
+      const prod = (r.dayProduction || 0) + (r.nightProduction || 0);
+      if (prod > 0) {
+        weightedCellRejSum += prod * (r.cellRejectionPercent || 0);
+      }
+    });
+    const avgCellRejPct = totalProdForWeight > 0 ? (weightedCellRejSum / totalProdForWeight) : 0;
+
+    const cellRejectionQty = Math.round(totalProcessedCells * (avgCellRejPct / 100));
+
+    // 8. TOTAL Cells Used
+    const grandTotalUsed = totalProcessedCells + cellRejectionQty;
+
+    // 9. Cells Remaining
+    const grandRemaining = grandTotalReceived - grandTotalUsed;
+
+    // 10. Est. Modules
+    const totalLossPct = (avgModRejPct + rGradePct) / 100;
+    const estimatedModules = Math.floor((grandRemaining / 66) * (1 - totalLossPct));
+
     return (
       <div className="production-view-container">
         <div className="production-header">
