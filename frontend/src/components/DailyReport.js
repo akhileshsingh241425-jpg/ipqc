@@ -2739,6 +2739,9 @@ function DailyReport() {
 
     // ======== CALCULATIONS FOR DETAILED INVENTORY UI ========
     // 1. Total Received
+    // ======== CALCULATIONS FOR DETAILED INVENTORY UI ========
+    // 1. Total Received
+    const cellEfficiencyReceived = selectedCompany.cellEfficiencyReceived || {};
     const grandTotalReceived = Object.values(cellEfficiencyReceived)
       .flatMap(eff => Object.values(eff))
       .reduce((a, b) => a + (b || 0), 0);
@@ -4412,7 +4415,7 @@ function DailyReport() {
                           balanceData.push([]);
                           balanceData.push(['EFFICIENCY', 'RECEIVED', 'USED', 'BALANCE', 'AFTER REJ', 'EST. MODULES', 'DAYS LEFT (EST)', 'REORDER NEEDED']);
 
-                          const avgDailyUsage = grandUsed / (records.length || 1);
+                          const avgDailyUsage = grandTotalUsed / (records.length || 1);
                           effGrades.forEach(eff => {
                             const effData = cellEffReceived[eff] || {};
                             const totalReceived = typeof effData === 'object'
