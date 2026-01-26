@@ -78,7 +78,7 @@ function DailyReport() {
   const isSuperAdmin = () => {
     return localStorage.getItem('userRole') === 'super_admin';
   };
-  
+
   const [companyForm, setCompanyForm] = useState({
     id: null,
     companyName: '',
@@ -172,7 +172,7 @@ function DailyReport() {
     includeDayWiseSummary: true,
     includeBomMaterials: true
   });
-  
+
   // Cell Efficiency Received Entry states
   const [showCellReceivedModal, setShowCellReceivedModal] = useState(false);
   const [cellReceivedForm, setCellReceivedForm] = useState({
@@ -217,7 +217,7 @@ function DailyReport() {
       setLoading(true);
       const API_BASE_URL = getAPIBaseURL();
       const response = await axios.get(`${API_BASE_URL}/api/coc/list`);
-      
+
       if (response.data && response.data.coc_data) {
         setAvailableCocData(response.data.coc_data);
       }
@@ -233,16 +233,16 @@ function DailyReport() {
   const loadMasterCocData = async () => {
     try {
       const toDate = new Date().toISOString().split('T')[0];
-      const fromDate = new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0]; // Last 180 days
-      
+      const fromDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // Last 180 days
+
       console.log('📡 Fetching Master COC data from MRP API...', { from: fromDate, to: toDate });
       const response = await axios.post('https://umanmrp.in/api/coc_api.php', {
         from: fromDate,
         to: toDate
       });
-      
+
       console.log('📦 Master COC API Response:', response.data);
-      
+
       // Handle different response formats
       let cocData = [];
       if (response.data && Array.isArray(response.data)) {
@@ -252,7 +252,7 @@ function DailyReport() {
       } else if (response.data && response.data.status === 'success' && response.data.data) {
         cocData = response.data.data;
       }
-      
+
       if (cocData.length > 0) {
         // Log first record to see structure
         console.log('📋 Sample COC record:', cocData[0]);
@@ -277,17 +277,17 @@ function DailyReport() {
   const loadAssignedCocData = async (companyName = '') => {
     try {
       setLoadingAssignedCoc(true);
-      
+
       // Use MRP API directly for assigned COC data
       const toDate = new Date().toISOString().split('T')[0];
-      const fromDate = new Date(Date.now() - 365*24*60*60*1000).toISOString().split('T')[0];
-      
+      const fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
       console.log('📡 Fetching assigned COC data from MRP API...');
       const response = await axios.post('https://umanmrp.in/a/get_assigned_coc_records.php', {
         from: fromDate,
         to: toDate
       });
-      
+
       if (response.data && response.data.status === 'success') {
         // Map company name for filtering
         const companyMap = {
@@ -296,19 +296,19 @@ function DailyReport() {
           'Rays Power': 'Rays Power'
         };
         const mrpCompanyName = companyMap[companyName] || companyName;
-        
+
         // Filter by company if provided
         let filteredData = response.data.data || [];
         if (companyName && mrpCompanyName) {
           filteredData = filteredData.filter(coc => coc.assigned_to === mrpCompanyName);
         }
-        
+
         // Add company_short field for easier matching
         filteredData = filteredData.map(coc => ({
           ...coc,
           company_short: coc.assigned_to?.toLowerCase() || ''
         }));
-        
+
         setAssignedCocData(filteredData);
         console.log('✅ Loaded assigned COC records from MRP:', filteredData.length);
       } else {
@@ -327,12 +327,12 @@ function DailyReport() {
     const pdiDoneRecords = selectedCompany.productionRecords.filter(
       r => r.pdi && r.pdi.trim() !== ''
     );
-    
+
     if (pdiDoneRecords.length === 0) {
       alert('No PDI Done records found!');
       return;
     }
-    
+
     setSelectedPdiRecords(pdiDoneRecords);
     loadAvailableCocData();
     setShowCocUploadModal(true);
@@ -342,13 +342,13 @@ function DailyReport() {
     try {
       setLoading(true);
       const API_BASE_URL = getAPIBaseURL();
-      
+
       // Upload selected COC materials to PDI batch
       const response = await axios.post(`${API_BASE_URL}/api/pdi/upload-coc-materials`, {
         company_id: selectedCompany.id,
         materials: selectedMaterials
       });
-      
+
       if (response.data.success) {
         alert(`✅ Successfully uploaded ${selectedMaterials.length} materials to PDI batch!`);
         setShowCocUploadModal(false);
@@ -474,25 +474,25 @@ function DailyReport() {
 
   const calculateCellStock = () => {
     if (!selectedCompany) return 0;
-    
+
     const cellsReceived = parseFloat(selectedCompany.cellsReceivedQty) || 0;
     const cellsPerModule = parseFloat(selectedCompany.cellsPerModule) || 132;
-    
+
     let totalCellsUsed = 0;
     let totalCellsRejected = 0;
-    
+
     if (selectedCompany.productionRecords) {
       selectedCompany.productionRecords.forEach(record => {
         const dailyProduction = (record.dayProduction || 0) + (record.nightProduction || 0);
         const cellsUsedToday = dailyProduction * cellsPerModule;
         const cellRejectionPercent = record.cellRejectionPercent || 0;
         const cellsRejectedToday = (cellsUsedToday * cellRejectionPercent) / 100;
-        
+
         totalCellsUsed += cellsUsedToday;
         totalCellsRejected += cellsRejectedToday;
       });
     }
-    
+
     const cellStock = cellsReceived - totalCellsUsed - totalCellsRejected;
     return Math.round(cellStock);
   };
@@ -506,32 +506,32 @@ function DailyReport() {
     if (!selectedCompany || !selectedCompany.productionRecords || selectedCompany.productionRecords.length === 0) {
       return [];
     }
-    
+
     let records = selectedCompany.productionRecords.sort((a, b) => new Date(a.date) - new Date(b.date));
-    
+
     // Apply PDI filter
     if (pdiFilter === 'done') {
       records = records.filter(r => r.pdi && r.pdi.trim() !== '');
     } else if (pdiFilter === 'pending') {
       records = records.filter(r => !r.pdi || r.pdi.trim() === '');
     }
-    
+
     return records;
   };
 
   // Password verification handler
   const handlePasswordVerification = (verified) => {
     setShowPasswordModal(false);
-    
+
     if (verified) {
       setIsPasswordVerified(true);
-      
+
       // Execute pending action
       if (pendingAction) {
         pendingAction();
         setPendingAction(null);
       }
-      
+
       // Auto-lock after 5 minutes
       setTimeout(() => {
         setIsPasswordVerified(false);
@@ -553,14 +553,14 @@ function DailyReport() {
 
   const handleProductionChange = (recordId, field, value) => {
     if (!selectedCompany) return;
-    
+
     // Immediate UI update only - no backend save
-    const updatedRecords = selectedCompany.productionRecords.map(record => 
-      record.id === recordId 
+    const updatedRecords = selectedCompany.productionRecords.map(record =>
+      record.id === recordId
         ? { ...record, [field]: field.includes('Percent') || field.includes('Production') ? parseFloat(value) || 0 : value }
         : record
     );
-    
+
     setSelectedCompany({
       ...selectedCompany,
       productionRecords: updatedRecords
@@ -600,7 +600,7 @@ function DailyReport() {
       } else {
         alert('✅ Record saved successfully!');
       }
-      
+
       await refreshSelectedCompany();
     } catch (error) {
       console.error('Failed to save record:', error);
@@ -613,12 +613,12 @@ function DailyReport() {
   const autoGenerateIPQCPDF = async (record, shift = 'day') => {
     try {
       const API_BASE_URL = getAPIBaseURL();
-      
+
       // Extract serial prefix and start number from serial
       const serialStart = record.serialNumberStart || '';
       const serialPrefix = serialStart.replace(/\d+$/, ''); // Remove trailing numbers
       const startNum = parseInt(serialStart.match(/\d+$/)?.[0] || '1');
-      
+
       const ipqcData = {
         date: record.date || new Date().toISOString().split('T')[0],
         shift: shift === 'day' ? 'A' : 'B',  // Map to shift codes
@@ -632,13 +632,13 @@ function DailyReport() {
         jb_cable_length: 1200, // Fixed as per requirement
         golden_module_number: `GM-${new Date().getFullYear()}-001`
       };
-      
+
       console.log(`Auto-generating IPQC PDF for ${shift} shift:`, ipqcData);
-      
+
       const response = await axios.post(`${API_BASE_URL}/api/ipqc/generate-pdf-only`, ipqcData, {
         responseType: 'blob'
       });
-      
+
       // Save the PDF path to record (backend should return the saved path)
       console.log(`✅ IPQC PDF auto-generated successfully for ${shift} shift`);
       return true;
@@ -651,7 +651,7 @@ function DailyReport() {
   const autoLinkFTRFromMasterData = async (recordId, recordData) => {
     try {
       const API_BASE_URL = getAPIBaseURL();
-      
+
       // Get master orders for this company
       const ordersResponse = await axios.get(`${API_BASE_URL}/api/master/orders`);
       const companyOrders = ordersResponse.data.orders.filter(
@@ -694,7 +694,7 @@ function DailyReport() {
         day_production: dayProduction,
         night_production: nightProduction
       });
-      
+
       if (!response.data.sufficient) {
         alert(`⚠️ Warning: Insufficient materials!\n${response.data.message}`);
       }
@@ -714,7 +714,7 @@ function DailyReport() {
         try {
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
-          
+
           // Try to find FTR sheet or use first sheet
           let sheetName = null;
           if (workbook.SheetNames.includes('FTR')) {
@@ -735,18 +735,18 @@ function DailyReport() {
           }
 
           const ftrData = XLSX.utils.sheet_to_json(sheet);
-          
+
           // Check if first row might be header
           if (ftrData.length > 0) {
             const firstRow = ftrData[0];
             const firstRowValues = Object.values(firstRow).join(' ').toLowerCase();
-            
+
             // If first row contains header keywords, skip it
             if (firstRowValues.includes('pmax') || firstRowValues.includes('date') || firstRowValues.includes('serial')) {
               ftrData.shift(); // Remove header row
             }
           }
-          
+
           console.log('FTR Data rows:', ftrData.length);
 
           // Validate and extract unique serial numbers - check multiple column names
@@ -756,17 +756,17 @@ function DailyReport() {
 
           ftrData.forEach((row, index) => {
             // Try different column name variations
-            const serialNumber = row['ID'] || row['SERIAL NUMBER'] || row['Serial Number'] || 
-                                row['serial_number'] || row['id'] || row['SerialNumber'] || 
-                                Object.values(row)[1]; // Sometimes serial is 2nd column
-            
+            const serialNumber = row['ID'] || row['SERIAL NUMBER'] || row['Serial Number'] ||
+              row['serial_number'] || row['id'] || row['SerialNumber'] ||
+              Object.values(row)[1]; // Sometimes serial is 2nd column
+
             if (!serialNumber || serialNumber.toString().trim() === '') {
               invalidRows.push(`Row ${index + 2}: Missing serial number`);
               return;
             }
 
             const cleanSerial = serialNumber.toString().trim();
-            
+
             if (serialNumbers.has(cleanSerial)) {
               duplicatesInFile.push(cleanSerial);
             } else {
@@ -820,15 +820,15 @@ function DailyReport() {
           if (response.data.order) {
             const ftrCount = response.data.order.ftr_count || (validSerials.length - rejectionCount);
             alert(`✅ Master Data uploaded successfully!\n\n` +
-                  `Total Modules: ${response.data.order.total_modules}\n` +
-                  `FTR Count: ${ftrCount}\n` +
-                  `Rejected: ${rejectionCount}`);
+              `Total Modules: ${response.data.order.total_modules}\n` +
+              `FTR Count: ${ftrCount}\n` +
+              `Rejected: ${rejectionCount}`);
           } else {
             alert(`✅ Master Data uploaded successfully!`);
           }
 
           await refreshSelectedCompany();
-          
+
           // Reset file input
           event.target.value = '';
         } catch (error) {
@@ -867,7 +867,7 @@ function DailyReport() {
         try {
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
-          
+
           // Use first sheet
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];
@@ -879,13 +879,13 @@ function DailyReport() {
 
           // Convert to JSON
           const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-          
+
           // Find header row
           let headerRowIndex = 0;
           for (let i = 0; i < Math.min(10, jsonData.length); i++) {
             const row = jsonData[i];
-            if (row && row.length > 0 && row.some(cell => 
-              cell && typeof cell === 'string' && 
+            if (row && row.length > 0 && row.some(cell =>
+              cell && typeof cell === 'string' &&
               (cell.toLowerCase().includes('serial') || cell.toLowerCase().includes('id'))
             )) {
               headerRowIndex = i;
@@ -929,7 +929,7 @@ function DailyReport() {
           // Find master order for this company
           const API_BASE_URL = getAPIBaseURL();
           const ordersResponse = await axios.get(`${API_BASE_URL}/api/master/orders`);
-          
+
           const companyOrders = ordersResponse.data.orders.filter(
             order => order.company_name === selectedCompany.companyName
           );
@@ -954,7 +954,7 @@ function DailyReport() {
           });
 
           let messageText = `✅ Successfully marked ${response.data.rejected_count} modules as rejected!`;
-          
+
           if (response.data.warning) {
             messageText += `\n\n⚠️ ${response.data.warning}`;
             if (response.data.not_found_serials && response.data.not_found_serials.length > 0) {
@@ -967,7 +967,7 @@ function DailyReport() {
           }
 
           alert(messageText);
-          
+
           // Reset file input
           event.target.value = '';
         } catch (error) {
@@ -991,7 +991,7 @@ function DailyReport() {
       alert('⚠️ Please enter production quantity first!');
       return;
     }
-    
+
     // Check password before opening COC modal
     checkPasswordAndExecute(() => {
       setCurrentProductionQty(totalProduction);
@@ -1003,20 +1003,20 @@ function DailyReport() {
   const handleCOCConfirm = async (selectedCOCData) => {
     try {
       setLoading(true);
-      
+
       // Store COC selection in the production record
       const recordData = {
         ...selectedRecordForBom,
         coc_materials_used: JSON.stringify(selectedCOCData),
         coc_warning_shown: false
       };
-      
+
       await companyService.updateProductionRecord(
-        selectedCompany.id, 
-        selectedRecordForBom.id, 
+        selectedCompany.id,
+        selectedRecordForBom.id,
         recordData
       );
-      
+
       setSelectedCOCs(selectedCOCData);
       setShowCOCModal(false);
       await refreshSelectedCompany();
@@ -1033,12 +1033,12 @@ function DailyReport() {
     if (!record.coc_materials_used) {
       return { hasLinked: false, count: 0 };
     }
-    
+
     try {
-      const cocData = typeof record.coc_materials_used === 'string' 
+      const cocData = typeof record.coc_materials_used === 'string'
         ? JSON.parse(record.coc_materials_used)
         : record.coc_materials_used;
-      
+
       const count = Object.keys(cocData).length;
       return { hasLinked: count > 0, count };
     } catch (error) {
@@ -1082,7 +1082,7 @@ function DailyReport() {
 
     try {
       setLoading(true);
-      
+
       // Create production record with PDI number and Running Order (pending approval)
       await companyService.addProductionRecord(selectedCompany.id, {
         date: newDayDate,
@@ -1094,7 +1094,7 @@ function DailyReport() {
         cellRejectionPercent: 0.0,
         moduleRejectionPercent: 0.0
       });
-      
+
       await refreshSelectedCompany();
       await loadCompanies();
       setShowAddDayModal(false);
@@ -1119,12 +1119,12 @@ function DailyReport() {
       const params = materialName ? `?material=${encodeURIComponent(materialName)}` : '';
       console.log('🔍 Fetching suppliers for:', materialName);
       console.log('🌐 API URL:', `${API_BASE.replace('/api', '')}/api/bom-suppliers${params}`);
-      
+
       const response = await axios.get(`${API_BASE.replace('/api', '')}/api/bom-suppliers${params}`);
-      
+
       console.log('✅ API Response:', response.data);
       console.log('📋 Suppliers:', response.data.suppliers);
-      
+
       return response.data.suppliers || [];
     } catch (error) {
       console.error('❌ Failed to fetch suppliers:', error);
@@ -1137,24 +1137,24 @@ function DailyReport() {
 
   const handleOpenBomModal = async (record) => {
     setSelectedRecordForBom(record);
-    
+
     // Get wattage from company data or default
     const wattage = selectedCompany?.wattage || '625wp';
     setSelectedWattage(wattage);
-    
+
     // Initialize bomMaterials state with EXISTING saved data
     const currentMaterials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
     const materialsData = {};
-    
+
     // Get existing BOM materials from record (if any saved previously)
     const existingBomMaterials = record.bomMaterials || [];
-    
+
     currentMaterials.forEach(material => {
       // Find existing saved data for this material
-      const existingMaterial = existingBomMaterials.find(bm => 
+      const existingMaterial = existingBomMaterials.find(bm =>
         bm.materialName === material.name || bm.material_name === material.name
       );
-      
+
       materialsData[material.name] = {
         lotBatchNo: existingMaterial?.lotBatchNo || existingMaterial?.lot_batch_no || '',
         company: existingMaterial?.company || '',
@@ -1163,12 +1163,12 @@ function DailyReport() {
         suppliers: [] // Material-specific suppliers
       };
     });
-    
+
     setBomMaterials(materialsData);
     setIpqcPdf(null);
     setFtrDocument(null);
     setShowBomModal(true);
-    
+
     // Fetch suppliers for each material in background
     currentMaterials.forEach(async (material) => {
       const suppliers = await fetchBomSuppliers(material.name);
@@ -1185,7 +1185,7 @@ function DailyReport() {
   const handleBomMaterialChange = (materialName, field, value) => {
     setBomMaterials(prev => {
       const currentMaterial = prev[materialName] || {};
-      
+
       // Handle multiple images
       if (field === 'images') {
         const existingImages = currentMaterial.images || [];
@@ -1197,7 +1197,7 @@ function DailyReport() {
           }
         };
       }
-      
+
       // Handle other fields
       return {
         ...prev,
@@ -1215,7 +1215,7 @@ function DailyReport() {
     setMaterialCocData([]);
     setLoadingMaterialCoc(true);
     setShowMaterialCocModal(true);
-    
+
     // Reset filters
     setCocMaterialFilter('all');
     setCocInvoiceFilter('');
@@ -1239,14 +1239,14 @@ function DailyReport() {
     // This handles COC unlinking (not BOM material deletion)
     const materialName = materialGroup.materialName;
     const invoiceNo = materialGroup.lotNumber; // lotNumber is actually invoiceNo in COC context
-    
+
     if (!window.confirm(`Are you sure you want to unlink COC?\n\nMaterial: ${materialName}\nInvoice: ${invoiceNo}`)) {
       return;
     }
 
     try {
       const API_BASE_URL = getAPIBaseURL();
-      
+
       // Get all production records for this PDI
       const pdiRecords = selectedCompany.productionRecords.filter(
         r => r.pdi === selectedPdiForDetails
@@ -1257,7 +1257,7 @@ function DailyReport() {
       // Remove COC from each production record's cocMaterials
       for (const record of pdiRecords) {
         const existingCocMaterials = record.cocMaterials || [];
-        
+
         // Filter out the COC we want to remove
         const updatedCocMaterials = existingCocMaterials.filter(
           cm => !(cm.materialName === materialName && cm.invoiceNo === invoiceNo)
@@ -1297,7 +1297,7 @@ function DailyReport() {
     try {
       setLoading(true);
       const API_BASE_URL = getAPIBaseURL();
-      
+
       // Step 1: Download COC PDF from URL and save to server
       let imagePath = null;
       if (cocItem.coc_document_url) {
@@ -1308,7 +1308,7 @@ function DailyReport() {
             material_name: selectedMaterial,
             invoice_no: cocItem.invoice_no
           });
-          
+
           if (downloadResponse.data.success) {
             imagePath = downloadResponse.data.image_path;
             console.log('✓ COC PDF downloaded and saved:', imagePath);
@@ -1318,7 +1318,7 @@ function DailyReport() {
           // Continue without PDF - just save metadata
         }
       }
-      
+
       // Step 2: Find all production records for this PDI
       const pdiRecords = selectedCompany.productionRecords.filter(
         r => r.pdi === selectedPdiForDetails
@@ -1334,17 +1334,17 @@ function DailyReport() {
       // COC linking is SEPARATE from BOM materials
       // Saves in coc_materials JSON field, not in bom_materials table
       let assignedCount = 0;
-      
+
       for (const record of pdiRecords) {
         // Get existing COC materials for this record
         const existingCocMaterials = record.cocMaterials || [];
-        
+
         // Check if this COC is already assigned to this material
         const existing = existingCocMaterials.find(
-          cm => cm.materialName === selectedMaterial && 
-                cm.invoiceNo === cocItem.invoice_no
+          cm => cm.materialName === selectedMaterial &&
+            cm.invoiceNo === cocItem.invoice_no
         );
-        
+
         if (existing) {
           console.log(`⚠️ COC already assigned to ${selectedMaterial} on ${record.date}`);
           continue; // Skip this record
@@ -1370,7 +1370,7 @@ function DailyReport() {
         await companyService.updateProductionRecord(selectedCompany.id, record.id, {
           cocMaterials: updatedCocMaterials
         });
-        
+
         assignedCount++;
         console.log(`✅ COC linked to ${selectedMaterial} on ${record.date}`);
       }
@@ -1380,9 +1380,9 @@ function DailyReport() {
       } else {
         alert(`✅ COC linked successfully!\n\nMaterial: ${selectedMaterial}\nInvoice: ${cocItem.invoice_no}\nLot/Batch: ${cocItem.lot_batch_no || 'N/A'}\nLinked to: ${assignedCount} production date(s)\n\n(Saved separately for customer documentation)`);
       }
-      
+
       setShowMaterialCocModal(false);
-      
+
       // Refresh company data
       const refreshedCompanies = await companyService.getAllCompanies();
       setCompanies(refreshedCompanies);
@@ -1403,13 +1403,13 @@ function DailyReport() {
     try {
       setLoadingCocBrands(true);
       const API_BASE = getAPIBase();
-      
+
       // Get last 6 months data
       const toDate = new Date().toISOString().split('T')[0];
-      const fromDate = new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0];
-      
+      const fromDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
       const response = await axios.get(`${API_BASE}/coc/list?from_date=${fromDate}&to_date=${toDate}`);
-      
+
       if (response.data.success) {
         // Material name mapping for fuzzy matching
         const materialMapping = {
@@ -1426,7 +1426,7 @@ function DailyReport() {
           'JUNCTION BOX': ['junction box', 'jb', 'j box', 'jbox'],
           'RFID': ['rfid', 'rfid tag', 'tag']
         };
-        
+
         // Helper function to match material name
         const matchMaterial = (cocMaterialName, bomMaterialName, cocSpec = '', bomSpec = '') => {
           const cocName = cocMaterialName.toLowerCase().trim();
@@ -1444,29 +1444,29 @@ function DailyReport() {
           }
           // Check mapping
           const keywords = materialMapping[bomMaterialName] || [bomName];
-          return keywords.some(keyword => 
+          return keywords.some(keyword =>
             cocName.includes(keyword) || keyword.includes(cocName)
           );
         };
-        
+
         // Group brands by material name
         const brandsByMaterial = {};
-        
+
         // Get all BOM material names
         const allBomMaterials = [...new Set([
           ...(BOM_MATERIALS_BY_WATTAGE['625wp'] || []).map(m => m.name),
           ...(BOM_MATERIALS_BY_WATTAGE['630wp'] || []).map(m => m.name)
         ])];
-        
+
         response.data.coc_data.forEach(item => {
           if (item.material_name && item.brand) {
             // Try to match with BOM materials
             allBomMaterials.forEach(bomMaterial => {
               // Get the material group (for RIBBON variants)
-              const materialGroup = BOM_MATERIALS_BY_WATTAGE['625wp']?.find(m => m.name === bomMaterial)?.materialGroup || 
-                                   BOM_MATERIALS_BY_WATTAGE['630wp']?.find(m => m.name === bomMaterial)?.materialGroup;
+              const materialGroup = BOM_MATERIALS_BY_WATTAGE['625wp']?.find(m => m.name === bomMaterial)?.materialGroup ||
+                BOM_MATERIALS_BY_WATTAGE['630wp']?.find(m => m.name === bomMaterial)?.materialGroup;
               const bomSpec = BOM_MATERIALS_BY_WATTAGE['625wp']?.find(m => m.name === bomMaterial)?.product_type ||
-                              BOM_MATERIALS_BY_WATTAGE['630wp']?.find(m => m.name === bomMaterial)?.product_type || '';
+                BOM_MATERIALS_BY_WATTAGE['630wp']?.find(m => m.name === bomMaterial)?.product_type || '';
               const matchKey = materialGroup || bomMaterial.split('(')[0].trim(); // Use group or base name
               // Use spec for matching
               if (matchMaterial(item.material_name, matchKey, item.spec, bomSpec)) {
@@ -1486,7 +1486,7 @@ function DailyReport() {
             });
           }
         });
-        
+
         console.log('COC Brands by Material:', brandsByMaterial);
         setCocBrands(brandsByMaterial);
       }
@@ -1508,29 +1508,29 @@ function DailyReport() {
       // Sheet 1: COMPREHENSIVE COC STATUS (Combined Required + Available)
       const comprehensiveData = [];
       comprehensiveData.push(['Material Name', 'Product Type', 'Required Qty', 'Available COCs', 'Company', 'Invoice No', 'COC Qty', 'Lot/Batch', 'Invoice Date', 'Status']);
-      
+
       requiredCocsReport.forEach(req => {
         // Calculate total available
         let totalAvailable = 0;
         const allCocs = [];
-        
+
         Object.entries(req.availableCocs).forEach(([company, cocs]) => {
           cocs.forEach(coc => {
             totalAvailable += coc.cocQty;
             allCocs.push({ company, ...coc });
           });
         });
-        
+
         // Sort by date - oldest first (FIFO)
         allCocs.sort((a, b) => {
           const dateA = new Date(a.invoiceDate || '2099-01-01');
           const dateB = new Date(b.invoiceDate || '2099-01-01');
           return dateA - dateB;
         });
-        
+
         // Status
         let status = totalAvailable === 0 ? '❌ NO COC' : (totalAvailable >= req.requiredQty ? '✅ SUFFICIENT' : '⚠️ SHORTAGE');
-        
+
         if (allCocs.length > 0) {
           // Add rows for each available COC
           allCocs.forEach((coc, idx) => {
@@ -1565,10 +1565,10 @@ function DailyReport() {
 
       // Create workbook
       const wb = XLSX.utils.book_new();
-      
+
       // Add Sheet 1 - Comprehensive COC Status
       const ws1 = XLSX.utils.aoa_to_sheet(comprehensiveData);
-      
+
       // Style Sheet 1 Header
       const range1 = XLSX.utils.decode_range(ws1['!ref']);
       for (let col = range1.s.c; col <= range1.e.c; col++) {
@@ -1586,12 +1586,12 @@ function DailyReport() {
           }
         };
       }
-      
+
       // Style Sheet 1 Data rows
       for (let row = range1.s.r + 1; row <= range1.e.r; row++) {
         const statusCell = ws1[XLSX.utils.encode_cell({ r: row, c: 9 })];
         const statusValue = statusCell ? statusCell.v : '';
-        
+
         let rowColor = "FFFFFF";
         if (statusValue.includes('NO COC')) {
           rowColor = "FFCDD2"; // Red
@@ -1600,11 +1600,11 @@ function DailyReport() {
         } else if (statusValue.includes('SUFFICIENT')) {
           rowColor = "C8E6C9"; // Green
         }
-        
+
         for (let col = range1.s.c; col <= range1.e.c; col++) {
           const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
           if (!ws1[cellAddress]) continue;
-          
+
           ws1[cellAddress].s = {
             fill: { fgColor: { rgb: rowColor } },
             alignment: { horizontal: "center", vertical: "center" },
@@ -1615,14 +1615,14 @@ function DailyReport() {
               right: { style: "thin", color: { rgb: "BDBDBD" } }
             }
           };
-          
+
           // Bold for material name and status
           if (col === 0 || col === 9) {
             ws1[cellAddress].s.font = { bold: true, sz: 11 };
           }
         }
       }
-      
+
       ws1['!cols'] = [
         { wch: 25 }, // Material Name
         { wch: 28 }, // Product Type
@@ -1635,22 +1635,22 @@ function DailyReport() {
         { wch: 15 }, // Invoice Date
         { wch: 16 }  // Status
       ];
-      
+
       // Set row heights
       ws1['!rows'] = [{ hpt: 25 }]; // Header row height
-      
+
       XLSX.utils.book_append_sheet(wb, ws1, 'COC Status Report');
-      
+
       // Sheet 2: Smart COC Suggestions (Which COC to use for fulfillment)
       const summaryData = [];
       summaryData.push(['Material Name', 'Product Type', 'Required Qty', 'Available', 'Shortage', 'Status', '🎯 USE THIS COC', 'Company', 'Invoice No', 'COC Qty', 'Lot/Batch', 'Date', 'Production BOM']);
-      
+
       // Add summary data from required COCs
       requiredCocsReport.forEach(req => {
         // Calculate total available across all companies
         let totalAvailable = 0;
         const allCocs = [];
-        
+
         Object.entries(req.availableCocs).forEach(([company, cocs]) => {
           cocs.forEach(coc => {
             totalAvailable += coc.cocQty;
@@ -1660,37 +1660,37 @@ function DailyReport() {
             });
           });
         });
-        
+
         // Calculate shortage
         const shortage = req.requiredQty - totalAvailable;
         const shortageText = shortage > 0 ? Math.round(shortage * 100) / 100 : 0;
-        
+
         // Find suggested COC - PRIORITIZE production BOM companies
         let suggestedCoc = null;
         let suggestionText = '-';
-        
+
         if (allCocs.length > 0) {
           // First: Try production BOM companies (oldest first)
-          const productionCocs = allCocs.filter(coc => 
+          const productionCocs = allCocs.filter(coc =>
             req.productionCompanies && req.productionCompanies.includes(coc.company)
           ).sort((a, b) => {
             const dateA = new Date(a.invoiceDate || '2099-01-01');
             const dateB = new Date(b.invoiceDate || '2099-01-01');
             return dateA - dateB;
           });
-          
+
           // Then: Other companies (oldest first)
-          const otherCocs = allCocs.filter(coc => 
+          const otherCocs = allCocs.filter(coc =>
             !req.productionCompanies || !req.productionCompanies.includes(coc.company)
           ).sort((a, b) => {
             const dateA = new Date(a.invoiceDate || '2099-01-01');
             const dateB = new Date(b.invoiceDate || '2099-01-01');
             return dateA - dateB;
           });
-          
+
           // Combine: Production companies first
           const sortedCocs = [...productionCocs, ...otherCocs];
-          
+
           if (shortage > 0) {
             // Find COC that can fulfill shortage - prioritize production BOM
             suggestedCoc = sortedCocs.find(coc => coc.cocQty >= shortage) || sortedCocs[0];
@@ -1701,7 +1701,7 @@ function DailyReport() {
             suggestionText = '✅ USE FIRST';
           }
         }
-        
+
         // Status
         let status = '';
         if (totalAvailable === 0) {
@@ -1711,11 +1711,11 @@ function DailyReport() {
         } else {
           status = '⚠️ SHORT';
         }
-        
+
         // Check if suggested COC is from production BOM
-        const isProductionBom = suggestedCoc && req.productionCompanies && 
-                               req.productionCompanies.includes(suggestedCoc.company) ? '✅ USED IN PRODUCTION' : '';
-        
+        const isProductionBom = suggestedCoc && req.productionCompanies &&
+          req.productionCompanies.includes(suggestedCoc.company) ? '✅ USED IN PRODUCTION' : '';
+
         summaryData.push([
           req.materialName,
           req.productType || '-',
@@ -1732,13 +1732,13 @@ function DailyReport() {
           isProductionBom
         ]);
       });
-      
+
       // Add Sheet 2 - COC Suggestions
       const ws2 = XLSX.utils.aoa_to_sheet(summaryData);
-      
+
       // Apply advanced styling to Sheet 2
       const range2 = XLSX.utils.decode_range(ws2['!ref']);
-      
+
       // Header row styling - Gradient effect with dark blue
       for (let col = range2.s.c; col <= range2.e.c; col++) {
         const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col });
@@ -1755,15 +1755,15 @@ function DailyReport() {
           }
         };
       }
-      
+
       // Data rows styling with conditional colors
       for (let row = range2.s.r + 1; row <= range2.e.r; row++) {
         const statusCell = ws2[XLSX.utils.encode_cell({ r: row, c: 5 })];
         const statusValue = statusCell ? statusCell.v : '';
-        
+
         let rowColor = "FFFFFF";
         let statusColor = "FFFFFF";
-        
+
         if (statusValue.includes('NO COC')) {
           rowColor = "FFCDD2"; // Light red
           statusColor = "F44336"; // Red
@@ -1774,16 +1774,16 @@ function DailyReport() {
           rowColor = "C8E6C9"; // Light green
           statusColor = "4CAF50"; // Green
         }
-        
+
         for (let col = range2.s.c; col <= range2.e.c; col++) {
           const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
           if (!ws2[cellAddress]) continue;
-          
+
           const cellColor = col === 5 ? statusColor : rowColor;
-          
+
           ws2[cellAddress].s = {
             fill: { fgColor: { rgb: cellColor } },
-            font: { 
+            font: {
               bold: col === 0 || col === 5 || col === 6,
               color: { rgb: col === 5 ? "FFFFFF" : "000000" },
               sz: col === 6 ? 12 : 11
@@ -1798,7 +1798,7 @@ function DailyReport() {
           };
         }
       }
-      
+
       ws2['!cols'] = [
         { wch: 25 }, // Material Name
         { wch: 28 }, // Product Type
@@ -1814,15 +1814,15 @@ function DailyReport() {
         { wch: 15 }, // Date
         { wch: 25 }  // Production BOM
       ];
-      
+
       ws2['!rows'] = [{ hpt: 30 }]; // Header row height
-      
+
       XLSX.utils.book_append_sheet(wb, ws2, 'Smart Suggestions');
-      
+
       // Download
       const fileName = `COC_Report_PDI_${selectedPdiForDetails || 'All'}_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      
+
       alert('✅ Professional Excel Report Downloaded!\n📊 Sheet 1: Complete COC Status\n🎯 Sheet 2: Smart COC Suggestions (FIFO)');
     } catch (error) {
       console.error('Failed to generate Excel:', error);
@@ -1837,22 +1837,22 @@ function DailyReport() {
       setLoading(true);
       const recordId = selectedRecordForBom.id;
       const API_BASE = getAPIBase();
-      
+
       // Get current wattage materials (14 fixed materials)
       const currentMaterials = BOM_MATERIALS_BY_WATTAGE[selectedWattage] || [];
 
       // Upload each BOM material - ONLY if there's NEW data to save
       for (const material of currentMaterials) {
         const materialData = bomMaterials[material.name];
-        
+
         // Check if there's any NEW data to save (not just existing data)
         const hasNewLotBatchNo = materialData.lotBatchNo && materialData.lotBatchNo.trim() !== '';
         const hasNewCompany = materialData.company && materialData.company.trim() !== '';
         const hasNewImages = materialData.images && materialData.images.length > 0;
         const hasNewEfficiency = material.name === 'Solar Cell' && materialData.cellEfficiency;
-        
+
         console.log(`[BOM DEBUG] Material: ${material.name}, lotBatchNo: '${materialData?.lotBatchNo}', company: '${materialData?.company}', efficiency: '${materialData?.cellEfficiency}', hasImages: ${hasNewImages}, will send: ${hasNewLotBatchNo || hasNewCompany || hasNewImages || hasNewEfficiency}`);
-        
+
         // Only send request if there's actual new data to save
         if (materialData && (hasNewLotBatchNo || hasNewCompany || hasNewImages || hasNewEfficiency)) {
           const formData = new FormData();
@@ -1860,12 +1860,12 @@ function DailyReport() {
           formData.append('lotBatchNo', materialData.lotBatchNo || '');
           formData.append('company', materialData.company || '');
           formData.append('shift', selectedShift);  // day or night
-          
+
           // Add cell efficiency for Solar Cell
           if (material.name === 'Solar Cell' && materialData.cellEfficiency) {
             formData.append('cellEfficiency', materialData.cellEfficiency);
           }
-          
+
           // Append multiple images (only new ones)
           if (hasNewImages) {
             for (const image of materialData.images) {
@@ -1936,14 +1936,14 @@ function DailyReport() {
     try {
       setLoadingRequiredCocs(true);
       const API_BASE = getAPIBase();
-      
+
       // Get PDI records
       const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === pdiNumber);
       const totalProduction = pdiRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
-      
+
       // Get BOM materials for this wattage
       const bomMaterials = BOM_MATERIALS_BY_WATTAGE[wattage] || [];
-      
+
       // Calculate required quantities
       const requiredMaterials = bomMaterials.map(material => {
         const requiredQty = totalProduction * material.qty;
@@ -1954,19 +1954,19 @@ function DailyReport() {
           perModuleQty: material.qty
         };
       });
-      
+
       // Fetch available COCs from MRP API (correct endpoint with full data)
       const toDate = new Date().toISOString().split('T')[0];
-      const fromDate = new Date(Date.now() - 180*24*60*60*1000).toISOString().split('T')[0];
-      
+      const fromDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
       const response = await axios.post('https://umanmrp.in/a/get_assigned_coc_records.php', {
         from: fromDate,
         to: toDate
       });
-      
+
       if (response.data && response.data.status === 'success') {
         const cocData = response.data.data || [];
-        
+
         // Map company name to MRP API format
         const COMPANY_NAME_MAPPING = {
           'Rays Power': 'Rays Power',
@@ -1974,16 +1974,16 @@ function DailyReport() {
           'Sterlin and Wilson': 'S&W'
         };
         const mrpCompanyName = COMPANY_NAME_MAPPING[selectedCompany.name] || selectedCompany.name;
-        
+
         // Filter COCs by company (assigned_to) AND PDI number
         const filteredCocData = cocData.filter(coc => {
           const matchesCompany = coc.assigned_to === mrpCompanyName;
           const matchesPdi = coc.pdi_no === pdiNumber || coc.pdi_no?.toString() === pdiNumber?.toString();
           return matchesCompany && matchesPdi;
         });
-        
+
         console.log(`Filtered COCs for ${mrpCompanyName} PDI ${pdiNumber}:`, filteredCocData.length);
-        
+
         // Get actual BOM materials used in production (priority: production BOM > COC API)
         const actualBomMaterials = {};
         pdiRecords.forEach(record => {
@@ -1999,11 +1999,11 @@ function DailyReport() {
             });
           }
         });
-        
+
         // Group COCs by material and company
         const requiredCocsData = requiredMaterials.map(req => {
           const reqMaterial = req.materialName.toLowerCase();
-          
+
           // PRIORITY 1: Use companies from actual production BOM
           let companiesUsedInProduction = actualBomMaterials[reqMaterial];
           if (!companiesUsedInProduction) {
@@ -2016,50 +2016,50 @@ function DailyReport() {
               }
             }
           }
-          
+
           // Find matching COCs for this material from FILTERED MRP API data
           const matchingCocs = filteredCocData.filter(coc => {
             const cocMaterial = (coc.material_name || '').toLowerCase().trim();
-            
+
             // Improved matching logic with better aliases
             if (reqMaterial.includes('cell') && cocMaterial.includes('cell')) return true;
             if (reqMaterial.includes('eva') && cocMaterial.includes('eva')) return true;
-            
+
             // Glass: Handle FRONT/BACK variants
-            if ((reqMaterial.includes('glass') || reqMaterial.includes('front glass') || reqMaterial.includes('back glass')) 
-                && cocMaterial.includes('glass')) return true;
-            
+            if ((reqMaterial.includes('glass') || reqMaterial.includes('front glass') || reqMaterial.includes('back glass'))
+              && cocMaterial.includes('glass')) return true;
+
             // Ribbon: Handle all ribbon variants (0.26mm, 4.0x0.4, 6.0x0.4, BUSBAR)
-            if ((reqMaterial.includes('ribbon') || reqMaterial.includes('busbar')) 
-                && (cocMaterial.includes('ribbon') || cocMaterial.includes('busbar'))) return true;
-            
+            if ((reqMaterial.includes('ribbon') || reqMaterial.includes('busbar'))
+              && (cocMaterial.includes('ribbon') || cocMaterial.includes('busbar'))) return true;
+
             if (reqMaterial.includes('flux') && cocMaterial.includes('flux')) return true;
-            
+
             // EPE: Handle EPE FRONT variant
-            if ((reqMaterial.includes('epe') || reqMaterial.includes('epe front')) 
-                && cocMaterial.includes('epe')) return true;
-            
+            if ((reqMaterial.includes('epe') || reqMaterial.includes('epe front'))
+              && cocMaterial.includes('epe')) return true;
+
             // Aluminium Frame: Handle LONG/SHORT variants
-            if ((reqMaterial.includes('frame') || reqMaterial.includes('aluminium') || reqMaterial.includes('aluminum')) 
-                && (cocMaterial.includes('frame') || cocMaterial.includes('aluminium') || cocMaterial.includes('aluminum'))) return true;
-            
+            if ((reqMaterial.includes('frame') || reqMaterial.includes('aluminium') || reqMaterial.includes('aluminum'))
+              && (cocMaterial.includes('frame') || cocMaterial.includes('aluminium') || cocMaterial.includes('aluminum'))) return true;
+
             // Sealent/Sealant spelling variants
-            if ((reqMaterial.includes('sealent') || reqMaterial.includes('sealant')) 
-                && (cocMaterial.includes('sealent') || cocMaterial.includes('sealant'))) return true;
-            
+            if ((reqMaterial.includes('sealent') || reqMaterial.includes('sealant'))
+              && (cocMaterial.includes('sealent') || cocMaterial.includes('sealant'))) return true;
+
             // JB Potting: Handle A/B/both variants
-            if ((reqMaterial.includes('potting') || reqMaterial.includes('jb')) 
-                && (cocMaterial.includes('potting') || cocMaterial.includes('jb'))) return true;
-            
+            if ((reqMaterial.includes('potting') || reqMaterial.includes('jb'))
+              && (cocMaterial.includes('potting') || cocMaterial.includes('jb'))) return true;
+
             // Junction Box
-            if ((reqMaterial.includes('junction') || reqMaterial.includes('box')) 
-                && (cocMaterial.includes('junction') || cocMaterial.includes('box'))) return true;
-            
+            if ((reqMaterial.includes('junction') || reqMaterial.includes('box'))
+              && (cocMaterial.includes('junction') || cocMaterial.includes('box'))) return true;
+
             if (reqMaterial.includes('rfid') && cocMaterial.includes('rfid')) return true;
-            
+
             return false;
           });
-          
+
           // Group by company/brand using MRP API fields
           const cocsByCompany = {};
           matchingCocs.forEach(coc => {
@@ -2075,12 +2075,12 @@ function DailyReport() {
               usedInProduction: companiesUsedInProduction && companiesUsedInProduction.has(company) ? '✅ USED' : ''
             });
           });
-          
+
           // Sort companies: Production BOM companies first
           const sortedCocsByCompany = {};
           const productionCompanies = [];
           const otherCompanies = [];
-          
+
           Object.keys(cocsByCompany).forEach(company => {
             if (companiesUsedInProduction && companiesUsedInProduction.has(company)) {
               productionCompanies.push(company);
@@ -2088,18 +2088,18 @@ function DailyReport() {
               otherCompanies.push(company);
             }
           });
-          
+
           [...productionCompanies, ...otherCompanies].forEach(company => {
             sortedCocsByCompany[company] = cocsByCompany[company];
           });
-          
+
           return {
             ...req,
             availableCocs: sortedCocsByCompany,
             productionCompanies: Array.from(companiesUsedInProduction || [])
           };
         });
-        
+
         setRequiredCocsReport(requiredCocsData);
       }
     } catch (error) {
@@ -2153,7 +2153,7 @@ function DailyReport() {
             'Insulation Resistance Fail / Hi-pot Fail',
             'Frame Major Dent / Frame Separation'
           ];
-          
+
           const minorDefects = [
             'Cell Color Mismatch (Shade Difference)',
             'Minor EVA Bubble (Non-critical Position)',
@@ -2182,7 +2182,7 @@ function DailyReport() {
           const isMajor = Math.random() < 0.3;
           const defectList = isMajor ? majorDefects : minorDefects;
           const randomReason = defectList[Math.floor(Math.random() * defectList.length)];
-          
+
           // Select appropriate stage based on defect type
           let randomStage;
           if (randomReason.includes('EL') || randomReason.includes('Hot-spot')) {
@@ -2203,11 +2203,11 @@ function DailyReport() {
         };
 
         // Extract serial numbers from Excel (supports multiple column names)
-        let serialNumbers = jsonData.map(row => 
-          row['Serial Number'] || 
-          row['serial_number'] || 
-          row['Barcode'] || 
-          row['barcode'] || 
+        let serialNumbers = jsonData.map(row =>
+          row['Serial Number'] ||
+          row['serial_number'] ||
+          row['Barcode'] ||
+          row['barcode'] ||
           row['Serial No'] ||
           row['Module Serial'] ||
           row['SN'] ||
@@ -2254,7 +2254,7 @@ function DailyReport() {
 
         // Warning if there are extra serial numbers that won't be used
         const unusedCount = serialNumbers.length - currentIndex;
-        
+
         if (rejections.length === 0) {
           alert('No valid serial numbers found in Excel!');
           return;
@@ -2270,13 +2270,13 @@ function DailyReport() {
         setLoading(true);
         await companyService.bulkAddRejections(selectedCompany.id, rejections);
         await refreshSelectedCompany();
-        
+
         let message = `✓ ${rejections.length} rejections uploaded successfully!\nDistributed across ${productionDates.length} production days based on rejection percentages.`;
-        
+
         if (unusedCount > 0) {
           message += `\n\n⚠️ Note: ${unusedCount} serial numbers were not used (Excel had ${serialNumbers.length} serials, but only ${totalExpectedRejections} rejections expected based on production %).`;
         }
-        
+
         alert(message);
       } catch (error) {
         console.error('Excel upload failed:', error);
@@ -2300,14 +2300,14 @@ function DailyReport() {
       setLoading(true);
       await companyService.addRejection(selectedCompany.id, newRejection);
       await refreshSelectedCompany();
-      
+
       setNewRejection({
         serialNumber: '',
         rejectionDate: new Date().toISOString().split('T')[0],
         reason: 'Cell Crack',
         stage: 'Visual Inspection'
       });
-      
+
       setShowRejectionModal(false);
       alert('Rejection added successfully!');
     } catch (error) {
@@ -2376,7 +2376,7 @@ function DailyReport() {
 
     try {
       setLoading(true);
-      
+
       const filteredRecords = selectedCompany.productionRecords.filter(record => {
         const recordDate = new Date(record.date);
         const start = new Date(pdfDateRange.startDate);
@@ -2397,10 +2397,10 @@ function DailyReport() {
         return a.serialNumber.localeCompare(b.serialNumber);
       });
 
-      const totalProduction = filteredRecords.reduce((sum, r) => 
+      const totalProduction = filteredRecords.reduce((sum, r) =>
         sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0
       );
-      
+
       const totalMW = ((totalProduction * parseFloat(selectedCompany.moduleWattage)) / 1000000).toFixed(2);
 
       const payload = {
@@ -2470,7 +2470,7 @@ function DailyReport() {
 
     try {
       setLoading(true);
-      
+
       const filteredRecords = selectedCompany.productionRecords.filter(record => {
         const recordDate = new Date(record.date);
         const start = new Date(pdfDateRange.startDate);
@@ -2491,10 +2491,10 @@ function DailyReport() {
         return a.serialNumber.localeCompare(b.serialNumber);
       });
 
-      const totalProduction = filteredRecords.reduce((sum, r) => 
+      const totalProduction = filteredRecords.reduce((sum, r) =>
         sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0
       );
-      
+
       const totalMW = ((totalProduction * parseFloat(selectedCompany.moduleWattage)) / 1000000).toFixed(2);
 
       const payload = {
@@ -2569,15 +2569,15 @@ function DailyReport() {
           + Add New Company
         </button>
       </div>
-      
+
       {loading && <div className="loading">Loading...</div>}
-      
+
       {!loading && companies.length === 0 && (
         <div className="empty-state">
           <p>No companies added yet. Click "Add New Company" to get started!</p>
         </div>
       )}
-      
+
       <div className="companies-grid">
         {companies.map(company => (
           <div key={company.id} className="company-card">
@@ -2633,34 +2633,34 @@ function DailyReport() {
           ← Back to List
         </button>
       </div>
-      
+
       <div className="form-content">
         <div className="form-group">
           <label>Company Name *</label>
           <input
             type="text"
             value={companyForm.companyName}
-            onChange={(e) => setCompanyForm({...companyForm, companyName: e.target.value})}
+            onChange={(e) => setCompanyForm({ ...companyForm, companyName: e.target.value })}
             placeholder="Enter company name"
           />
         </div>
-        
+
         <div className="form-row">
           <div className="form-group">
             <label>Module Wattage *</label>
             <input
               type="number"
               value={companyForm.moduleWattage}
-              onChange={(e) => setCompanyForm({...companyForm, moduleWattage: e.target.value})}
+              onChange={(e) => setCompanyForm({ ...companyForm, moduleWattage: e.target.value })}
               placeholder="625"
             />
           </div>
-          
+
           <div className="form-group">
             <label>Module Type *</label>
             <select
               value={companyForm.moduleType}
-              onChange={(e) => setCompanyForm({...companyForm, moduleType: e.target.value})}
+              onChange={(e) => setCompanyForm({ ...companyForm, moduleType: e.target.value })}
             >
               <option value="Topcon">Topcon</option>
               <option value="Perc">Perc</option>
@@ -2670,13 +2670,13 @@ function DailyReport() {
             </select>
           </div>
         </div>
-        
+
         <div className="form-group">
           <label>Cells Per Module *</label>
           <input
             type="number"
             value={companyForm.cellsPerModule}
-            onChange={(e) => setCompanyForm({...companyForm, cellsPerModule: e.target.value})}
+            onChange={(e) => setCompanyForm({ ...companyForm, cellsPerModule: e.target.value })}
             placeholder="132"
           />
         </div>
@@ -2686,14 +2686,14 @@ function DailyReport() {
           <input
             type="text"
             value={companyForm.currentRunningOrder}
-            onChange={(e) => setCompanyForm({...companyForm, currentRunningOrder: e.target.value})}
+            onChange={(e) => setCompanyForm({ ...companyForm, currentRunningOrder: e.target.value })}
             placeholder="e.g., ORD-2024-001"
           />
-          <small style={{color: '#666', fontSize: '12px', marginTop: '5px', display: 'block'}}>
+          <small style={{ color: '#666', fontSize: '12px', marginTop: '5px', display: 'block' }}>
             📋 Enter the order number that is currently in production
           </small>
         </div>
-        
+
         <div className="form-section">
           <h3>Cells Received (Optional)</h3>
           <div className="form-row">
@@ -2702,24 +2702,24 @@ function DailyReport() {
               <input
                 type="number"
                 value={companyForm.cellsReceivedQty}
-                onChange={(e) => setCompanyForm({...companyForm, cellsReceivedQty: e.target.value})}
+                onChange={(e) => setCompanyForm({ ...companyForm, cellsReceivedQty: e.target.value })}
                 placeholder="Enter number of cells"
               />
             </div>
-            
+
             <div className="form-group">
               <label>MW</label>
               <input
                 type="number"
                 step="0.01"
                 value={companyForm.cellsReceivedMW}
-                onChange={(e) => setCompanyForm({...companyForm, cellsReceivedMW: e.target.value})}
+                onChange={(e) => setCompanyForm({ ...companyForm, cellsReceivedMW: e.target.value })}
                 placeholder="Enter MW"
               />
             </div>
           </div>
         </div>
-        
+
         <div className="form-actions">
           <button className="btn-save" onClick={handleSaveCompany} disabled={loading}>
             {loading ? 'Saving...' : 'Save Company'}
@@ -2741,18 +2741,18 @@ function DailyReport() {
       <div className="production-view-container">
         <div className="production-header">
           <h2>{selectedCompany.companyName} - Production Management</h2>
-          <div style={{display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center'}}>
-            <button 
-              className="btn-primary" 
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              className="btn-primary"
               onClick={handleAddNewDay}
-              style={{padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
+              style={{ padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}
             >
               ➕ Add New Day
             </button>
-            <button 
-              className="btn-primary" 
+            <button
+              className="btn-primary"
               onClick={() => document.getElementById('master-data-upload').click()}
-              style={{padding: '10px 20px', background: '#ff9800', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
+              style={{ padding: '10px 20px', background: '#ff9800', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}
             >
               📤 Upload Master Data
             </button>
@@ -2760,13 +2760,13 @@ function DailyReport() {
               id="master-data-upload"
               type="file"
               accept=".xlsx,.xls"
-              style={{display: 'none'}}
+              style={{ display: 'none' }}
               onChange={handleMasterDataUpload}
             />
-            <button 
-              className="btn-primary" 
+            <button
+              className="btn-primary"
               onClick={() => document.getElementById('rejection-upload').click()}
-              style={{padding: '10px 20px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
+              style={{ padding: '10px 20px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}
             >
               🚫 Upload Rejections
             </button>
@@ -2774,11 +2774,11 @@ function DailyReport() {
               id="rejection-upload"
               type="file"
               accept=".xlsx,.xls"
-              style={{display: 'none'}}
+              style={{ display: 'none' }}
               onChange={handleRejectionUpload}
             />
-            <button 
-              style={{padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer'}}
+            <button
+              style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}
               onClick={() => { setSelectedCompany(null); setViewMode('list'); }}
             >
               ← Back to List
@@ -2816,7 +2816,7 @@ function DailyReport() {
               gap: '10px'
             }}
           >
-            <span style={{fontSize: '22px'}}>📋</span>
+            <span style={{ fontSize: '22px' }}>📋</span>
             Production Records
             <span style={{
               backgroundColor: productionTab === 'production' ? 'rgba(255,255,255,0.2)' : '#e0e0e0',
@@ -2845,7 +2845,7 @@ function DailyReport() {
               gap: '10px'
             }}
           >
-            <span style={{fontSize: '22px'}}>⚡</span>
+            <span style={{ fontSize: '22px' }}>⚡</span>
             Cell Efficiency Inventory
             <span style={{
               backgroundColor: productionTab === 'cellInventory' ? 'rgba(255,255,255,0.2)' : '#e0e0e0',
@@ -2869,999 +2869,999 @@ function DailyReport() {
 
         {/* ========== TAB CONTENT ========== */}
         {productionTab === 'production' && (
-        <div className="production-section">
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px'}}>
-            <h3>Daily Production Records</h3>
-            <div style={{display: 'flex', gap: '8px'}}>
-              <button
-                onClick={() => setPdiFilter('all')}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: '5px',
-                  border: pdiFilter === 'all' ? '2px solid #007bff' : '1px solid #ccc',
-                  backgroundColor: pdiFilter === 'all' ? '#007bff' : 'white',
-                  color: pdiFilter === 'all' ? 'white' : '#333',
-                  fontWeight: pdiFilter === 'all' ? 'bold' : 'normal',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  transition: 'all 0.2s'
-                }}
-              >
-                All Records ({selectedCompany.productionRecords?.length || 0})
-              </button>
-              <button
-                onClick={() => setPdiFilter('done')}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: '5px',
-                  border: pdiFilter === 'done' ? '2px solid #28a745' : '1px solid #ccc',
-                  backgroundColor: pdiFilter === 'done' ? '#28a745' : 'white',
-                  color: pdiFilter === 'done' ? 'white' : '#333',
-                  fontWeight: pdiFilter === 'done' ? 'bold' : 'normal',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  transition: 'all 0.2s'
-                }}
-              >
-                ✓ PDI Done ({selectedCompany.productionRecords?.filter(r => r.pdi && r.pdi.trim() !== '').length || 0})
-              </button>
-              <button
-                onClick={() => setPdiFilter('pending')}
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: '5px',
-                  border: pdiFilter === 'pending' ? '2px solid #ffc107' : '1px solid #ccc',
-                  backgroundColor: pdiFilter === 'pending' ? '#ffc107' : 'white',
-                  color: pdiFilter === 'pending' ? 'white' : '#333',
-                  fontWeight: pdiFilter === 'pending' ? 'bold' : 'normal',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  transition: 'all 0.2s'
-                }}
-              >
-                ⏳ PDI Pending ({selectedCompany.productionRecords?.filter(r => !r.pdi || r.pdi.trim() === '').length || 0})
-              </button>
+          <div className="production-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+              <h3>Daily Production Records</h3>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={() => setPdiFilter('all')}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '5px',
+                    border: pdiFilter === 'all' ? '2px solid #007bff' : '1px solid #ccc',
+                    backgroundColor: pdiFilter === 'all' ? '#007bff' : 'white',
+                    color: pdiFilter === 'all' ? 'white' : '#333',
+                    fontWeight: pdiFilter === 'all' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  All Records ({selectedCompany.productionRecords?.length || 0})
+                </button>
+                <button
+                  onClick={() => setPdiFilter('done')}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '5px',
+                    border: pdiFilter === 'done' ? '2px solid #28a745' : '1px solid #ccc',
+                    backgroundColor: pdiFilter === 'done' ? '#28a745' : 'white',
+                    color: pdiFilter === 'done' ? 'white' : '#333',
+                    fontWeight: pdiFilter === 'done' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  ✓ PDI Done ({selectedCompany.productionRecords?.filter(r => r.pdi && r.pdi.trim() !== '').length || 0})
+                </button>
+                <button
+                  onClick={() => setPdiFilter('pending')}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '5px',
+                    border: pdiFilter === 'pending' ? '2px solid #ffc107' : '1px solid #ccc',
+                    backgroundColor: pdiFilter === 'pending' ? '#ffc107' : 'white',
+                    color: pdiFilter === 'pending' ? 'white' : '#333',
+                    fontWeight: pdiFilter === 'pending' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  ⏳ PDI Pending ({selectedCompany.productionRecords?.filter(r => !r.pdi || r.pdi.trim() === '').length || 0})
+                </button>
+              </div>
             </div>
-          </div>
 
-          {pdiFilter === 'done' && selectedCompany.productionRecords?.length > 0 && (() => {
-            const uniquePdis = [...new Set(
-              selectedCompany.productionRecords
-                .filter(r => r.pdi && r.pdi.trim() !== '' && r.pdiApproved)
-                .map(r => r.pdi)
-            )];
-            
-            return uniquePdis.length > 0 ? (
-              <div style={{marginBottom: '20px', display: 'flex', gap: '15px', flexWrap: 'wrap'}}>
-                {uniquePdis.map(pdiNumber => {
-                  const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === pdiNumber && r.pdiApproved);
-                  const totalProduction = pdiRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
-                  
-                  return (
-                    <div key={pdiNumber} style={{
-                      padding: '15px',
-                      border: '2px solid #28a745',
-                      borderRadius: '8px',
-                      backgroundColor: '#e8f5e9',
-                      minWidth: '250px',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                    >
-                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
-                        <h4 style={{margin: 0, color: '#2e7d32', fontSize: '16px'}}>✅ {pdiNumber}</h4>
-                        <span style={{background: '#28a745', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold'}}>
-                          COMPLETED
-                        </span>
-                      </div>
-                      <p style={{margin: '5px 0', fontSize: '13px', color: '#666'}}>
-                        <strong>Records:</strong> {pdiRecords.length}<br/>
-                        <strong>Production:</strong> {totalProduction} modules
-                      </p>
-                      
-                      <div style={{display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap'}}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPdiForDetails(pdiNumber);
-                            setShowPdiDetailsModal(true);
-                            loadAssignedCocData(selectedCompany?.companyName);
-                          }}
-                          style={{
-                            flex: '1 1 45%',
-                            padding: '8px',
-                            background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '5px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          📋 View BOM
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            alert('Download Report for ' + pdiNumber);
-                          }}
-                          style={{
-                            flex: '1 1 45%',
-                            padding: '8px',
-                            background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '5px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          📄 Report
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const wattage = selectedCompany.moduleWattage || '625wp';
-                            setSelectedPdiForDetails(pdiNumber);
-                            calculateRequiredCocs(pdiNumber, wattage);
-                          }}
-                          style={{
-                            flex: '1 1 100%',
-                            padding: '8px',
-                            background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '5px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                          disabled={loadingRequiredCocs}
-                        >
-                          {loadingRequiredCocs && selectedPdiForDetails === pdiNumber ? '⏳ Loading...' : '🔍 Required COCs'}
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+            {pdiFilter === 'done' && selectedCompany.productionRecords?.length > 0 && (() => {
+              const uniquePdis = [...new Set(
+                selectedCompany.productionRecords
+                  .filter(r => r.pdi && r.pdi.trim() !== '' && r.pdiApproved)
+                  .map(r => r.pdi)
+              )];
 
-              </div>
-            ) : <p className="no-data">No completed PDI records yet.</p>;
-          })()}
+              return uniquePdis.length > 0 ? (
+                <div style={{ marginBottom: '20px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                  {uniquePdis.map(pdiNumber => {
+                    const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === pdiNumber && r.pdiApproved);
+                    const totalProduction = pdiRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
 
-          {pdiFilter === 'pending' && selectedCompany.productionRecords?.length > 0 && (() => {
-            const uniquePdis = [...new Set(
-              selectedCompany.productionRecords
-                .filter(r => r.pdi && r.pdi.trim() !== '' && !r.pdiApproved)
-                .map(r => r.pdi)
-            )];
-            
-            return uniquePdis.length > 0 ? (
-              <div style={{marginBottom: '20px', display: 'flex', gap: '15px', flexWrap: 'wrap'}}>
-                {uniquePdis.map(pdiNumber => {
-                  const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === pdiNumber);
-                  const totalProduction = pdiRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
-                  
-                  return (
-                    <div key={pdiNumber} style={{
-                      padding: '15px',
-                      border: '2px solid #ffc107',
-                      borderRadius: '8px',
-                      backgroundColor: '#fff9e6',
-                      minWidth: '250px',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                    }}>
-                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
-                        <h4 style={{margin: 0, color: '#f57c00', fontSize: '16px'}}>⚠️ {pdiNumber}</h4>
-                        <span style={{background: '#ffc107', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold'}}>
-                          PENDING
-                        </span>
-                      </div>
-                      <p style={{margin: '5px 0', fontSize: '13px', color: '#666'}}>
-                        <strong>Records:</strong> {pdiRecords.length}<br/>
-                        <strong>Production:</strong> {totalProduction} modules
-                      </p>
-                      
-                      <div style={{display: 'flex', gap: '8px', marginTop: '10px'}}>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPdiForDetails(pdiNumber);
-                            setShowPdiDetailsModal(true);
-                            loadAssignedCocData(selectedCompany?.companyName);
-                          }}
-                          style={{
-                            flex: 1,
-                            padding: '8px',
-                            background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '5px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          📋 View BOM
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (!window.confirm(`Mark ${pdiNumber} as COMPLETE?`)) return;
-                            
-                            try {
-                              setLoading(true);
-                              for (const record of pdiRecords) {
-                                await companyService.updateProductionRecord(selectedCompany.id, record.id, {
-                                  ...record,
-                                  pdiApproved: true
-                                });
-                              }
-                              await refreshSelectedCompany();
-                              alert(`✅ ${pdiNumber} marked as complete!`);
-                            } catch (error) {
-                              console.error('Failed to approve PDI:', error);
-                              alert('Failed to mark as complete');
-                            } finally {
-                              setLoading(false);
-                            }
-                          }}
-                          style={{
-                            flex: 1,
-                            padding: '8px',
-                            background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
-                            color: 'white',
-                            border: 'none',
-                            borderRadius: '5px',
-                            fontWeight: 'bold',
-                            cursor: 'pointer',
-                            fontSize: '12px'
-                          }}
-                        >
-                          ✅ Mark as Complete
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null;
-          })()}
+                    return (
+                      <div key={pdiNumber} style={{
+                        padding: '15px',
+                        border: '2px solid #28a745',
+                        borderRadius: '8px',
+                        backgroundColor: '#e8f5e9',
+                        minWidth: '250px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        cursor: 'pointer',
+                        transition: 'transform 0.2s',
+                      }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.02)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <h4 style={{ margin: 0, color: '#2e7d32', fontSize: '16px' }}>✅ {pdiNumber}</h4>
+                          <span style={{ background: '#28a745', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
+                            COMPLETED
+                          </span>
+                        </div>
+                        <p style={{ margin: '5px 0', fontSize: '13px', color: '#666' }}>
+                          <strong>Records:</strong> {pdiRecords.length}<br />
+                          <strong>Production:</strong> {totalProduction} modules
+                        </p>
 
-          {dateRecords.length === 0 ? (
-            <p className="no-data">No production data yet. Click "Add New Day" to start tracking!</p>
-          ) : pdiFilter !== 'all' ? null : (
-            <>
-              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', padding: '0 8px'}}>
-                <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-                  <h3 style={{margin: 0, color: '#1e3a8a', fontSize: '16px'}}>📋 Production Records ({dateRecords.length})</h3>
-                  <span style={{fontSize: '13px', color: '#6b7280'}}>
-                    Total Production: <strong>{dateRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0).toLocaleString()}</strong> modules
-                  </span>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPdiForDetails(pdiNumber);
+                              setShowPdiDetailsModal(true);
+                              loadAssignedCocData(selectedCompany?.companyName);
+                            }}
+                            style={{
+                              flex: '1 1 45%',
+                              padding: '8px',
+                              background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '5px',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            📋 View BOM
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              alert('Download Report for ' + pdiNumber);
+                            }}
+                            style={{
+                              flex: '1 1 45%',
+                              padding: '8px',
+                              background: 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '5px',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            📄 Report
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const wattage = selectedCompany.moduleWattage || '625wp';
+                              setSelectedPdiForDetails(pdiNumber);
+                              calculateRequiredCocs(pdiNumber, wattage);
+                            }}
+                            style={{
+                              flex: '1 1 100%',
+                              padding: '8px',
+                              background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '5px',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                            disabled={loadingRequiredCocs}
+                          >
+                            {loadingRequiredCocs && selectedPdiForDetails === pdiNumber ? '⏳ Loading...' : '🔍 Required COCs'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
                 </div>
-                <div style={{display: 'flex', gap: '8px'}}>
-                  <button
-                    onClick={() => {
-                      const pdiNumber = dateRecords[0]?.pdi;
-                      const wattage = dateRecords[0]?.wattage || '625wp';
-                      if (pdiNumber) {
-                        setSelectedPdiForDetails(pdiNumber);
-                        calculateRequiredCocs(pdiNumber, wattage);
-                      }
-                    }}
-                    style={{
-                      padding: '8px 16px',
-                      background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '5px',
-                      cursor: 'pointer',
-                      fontWeight: 'bold',
-                      fontSize: '12px',
-                      whiteSpace: 'nowrap',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                    }}
-                    disabled={loadingRequiredCocs}
-                  >
-                    {loadingRequiredCocs ? '⏳ Loading...' : '🔍 Required COCs'}
-                  </button>
-                  {dateRecords.length > 0 && isSuperAdmin() && (
+              ) : <p className="no-data">No completed PDI records yet.</p>;
+            })()}
+
+            {pdiFilter === 'pending' && selectedCompany.productionRecords?.length > 0 && (() => {
+              const uniquePdis = [...new Set(
+                selectedCompany.productionRecords
+                  .filter(r => r.pdi && r.pdi.trim() !== '' && !r.pdiApproved)
+                  .map(r => r.pdi)
+              )];
+
+              return uniquePdis.length > 0 ? (
+                <div style={{ marginBottom: '20px', display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                  {uniquePdis.map(pdiNumber => {
+                    const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === pdiNumber);
+                    const totalProduction = pdiRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
+
+                    return (
+                      <div key={pdiNumber} style={{
+                        padding: '15px',
+                        border: '2px solid #ffc107',
+                        borderRadius: '8px',
+                        backgroundColor: '#fff9e6',
+                        minWidth: '250px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <h4 style={{ margin: 0, color: '#f57c00', fontSize: '16px' }}>⚠️ {pdiNumber}</h4>
+                          <span style={{ background: '#ffc107', color: 'white', padding: '2px 8px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold' }}>
+                            PENDING
+                          </span>
+                        </div>
+                        <p style={{ margin: '5px 0', fontSize: '13px', color: '#666' }}>
+                          <strong>Records:</strong> {pdiRecords.length}<br />
+                          <strong>Production:</strong> {totalProduction} modules
+                        </p>
+
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedPdiForDetails(pdiNumber);
+                              setShowPdiDetailsModal(true);
+                              loadAssignedCocData(selectedCompany?.companyName);
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '8px',
+                              background: 'linear-gradient(135deg, #2196F3 0%, #1976D2 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '5px',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            📋 View BOM
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm(`Mark ${pdiNumber} as COMPLETE?`)) return;
+
+                              try {
+                                setLoading(true);
+                                for (const record of pdiRecords) {
+                                  await companyService.updateProductionRecord(selectedCompany.id, record.id, {
+                                    ...record,
+                                    pdiApproved: true
+                                  });
+                                }
+                                await refreshSelectedCompany();
+                                alert(`✅ ${pdiNumber} marked as complete!`);
+                              } catch (error) {
+                                console.error('Failed to approve PDI:', error);
+                                alert('Failed to mark as complete');
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: '8px',
+                              background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '5px',
+                              fontWeight: 'bold',
+                              cursor: 'pointer',
+                              fontSize: '12px'
+                            }}
+                          >
+                            ✅ Mark as Complete
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null;
+            })()}
+
+            {dateRecords.length === 0 ? (
+              <p className="no-data">No production data yet. Click "Add New Day" to start tracking!</p>
+            ) : pdiFilter !== 'all' ? null : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', padding: '0 8px' }}>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, color: '#1e3a8a', fontSize: '16px' }}>📋 Production Records ({dateRecords.length})</h3>
+                    <span style={{ fontSize: '13px', color: '#6b7280' }}>
+                      Total Production: <strong>{dateRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0).toLocaleString()}</strong> modules
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
                     <button
-                      onClick={async () => {
-                        if (window.confirm(`Delete all ${dateRecords.length} production records for ${selectedCompany.companyName}? This action cannot be undone!`)) {
-                          try {
-                            setLoading(true);
-                            for (const record of dateRecords) {
-                              await companyService.deleteProductionRecord(selectedCompany.id, record.id);
-                            }
-                            await refreshSelectedCompany();
-                            alert('All production records deleted successfully!');
-                          } catch (error) {
-                            console.error('Failed to delete records:', error);
-                            alert('Failed to delete some records');
-                          } finally {
-                            setLoading(false);
-                          }
+                      onClick={() => {
+                        const pdiNumber = dateRecords[0]?.pdi;
+                        const wattage = dateRecords[0]?.wattage || '625wp';
+                        if (pdiNumber) {
+                          setSelectedPdiForDetails(pdiNumber);
+                          calculateRequiredCocs(pdiNumber, wattage);
                         }
                       }}
                       style={{
                         padding: '8px 16px',
-                        background: '#dc2626',
+                        background: 'linear-gradient(135deg, #FF9800 0%, #F57C00 100%)',
                         color: 'white',
                         border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        fontWeight: '600',
+                        borderRadius: '5px',
                         cursor: 'pointer',
-                        transition: 'all 0.2s'
+                        fontWeight: 'bold',
+                        fontSize: '12px',
+                        whiteSpace: 'nowrap',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                       }}
-                      title="Delete all production records"
+                      disabled={loadingRequiredCocs}
                     >
-                      🗑️ Clear All Records
+                      {loadingRequiredCocs ? '⏳ Loading...' : '🔍 Required COCs'}
                     </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Required COCs Report Section */}
-              {requiredCocsReport.length > 0 && selectedPdiForDetails && (
-                <div style={{marginBottom: '25px', padding: '20px', backgroundColor: '#fff3cd', borderRadius: '8px', border: '2px solid #FF9800'}}>
-                  <h4 style={{marginTop: 0, color: '#FF6F00', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                    📊 Required COCs for {selectedPdiForDetails}
-                    <button
-                      onClick={() => setRequiredCocsReport([])}
-                      style={{
-                        marginLeft: 'auto',
-                        padding: '4px 12px',
-                        background: '#666',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '11px'
-                      }}
-                    >
-                      ✕ Close
-                    </button>
-                  </h4>
-                  <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>
-                    Based on <strong>{dateRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0)} modules</strong> production
-                  </p>
-                  
-                  <div style={{maxHeight: '500px', overflowY: 'auto'}}>
-                    {requiredCocsReport.map((req, idx) => (
-                      <div key={idx} style={{marginBottom: '15px', padding: '12px', backgroundColor: 'white', borderRadius: '5px', border: '1px solid #dee2e6'}}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
-                          <div>
-                            <strong style={{fontSize: '13px', color: '#1976d2'}}>{req.materialName}</strong>
-                            {req.productType && <span style={{fontSize: '10px', color: '#666', marginLeft: '8px'}}>({req.productType})</span>}
-                          </div>
-                          <div style={{fontSize: '12px', fontWeight: 'bold', color: '#d32f2f'}}>
-                            Need: {req.requiredQty}
-                          </div>
-                        </div>
-                        
-                        {Object.keys(req.availableCocs).length > 0 ? (
-                          <div>
-                            {Object.entries(req.availableCocs).map(([company, cocs]) => {
-                              const totalAvailable = cocs.reduce((sum, coc) => sum + coc.cocQty, 0);
-                              const isEnough = totalAvailable >= req.requiredQty;
-                              
-                              return (
-                                <div key={company} style={{marginTop: '8px', padding: '8px', backgroundColor: isEnough ? '#e8f5e9' : '#ffebee', borderRadius: '4px', border: `1px solid ${isEnough ? '#4caf50' : '#f44336'}`}}>
-                                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
-                                    <strong style={{fontSize: '11px', color: '#333'}}>{company}</strong>
-                                    <span style={{fontSize: '11px', fontWeight: 'bold', color: isEnough ? '#4caf50' : '#f44336'}}>
-                                      {totalAvailable} {isEnough ? '✅' : '⚠️'}
-                                    </span>
-                                  </div>
-                                  
-                                  <div style={{maxHeight: '100px', overflowY: 'auto'}}>
-                                    {cocs.slice(0, 3).map((coc, cocIdx) => (
-                                      <div key={cocIdx} style={{padding: '4px', backgroundColor: 'rgba(255,255,255,0.6)', marginBottom: '3px', borderRadius: '3px', fontSize: '10px'}}>
-                                        <div style={{display: 'flex', justifyContent: 'space-between'}}>
-                                          <span>Inv: <strong>{coc.invoiceNo}</strong></span>
-                                          <span>Qty: <strong>{coc.cocQty}</strong></span>
-                                        </div>
-                                      </div>
-                                    ))}
-                                    {cocs.length > 3 && <div style={{fontSize: '10px', color: '#666', textAlign: 'center'}}>+{cocs.length - 3} more</div>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <div style={{padding: '8px', backgroundColor: '#ffebee', borderRadius: '4px', textAlign: 'center', color: '#d32f2f', fontSize: '11px'}}>
-                            ❌ No COC in database
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                    {dateRecords.length > 0 && isSuperAdmin() && (
+                      <button
+                        onClick={async () => {
+                          if (window.confirm(`Delete all ${dateRecords.length} production records for ${selectedCompany.companyName}? This action cannot be undone!`)) {
+                            try {
+                              setLoading(true);
+                              for (const record of dateRecords) {
+                                await companyService.deleteProductionRecord(selectedCompany.id, record.id);
+                              }
+                              await refreshSelectedCompany();
+                              alert('All production records deleted successfully!');
+                            } catch (error) {
+                              console.error('Failed to delete records:', error);
+                              alert('Failed to delete some records');
+                            } finally {
+                              setLoading(false);
+                            }
+                          }
+                        }}
+                        style={{
+                          padding: '8px 16px',
+                          background: '#dc2626',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          fontWeight: '600',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s'
+                        }}
+                        title="Delete all production records"
+                      >
+                        🗑️ Clear All Records
+                      </button>
+                    )}
                   </div>
                 </div>
-              )}
-              
-              {/* BULK UPDATE EFFICIENCY BUTTONS */}
-              <div style={{
-                display: 'flex', 
-                gap: '10px', 
-                marginBottom: '15px', 
-                padding: '15px', 
-                backgroundColor: '#fff3e0', 
-                borderRadius: '10px',
-                border: '2px solid #ff9800',
-                alignItems: 'center',
-                flexWrap: 'wrap'
-              }}>
-                <span style={{fontWeight: 'bold', color: '#e65100', marginRight: '10px'}}>⚡ BULK UPDATE EFFICIENCY:</span>
-                {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => (
-                  <button
-                    key={eff}
-                    onClick={async () => {
-                      const recordsToUpdate = (selectedCompany?.productionRecords || [])
-                        .filter(r => !r.dayCellEfficiency || r.dayCellEfficiency === '');
-                      
-                      if (recordsToUpdate.length === 0) {
-                        alert('✅ All records already have Day Efficiency set!');
-                        return;
-                      }
-                      
-                      if (!window.confirm(`Set Day Efficiency to ${eff}% for ${recordsToUpdate.length} records without efficiency?\n\nThis will update all records where Day Efficiency is not set.`)) {
-                        return;
-                      }
-                      
-                      setLoading(true);
-                      let successCount = 0;
-                      let failCount = 0;
-                      
-                      for (const record of recordsToUpdate) {
-                        try {
-                          await companyService.updateProductionRecord(selectedCompany.id, record.id, {
-                            ...record,
-                            dayCellEfficiency: eff
-                          });
-                          successCount++;
-                        } catch (error) {
-                          console.error('Failed to update record:', record.id, error);
-                          failCount++;
-                        }
-                      }
-                      
-                      await loadCompanies();
-                      if (selectedCompany) {
-                        const updatedCompany = companies.find(c => c.id === selectedCompany.id);
-                        if (updatedCompany) setSelectedCompany(updatedCompany);
-                      }
-                      
-                      setLoading(false);
-                      alert(`✅ Bulk Update Complete!\n\nSuccess: ${successCount}\nFailed: ${failCount}`);
-                    }}
-                    disabled={loading}
-                    style={{
-                      padding: '10px 20px',
-                      backgroundColor: '#ff9800',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '8px',
-                      cursor: loading ? 'not-allowed' : 'pointer',
-                      fontSize: '14px',
-                      fontWeight: 'bold',
-                      opacity: loading ? 0.6 : 1
-                    }}
-                  >
-                    {eff}%
-                  </button>
-                ))}
-                <span style={{fontSize: '11px', color: '#666', marginLeft: '10px'}}>
-                  (Updates records without Day Efficiency set)
-                </span>
-              </div>
-              
-              <div className="production-table-wrapper" style={{overflowX: 'auto', maxWidth: '100%'}}>
-                <table className="production-table" style={{fontSize: '12px', minWidth: '1550px'}}>
-                <thead>
-                  <tr>
-                    <th style={{width: '80px'}}>DATE</th>
-                    <th style={{width: '120px'}}>RUNNING ORDER</th>
-                    <th style={{width: '60px'}}>PDI</th>
-                    <th style={{width: '130px'}}>SERIAL START</th>
-                    <th style={{width: '130px'}}>SERIAL END</th>
-                    <th style={{width: '50px'}}>COUNT</th>
-                    <th style={{width: '70px'}}>DAY</th>
-                    <th style={{width: '70px'}}>NIGHT</th>
-                    <th style={{width: '60px'}}>TOTAL</th>
-                    <th style={{width: '75px', backgroundColor: '#e3f2fd'}}>DAY EFF %</th>
-                    <th style={{width: '75px', backgroundColor: '#bbdefb'}}>NIGHT EFF %</th>
-                    <th style={{width: '70px', backgroundColor: '#fff3cd'}}>CELL REJ %</th>
-                    <th style={{width: '80px', backgroundColor: '#f8d7da'}}>MODULE REJ %</th>
-                    <th style={{width: '80px', backgroundColor: '#d1ecf1'}}>IPQC Sheet</th>
-                    <th style={{width: '80px', backgroundColor: '#d4edda'}}>FTR Doc</th>
-                    <th style={{width: '80px'}}>BOM/Docs</th>
-                    <th style={{width: '60px'}}>Status</th>
-                    <th style={{width: '60px'}}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dateRecords.map(record => {
-                    const total = (record.dayProduction || 0) + (record.nightProduction || 0);
-                    const isClosed = record.isClosed || false;
-                    return (
-                      <tr key={record.id} style={{backgroundColor: isClosed ? '#f5f5f5' : 'transparent'}}>
-                        <td style={{fontSize: '11px'}}>{record.date}</td>
-                        <td>
-                          <input
-                            type="text"
-                            value={record.runningOrder || ''}
-                            onChange={(e) => handleProductionChange(record.id, 'runningOrder', e.target.value)}
-                            className="table-input"
-                            placeholder={selectedCompany?.currentRunningOrder || 'Order No.'}
-                            disabled={isClosed}
-                            style={{width: '115px', padding: '4px', fontSize: '10px'}}
-                          />
-                        </td>
-                        <td>
-                          <div style={{
-                            backgroundColor: record.pdi && record.pdi.trim() !== '' 
-                              ? (record.pdiApproved ? '#d4edda' : '#fff3cd')
-                              : 'transparent',
-                            padding: '4px',
-                            borderRadius: '3px',
-                            fontWeight: record.pdi && record.pdi.trim() !== '' ? 'bold' : 'normal',
-                            color: record.pdi && record.pdi.trim() !== '' 
-                              ? (record.pdiApproved ? '#155724' : '#856404')
-                              : '#333',
-                            fontSize: '11px',
-                            textAlign: 'center'
-                          }}>
-                            {record.pdi || '-'}
+
+                {/* Required COCs Report Section */}
+                {requiredCocsReport.length > 0 && selectedPdiForDetails && (
+                  <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#fff3cd', borderRadius: '8px', border: '2px solid #FF9800' }}>
+                    <h4 style={{ marginTop: 0, color: '#FF6F00', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      📊 Required COCs for {selectedPdiForDetails}
+                      <button
+                        onClick={() => setRequiredCocsReport([])}
+                        style={{
+                          marginLeft: 'auto',
+                          padding: '4px 12px',
+                          background: '#666',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '11px'
+                        }}
+                      >
+                        ✕ Close
+                      </button>
+                    </h4>
+                    <p style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>
+                      Based on <strong>{dateRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0)} modules</strong> production
+                    </p>
+
+                    <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                      {requiredCocsReport.map((req, idx) => (
+                        <div key={idx} style={{ marginBottom: '15px', padding: '12px', backgroundColor: 'white', borderRadius: '5px', border: '1px solid #dee2e6' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                            <div>
+                              <strong style={{ fontSize: '13px', color: '#1976d2' }}>{req.materialName}</strong>
+                              {req.productType && <span style={{ fontSize: '10px', color: '#666', marginLeft: '8px' }}>({req.productType})</span>}
+                            </div>
+                            <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#d32f2f' }}>
+                              Need: {req.requiredQty}
+                            </div>
                           </div>
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={record.serialNumberStart || ''}
-                            onChange={(e) => handleProductionChange(record.id, 'serialNumberStart', e.target.value)}
-                            className="table-input"
-                            placeholder="ABC-12345-00001"
-                            disabled={isClosed}
-                            style={{width: '125px', fontSize: '10px', padding: '4px 3px'}}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="text"
-                            value={record.serialNumberEnd || ''}
-                            onChange={(e) => handleProductionChange(record.id, 'serialNumberEnd', e.target.value)}
-                            className="table-input"
-                            placeholder="ABC-12345-00005"
-                            disabled={isClosed}
-                            style={{width: '125px', fontSize: '10px', padding: '4px 3px'}}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            value={record.serialCount || 0}
-                            onChange={(e) => handleProductionChange(record.id, 'serialCount', e.target.value)}
-                            className="table-input"
-                            disabled={isClosed}
-                            style={{width: '45px', padding: '4px', fontSize: '11px'}}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            value={record.dayProduction || 0}
-                            onChange={(e) => handleProductionChange(record.id, 'dayProduction', e.target.value)}
-                            className="table-input"
-                            disabled={isClosed}
-                            style={{width: '65px', padding: '4px', fontSize: '11px'}}
-                          />
-                        </td>
-                        <td>
-                          <input
-                            type="number"
-                            value={record.nightProduction || 0}
-                            onChange={(e) => handleProductionChange(record.id, 'nightProduction', e.target.value)}
-                            className="table-input"
-                            disabled={isClosed}
-                            style={{width: '65px', padding: '4px', fontSize: '11px'}}
-                          />
-                        </td>
-                        <td className="total-cell" style={{fontSize: '12px', fontWeight: '700'}}>{total}</td>
-                        <td style={{backgroundColor: '#e3f2fd22'}}>
-                          <select
-                            value={record.dayCellEfficiency || ''}
-                            onChange={(e) => handleProductionChange(record.id, 'dayCellEfficiency', e.target.value)}
-                            disabled={isClosed}
-                            style={{
-                              width: '70px', 
-                              padding: '4px 2px', 
-                              fontSize: '11px', 
-                              border: '2px solid #1976d2',
-                              borderRadius: '3px',
-                              backgroundColor: record.dayCellEfficiency ? '#e3f2fd' : 'white',
-                              fontWeight: record.dayCellEfficiency ? 'bold' : 'normal',
-                              color: '#1565c0'
-                            }}
-                          >
-                            <option value="">-</option>
-                            <option value="25.4">25.4%</option>
-                            <option value="25.5">25.5%</option>
-                            <option value="25.6">25.6%</option>
-                            <option value="25.7">25.7%</option>
-                            <option value="25.8">25.8%</option>
-                          </select>
-                        </td>
-                        <td style={{backgroundColor: '#bbdefb22'}}>
-                          <select
-                            value={record.nightCellEfficiency || ''}
-                            onChange={(e) => handleProductionChange(record.id, 'nightCellEfficiency', e.target.value)}
-                            disabled={isClosed}
-                            style={{
-                              width: '70px', 
-                              padding: '4px 2px', 
-                              fontSize: '11px', 
-                              border: '2px solid #0d47a1',
-                              borderRadius: '3px',
-                              backgroundColor: record.nightCellEfficiency ? '#bbdefb' : 'white',
-                              fontWeight: record.nightCellEfficiency ? 'bold' : 'normal',
-                              color: '#0d47a1'
-                            }}
-                          >
-                            <option value="">-</option>
-                            <option value="25.4">25.4%</option>
-                            <option value="25.5">25.5%</option>
-                            <option value="25.6">25.6%</option>
-                            <option value="25.7">25.7%</option>
-                            <option value="25.8">25.8%</option>
-                          </select>
-                        </td>
-                        <td style={{backgroundColor: '#fff3cd22'}}>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={record.cellRejectionPercent || 0}
-                            onChange={(e) => handleProductionChange(record.id, 'cellRejectionPercent', e.target.value)}
-                            className="table-input"
-                            disabled={isClosed}
-                            style={{width: '60px', padding: '4px', fontSize: '11px'}}
-                          />
-                        </td>
-                        <td style={{backgroundColor: '#f8d7da22'}}>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={record.moduleRejectionPercent || 0}
-                            onChange={(e) => handleProductionChange(record.id, 'moduleRejectionPercent', e.target.value)}
-                            className="table-input"
-                            disabled={isClosed}
-                            style={{width: '70px', padding: '4px', fontSize: '11px'}}
-                          />
-                        </td>
-                        <td style={{backgroundColor: '#d1ecf122', textAlign: 'center'}}>
-                          {(() => {
-                            // Show separate buttons for day and night IPQC
-                            const hasDayIpqc = record.dayIpqcPdf;
-                            const hasNightIpqc = record.nightIpqcPdf;
-                            const hasSerialData = record.serialNumberStart && record.serialNumberEnd && record.serialCount > 0;
-                            
-                            return (
-                              <div style={{display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center'}}>
-                                {/* Day Shift IPQC */}
-                                {hasDayIpqc ? (
-                                  <button
-                                    onClick={() => {
-                                      const path = record.dayIpqcPdf.startsWith('/') ? record.dayIpqcPdf : `/${record.dayIpqcPdf}`;
-                                      const url = record.dayIpqcPdf.startsWith('http') 
-                                        ? record.dayIpqcPdf 
-                                        : `${getAPIBaseURL()}${path}`;
-                                      window.open(url, '_blank', 'noopener,noreferrer');
-                                    }}
-                                    style={{
-                                      color: '#FF9800',
-                                      backgroundColor: '#FFF3E0',
-                                      border: '1px solid #FF9800',
-                                      borderRadius: '3px',
-                                      fontSize: '10px',
-                                      fontWeight: 'bold',
-                                      cursor: 'pointer',
-                                      padding: '3px 8px',
-                                      width: '100%'
-                                    }}
-                                  >
-                                    🌞 Day
-                                  </button>
-                                ) : hasSerialData ? (
-                                  <button
-                                    onClick={async () => {
-                                      try {
-                                        setLoading(true);
-                                        await autoGenerateIPQCPDF(record, 'day');
-                                        await refreshSelectedCompany();
-                                        setLoading(false);
-                                      } catch (error) {
-                                        console.error('IPQC generation error:', error);
-                                        setLoading(false);
-                                        alert('❌ Failed to generate IPQC');
-                                      }
-                                    }}
-                                    style={{
-                                      color: '#FF9800',
-                                      backgroundColor: 'transparent',
-                                      border: '1px dashed #FF9800',
-                                      borderRadius: '3px',
-                                      fontSize: '10px',
-                                      cursor: 'pointer',
-                                      padding: '3px 8px',
-                                      width: '100%'
-                                    }}
-                                  >
-                                    🌞 Gen
-                                  </button>
-                                ) : null}
 
-                                {/* Night Shift IPQC */}
-                                {hasNightIpqc ? (
-                                  <button
-                                    onClick={() => {
-                                      const path = record.nightIpqcPdf.startsWith('/') ? record.nightIpqcPdf : `/${record.nightIpqcPdf}`;
-                                      const url = record.nightIpqcPdf.startsWith('http') 
-                                        ? record.nightIpqcPdf 
-                                        : `${getAPIBaseURL()}${path}`;
-                                      window.open(url, '_blank', 'noopener,noreferrer');
-                                    }}
-                                    style={{
-                                      color: '#2196F3',
-                                      backgroundColor: '#E3F2FD',
-                                      border: '1px solid #2196F3',
-                                      borderRadius: '3px',
-                                      fontSize: '10px',
-                                      fontWeight: 'bold',
-                                      cursor: 'pointer',
-                                      padding: '3px 8px',
-                                      width: '100%'
-                                    }}
-                                  >
-                                    🌙 Night
-                                  </button>
-                                ) : hasSerialData ? (
-                                  <button
-                                    onClick={async () => {
-                                      try {
-                                        setLoading(true);
-                                        await autoGenerateIPQCPDF(record, 'night');
-                                        await refreshSelectedCompany();
-                                        setLoading(false);
-                                      } catch (error) {
-                                        console.error('IPQC generation error:', error);
-                                        setLoading(false);
-                                        alert('❌ Failed to generate IPQC');
-                                      }
-                                    }}
-                                    style={{
-                                      color: '#2196F3',
-                                      backgroundColor: 'transparent',
-                                      border: '1px dashed #2196F3',
-                                      borderRadius: '3px',
-                                      fontSize: '10px',
-                                      cursor: 'pointer',
-                                      padding: '3px 8px',
-                                      width: '100%'
-                                    }}
-                                  >
-                                    🌙 Gen
-                                  </button>
-                                ) : null}
+                          {Object.keys(req.availableCocs).length > 0 ? (
+                            <div>
+                              {Object.entries(req.availableCocs).map(([company, cocs]) => {
+                                const totalAvailable = cocs.reduce((sum, coc) => sum + coc.cocQty, 0);
+                                const isEnough = totalAvailable >= req.requiredQty;
 
-                                {!hasDayIpqc && !hasNightIpqc && !hasSerialData && (
-                                  <span style={{fontSize: '10px', color: '#999'}}>-</span>
-                                )}
+                                return (
+                                  <div key={company} style={{ marginTop: '8px', padding: '8px', backgroundColor: isEnough ? '#e8f5e9' : '#ffebee', borderRadius: '4px', border: `1px solid ${isEnough ? '#4caf50' : '#f44336'}` }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                                      <strong style={{ fontSize: '11px', color: '#333' }}>{company}</strong>
+                                      <span style={{ fontSize: '11px', fontWeight: 'bold', color: isEnough ? '#4caf50' : '#f44336' }}>
+                                        {totalAvailable} {isEnough ? '✅' : '⚠️'}
+                                      </span>
+                                    </div>
+
+                                    <div style={{ maxHeight: '100px', overflowY: 'auto' }}>
+                                      {cocs.slice(0, 3).map((coc, cocIdx) => (
+                                        <div key={cocIdx} style={{ padding: '4px', backgroundColor: 'rgba(255,255,255,0.6)', marginBottom: '3px', borderRadius: '3px', fontSize: '10px' }}>
+                                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                            <span>Inv: <strong>{coc.invoiceNo}</strong></span>
+                                            <span>Qty: <strong>{coc.cocQty}</strong></span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                      {cocs.length > 3 && <div style={{ fontSize: '10px', color: '#666', textAlign: 'center' }}>+{cocs.length - 3} more</div>}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div style={{ padding: '8px', backgroundColor: '#ffebee', borderRadius: '4px', textAlign: 'center', color: '#d32f2f', fontSize: '11px' }}>
+                              ❌ No COC in database
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* BULK UPDATE EFFICIENCY BUTTONS */}
+                <div style={{
+                  display: 'flex',
+                  gap: '10px',
+                  marginBottom: '15px',
+                  padding: '15px',
+                  backgroundColor: '#fff3e0',
+                  borderRadius: '10px',
+                  border: '2px solid #ff9800',
+                  alignItems: 'center',
+                  flexWrap: 'wrap'
+                }}>
+                  <span style={{ fontWeight: 'bold', color: '#e65100', marginRight: '10px' }}>⚡ BULK UPDATE EFFICIENCY:</span>
+                  {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => (
+                    <button
+                      key={eff}
+                      onClick={async () => {
+                        const recordsToUpdate = (selectedCompany?.productionRecords || [])
+                          .filter(r => !r.dayCellEfficiency || r.dayCellEfficiency === '');
+
+                        if (recordsToUpdate.length === 0) {
+                          alert('✅ All records already have Day Efficiency set!');
+                          return;
+                        }
+
+                        if (!window.confirm(`Set Day Efficiency to ${eff}% for ${recordsToUpdate.length} records without efficiency?\n\nThis will update all records where Day Efficiency is not set.`)) {
+                          return;
+                        }
+
+                        setLoading(true);
+                        let successCount = 0;
+                        let failCount = 0;
+
+                        for (const record of recordsToUpdate) {
+                          try {
+                            await companyService.updateProductionRecord(selectedCompany.id, record.id, {
+                              ...record,
+                              dayCellEfficiency: eff
+                            });
+                            successCount++;
+                          } catch (error) {
+                            console.error('Failed to update record:', record.id, error);
+                            failCount++;
+                          }
+                        }
+
+                        await loadCompanies();
+                        if (selectedCompany) {
+                          const updatedCompany = companies.find(c => c.id === selectedCompany.id);
+                          if (updatedCompany) setSelectedCompany(updatedCompany);
+                        }
+
+                        setLoading(false);
+                        alert(`✅ Bulk Update Complete!\n\nSuccess: ${successCount}\nFailed: ${failCount}`);
+                      }}
+                      disabled={loading}
+                      style={{
+                        padding: '10px 20px',
+                        backgroundColor: '#ff9800',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        opacity: loading ? 0.6 : 1
+                      }}
+                    >
+                      {eff}%
+                    </button>
+                  ))}
+                  <span style={{ fontSize: '11px', color: '#666', marginLeft: '10px' }}>
+                    (Updates records without Day Efficiency set)
+                  </span>
+                </div>
+
+                <div className="production-table-wrapper" style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                  <table className="production-table" style={{ fontSize: '12px', minWidth: '1550px' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ width: '80px' }}>DATE</th>
+                        <th style={{ width: '120px' }}>RUNNING ORDER</th>
+                        <th style={{ width: '60px' }}>PDI</th>
+                        <th style={{ width: '130px' }}>SERIAL START</th>
+                        <th style={{ width: '130px' }}>SERIAL END</th>
+                        <th style={{ width: '50px' }}>COUNT</th>
+                        <th style={{ width: '70px' }}>DAY</th>
+                        <th style={{ width: '70px' }}>NIGHT</th>
+                        <th style={{ width: '60px' }}>TOTAL</th>
+                        <th style={{ width: '75px', backgroundColor: '#e3f2fd' }}>DAY EFF %</th>
+                        <th style={{ width: '75px', backgroundColor: '#bbdefb' }}>NIGHT EFF %</th>
+                        <th style={{ width: '70px', backgroundColor: '#fff3cd' }}>CELL REJ %</th>
+                        <th style={{ width: '80px', backgroundColor: '#f8d7da' }}>MODULE REJ %</th>
+                        <th style={{ width: '80px', backgroundColor: '#d1ecf1' }}>IPQC Sheet</th>
+                        <th style={{ width: '80px', backgroundColor: '#d4edda' }}>FTR Doc</th>
+                        <th style={{ width: '80px' }}>BOM/Docs</th>
+                        <th style={{ width: '60px' }}>Status</th>
+                        <th style={{ width: '60px' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dateRecords.map(record => {
+                        const total = (record.dayProduction || 0) + (record.nightProduction || 0);
+                        const isClosed = record.isClosed || false;
+                        return (
+                          <tr key={record.id} style={{ backgroundColor: isClosed ? '#f5f5f5' : 'transparent' }}>
+                            <td style={{ fontSize: '11px' }}>{record.date}</td>
+                            <td>
+                              <input
+                                type="text"
+                                value={record.runningOrder || ''}
+                                onChange={(e) => handleProductionChange(record.id, 'runningOrder', e.target.value)}
+                                className="table-input"
+                                placeholder={selectedCompany?.currentRunningOrder || 'Order No.'}
+                                disabled={isClosed}
+                                style={{ width: '115px', padding: '4px', fontSize: '10px' }}
+                              />
+                            </td>
+                            <td>
+                              <div style={{
+                                backgroundColor: record.pdi && record.pdi.trim() !== ''
+                                  ? (record.pdiApproved ? '#d4edda' : '#fff3cd')
+                                  : 'transparent',
+                                padding: '4px',
+                                borderRadius: '3px',
+                                fontWeight: record.pdi && record.pdi.trim() !== '' ? 'bold' : 'normal',
+                                color: record.pdi && record.pdi.trim() !== ''
+                                  ? (record.pdiApproved ? '#155724' : '#856404')
+                                  : '#333',
+                                fontSize: '11px',
+                                textAlign: 'center'
+                              }}>
+                                {record.pdi || '-'}
                               </div>
-                            );
-                          })()}
-                        </td>
-                        <td style={{backgroundColor: '#d4edda22', textAlign: 'center'}}>
-                          {(() => {
-                            // Show FTR View button if uploaded document exists OR if serial numbers are valid
-                            const hasUploadedDoc = record.ftrDocument;
-                            const hasSerialData = record.serialNumberStart && record.serialNumberEnd && record.serialCount > 0;
-                            
-                            if (hasUploadedDoc) {
-                              return (
-                                <button
-                                  onClick={() => {
-                                    const path = record.ftrDocument.startsWith('/') ? record.ftrDocument : `/${record.ftrDocument}`;
-                                    const url = record.ftrDocument.startsWith('http') 
-                                      ? record.ftrDocument 
-                                      : `${getAPIBaseURL()}${path}`;
-                                    window.open(url, '_blank', 'noopener,noreferrer');
-                                  }}
-                                  style={{
-                                    color: '#28a745',
-                                    backgroundColor: 'transparent',
-                                    border: 'none',
-                                    textDecoration: 'underline',
-                                    fontSize: '11px',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '3px',
-                                    margin: '0 auto'
-                                  }}
-                                >
-                                  📋 View
-                                </button>
-                              );
-                            } else if (hasSerialData) {
-                              return (
-                                <button
-                                  onClick={async () => {
-                                    try {
-                                      const API_BASE_URL = getAPIBaseURL();
-                                      const ordersResponse = await axios.get(`${API_BASE_URL}/api/master/orders`);
-                                      const companyOrders = ordersResponse.data.orders.filter(
-                                        order => order.company_name === selectedCompany.companyName
-                                      );
-                                      
-                                      if (companyOrders.length === 0) {
-                                        alert('❌ No master data found for this company');
-                                        return;
-                                      }
-                                      
-                                      const latestOrder = companyOrders.sort((a, b) => b.id - a.id)[0];
-                                      
-                                      // Download FTR from master data
-                                      const response = await axios.post(`${API_BASE_URL}/api/master/download-ftr-by-serials`, {
-                                        order_id: latestOrder.id,
-                                        serial_range: {
-                                          start: record.serialNumberStart,
-                                          end: record.serialNumberEnd
-                                        }
-                                      }, {
-                                        responseType: 'blob'
-                                      });
-                                      
-                                      // Download file
-                                      const url = window.URL.createObjectURL(new Blob([response.data]));
-                                      const link = document.createElement('a');
-                                      link.href = url;
-                                      link.setAttribute('download', `FTR_${record.serialNumberStart}_to_${record.serialNumberEnd}.xlsx`);
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                      window.URL.revokeObjectURL(url);
-                                    } catch (error) {
-                                      console.error('FTR download error:', error);
-                                      alert('❌ Failed to download FTR: ' + (error.response?.data?.error || error.message));
-                                    }
-                                  }}
-                                  style={{
-                                    color: '#007bff',
-                                    backgroundColor: 'transparent',
-                                    border: 'none',
-                                    textDecoration: 'underline',
-                                    fontSize: '11px',
-                                    fontWeight: 'bold',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '3px',
-                                    margin: '0 auto'
-                                  }}
-                                  title={`FTR from Master Data (${record.serialCount} modules)`}
-                                >
-                                  📥 View
-                                </button>
-                              );
-                            } else {
-                              return <span style={{color: '#999', fontSize: '10px'}}>-</span>;
-                            }
-                          })()}
-                        </td>
-                        <td>
-                          {(() => {
-                            const bomCount = record.bomMaterials?.length || 0;
-                            // Manual uploads only (from BOM modal)
-                            const hasManualIpqc = record.ipqcPdf ? 1 : 0;
-                            const hasManualFtr = record.ftrDocument ? 1 : 0;
-                            const totalManualDocs = bomCount + hasManualIpqc + hasManualFtr;
-                            
-                            return (
-                              <button 
-                                className="btn-upload-bom" 
-                                onClick={() => handleOpenBomModal(record)}
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={record.serialNumberStart || ''}
+                                onChange={(e) => handleProductionChange(record.id, 'serialNumberStart', e.target.value)}
+                                className="table-input"
+                                placeholder="ABC-12345-00001"
+                                disabled={isClosed}
+                                style={{ width: '125px', fontSize: '10px', padding: '4px 3px' }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="text"
+                                value={record.serialNumberEnd || ''}
+                                onChange={(e) => handleProductionChange(record.id, 'serialNumberEnd', e.target.value)}
+                                className="table-input"
+                                placeholder="ABC-12345-00005"
+                                disabled={isClosed}
+                                style={{ width: '125px', fontSize: '10px', padding: '4px 3px' }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                value={record.serialCount || 0}
+                                onChange={(e) => handleProductionChange(record.id, 'serialCount', e.target.value)}
+                                className="table-input"
+                                disabled={isClosed}
+                                style={{ width: '45px', padding: '4px', fontSize: '11px' }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                value={record.dayProduction || 0}
+                                onChange={(e) => handleProductionChange(record.id, 'dayProduction', e.target.value)}
+                                className="table-input"
+                                disabled={isClosed}
+                                style={{ width: '65px', padding: '4px', fontSize: '11px' }}
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                value={record.nightProduction || 0}
+                                onChange={(e) => handleProductionChange(record.id, 'nightProduction', e.target.value)}
+                                className="table-input"
+                                disabled={isClosed}
+                                style={{ width: '65px', padding: '4px', fontSize: '11px' }}
+                              />
+                            </td>
+                            <td className="total-cell" style={{ fontSize: '12px', fontWeight: '700' }}>{total}</td>
+                            <td style={{ backgroundColor: '#e3f2fd22' }}>
+                              <select
+                                value={record.dayCellEfficiency || ''}
+                                onChange={(e) => handleProductionChange(record.id, 'dayCellEfficiency', e.target.value)}
                                 disabled={isClosed}
                                 style={{
-                                  padding: '4px 8px',
-                                  fontSize: '10px',
-                                  backgroundColor: isClosed ? '#ccc' : (totalManualDocs > 0 ? '#4CAF50' : '#2196F3'),
-                                  color: 'white',
-                                  border: 'none',
+                                  width: '70px',
+                                  padding: '4px 2px',
+                                  fontSize: '11px',
+                                  border: '2px solid #1976d2',
                                   borderRadius: '3px',
-                                  cursor: isClosed ? 'not-allowed' : 'pointer',
-                                  width: '75px',
-                                  margin: '0 auto',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '3px'
+                                  backgroundColor: record.dayCellEfficiency ? '#e3f2fd' : 'white',
+                                  fontWeight: record.dayCellEfficiency ? 'bold' : 'normal',
+                                  color: '#1565c0'
                                 }}
-                                title={`Manual uploads - BOM: ${bomCount} | IPQC: ${hasManualIpqc ? 'Yes' : 'No'} | FTR: ${hasManualFtr ? 'Yes' : 'No'}`}
                               >
-                                {totalManualDocs > 0 ? '📋 View' : '📋 Upload'}
-                                {totalManualDocs > 0 && (
-                                  <span style={{
-                                    background: 'rgba(255,255,255,0.3)',
-                                    padding: '1px 4px',
-                                    borderRadius: '8px',
-                                    fontSize: '9px',
-                                    fontWeight: 'bold'
-                                  }}>
-                                    {totalManualDocs}
-                                  </span>
-                                )}
-                              </button>
-                            );
-                          })()}
-                        </td>
-                        <td>
-                          {isClosed ? (
-                            <span style={{color: '#f44336', fontWeight: 'bold', fontSize: '9px'}}>🔒 Closed</span>
-                          ) : (
-                            <span style={{color: '#4CAF50', fontWeight: 'bold', fontSize: '9px'}}>✓ Open</span>
-                          )}
-                        </td>
-                        <td>
-                          <div style={{display: 'flex', gap: '4px', justifyContent: 'center'}}>
-                            <button 
-                              onClick={() => handleSaveRecord(record)}
-                              disabled={isClosed || loading}
-                              style={{
-                                padding: '5px 10px',
-                                fontSize: '11px',
-                                fontWeight: 'bold',
-                                backgroundColor: isClosed ? '#ccc' : '#4CAF50',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: isClosed || loading ? 'not-allowed' : 'pointer',
-                                opacity: isClosed || loading ? 0.5 : 1
-                              }}
-                              title="Save record and link FTR"
-                            >
-                              ✔ Done
-                            </button>
-                            {isSuperAdmin() && (
-                              <button 
-                                className="btn-delete-row" 
-                                onClick={() => handleDeleteProductionRecord(record.id)}
-                                title="Delete this record"
+                                <option value="">-</option>
+                                <option value="25.4">25.4%</option>
+                                <option value="25.5">25.5%</option>
+                                <option value="25.6">25.6%</option>
+                                <option value="25.7">25.7%</option>
+                                <option value="25.8">25.8%</option>
+                              </select>
+                            </td>
+                            <td style={{ backgroundColor: '#bbdefb22' }}>
+                              <select
+                                value={record.nightCellEfficiency || ''}
+                                onChange={(e) => handleProductionChange(record.id, 'nightCellEfficiency', e.target.value)}
                                 disabled={isClosed}
-                                style={{fontSize: '14px', padding: '2px 6px'}}
+                                style={{
+                                  width: '70px',
+                                  padding: '4px 2px',
+                                  fontSize: '11px',
+                                  border: '2px solid #0d47a1',
+                                  borderRadius: '3px',
+                                  backgroundColor: record.nightCellEfficiency ? '#bbdefb' : 'white',
+                                  fontWeight: record.nightCellEfficiency ? 'bold' : 'normal',
+                                  color: '#0d47a1'
+                                }}
                               >
-                                🗑️
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </div>
-            </>
-          )}
-        </div>
+                                <option value="">-</option>
+                                <option value="25.4">25.4%</option>
+                                <option value="25.5">25.5%</option>
+                                <option value="25.6">25.6%</option>
+                                <option value="25.7">25.7%</option>
+                                <option value="25.8">25.8%</option>
+                              </select>
+                            </td>
+                            <td style={{ backgroundColor: '#fff3cd22' }}>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={record.cellRejectionPercent || 0}
+                                onChange={(e) => handleProductionChange(record.id, 'cellRejectionPercent', e.target.value)}
+                                className="table-input"
+                                disabled={isClosed}
+                                style={{ width: '60px', padding: '4px', fontSize: '11px' }}
+                              />
+                            </td>
+                            <td style={{ backgroundColor: '#f8d7da22' }}>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={record.moduleRejectionPercent || 0}
+                                onChange={(e) => handleProductionChange(record.id, 'moduleRejectionPercent', e.target.value)}
+                                className="table-input"
+                                disabled={isClosed}
+                                style={{ width: '70px', padding: '4px', fontSize: '11px' }}
+                              />
+                            </td>
+                            <td style={{ backgroundColor: '#d1ecf122', textAlign: 'center' }}>
+                              {(() => {
+                                // Show separate buttons for day and night IPQC
+                                const hasDayIpqc = record.dayIpqcPdf;
+                                const hasNightIpqc = record.nightIpqcPdf;
+                                const hasSerialData = record.serialNumberStart && record.serialNumberEnd && record.serialCount > 0;
+
+                                return (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', alignItems: 'center' }}>
+                                    {/* Day Shift IPQC */}
+                                    {hasDayIpqc ? (
+                                      <button
+                                        onClick={() => {
+                                          const path = record.dayIpqcPdf.startsWith('/') ? record.dayIpqcPdf : `/${record.dayIpqcPdf}`;
+                                          const url = record.dayIpqcPdf.startsWith('http')
+                                            ? record.dayIpqcPdf
+                                            : `${getAPIBaseURL()}${path}`;
+                                          window.open(url, '_blank', 'noopener,noreferrer');
+                                        }}
+                                        style={{
+                                          color: '#FF9800',
+                                          backgroundColor: '#FFF3E0',
+                                          border: '1px solid #FF9800',
+                                          borderRadius: '3px',
+                                          fontSize: '10px',
+                                          fontWeight: 'bold',
+                                          cursor: 'pointer',
+                                          padding: '3px 8px',
+                                          width: '100%'
+                                        }}
+                                      >
+                                        🌞 Day
+                                      </button>
+                                    ) : hasSerialData ? (
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            setLoading(true);
+                                            await autoGenerateIPQCPDF(record, 'day');
+                                            await refreshSelectedCompany();
+                                            setLoading(false);
+                                          } catch (error) {
+                                            console.error('IPQC generation error:', error);
+                                            setLoading(false);
+                                            alert('❌ Failed to generate IPQC');
+                                          }
+                                        }}
+                                        style={{
+                                          color: '#FF9800',
+                                          backgroundColor: 'transparent',
+                                          border: '1px dashed #FF9800',
+                                          borderRadius: '3px',
+                                          fontSize: '10px',
+                                          cursor: 'pointer',
+                                          padding: '3px 8px',
+                                          width: '100%'
+                                        }}
+                                      >
+                                        🌞 Gen
+                                      </button>
+                                    ) : null}
+
+                                    {/* Night Shift IPQC */}
+                                    {hasNightIpqc ? (
+                                      <button
+                                        onClick={() => {
+                                          const path = record.nightIpqcPdf.startsWith('/') ? record.nightIpqcPdf : `/${record.nightIpqcPdf}`;
+                                          const url = record.nightIpqcPdf.startsWith('http')
+                                            ? record.nightIpqcPdf
+                                            : `${getAPIBaseURL()}${path}`;
+                                          window.open(url, '_blank', 'noopener,noreferrer');
+                                        }}
+                                        style={{
+                                          color: '#2196F3',
+                                          backgroundColor: '#E3F2FD',
+                                          border: '1px solid #2196F3',
+                                          borderRadius: '3px',
+                                          fontSize: '10px',
+                                          fontWeight: 'bold',
+                                          cursor: 'pointer',
+                                          padding: '3px 8px',
+                                          width: '100%'
+                                        }}
+                                      >
+                                        🌙 Night
+                                      </button>
+                                    ) : hasSerialData ? (
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            setLoading(true);
+                                            await autoGenerateIPQCPDF(record, 'night');
+                                            await refreshSelectedCompany();
+                                            setLoading(false);
+                                          } catch (error) {
+                                            console.error('IPQC generation error:', error);
+                                            setLoading(false);
+                                            alert('❌ Failed to generate IPQC');
+                                          }
+                                        }}
+                                        style={{
+                                          color: '#2196F3',
+                                          backgroundColor: 'transparent',
+                                          border: '1px dashed #2196F3',
+                                          borderRadius: '3px',
+                                          fontSize: '10px',
+                                          cursor: 'pointer',
+                                          padding: '3px 8px',
+                                          width: '100%'
+                                        }}
+                                      >
+                                        🌙 Gen
+                                      </button>
+                                    ) : null}
+
+                                    {!hasDayIpqc && !hasNightIpqc && !hasSerialData && (
+                                      <span style={{ fontSize: '10px', color: '#999' }}>-</span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                            <td style={{ backgroundColor: '#d4edda22', textAlign: 'center' }}>
+                              {(() => {
+                                // Show FTR View button if uploaded document exists OR if serial numbers are valid
+                                const hasUploadedDoc = record.ftrDocument;
+                                const hasSerialData = record.serialNumberStart && record.serialNumberEnd && record.serialCount > 0;
+
+                                if (hasUploadedDoc) {
+                                  return (
+                                    <button
+                                      onClick={() => {
+                                        const path = record.ftrDocument.startsWith('/') ? record.ftrDocument : `/${record.ftrDocument}`;
+                                        const url = record.ftrDocument.startsWith('http')
+                                          ? record.ftrDocument
+                                          : `${getAPIBaseURL()}${path}`;
+                                        window.open(url, '_blank', 'noopener,noreferrer');
+                                      }}
+                                      style={{
+                                        color: '#28a745',
+                                        backgroundColor: 'transparent',
+                                        border: 'none',
+                                        textDecoration: 'underline',
+                                        fontSize: '11px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '3px',
+                                        margin: '0 auto'
+                                      }}
+                                    >
+                                      📋 View
+                                    </button>
+                                  );
+                                } else if (hasSerialData) {
+                                  return (
+                                    <button
+                                      onClick={async () => {
+                                        try {
+                                          const API_BASE_URL = getAPIBaseURL();
+                                          const ordersResponse = await axios.get(`${API_BASE_URL}/api/master/orders`);
+                                          const companyOrders = ordersResponse.data.orders.filter(
+                                            order => order.company_name === selectedCompany.companyName
+                                          );
+
+                                          if (companyOrders.length === 0) {
+                                            alert('❌ No master data found for this company');
+                                            return;
+                                          }
+
+                                          const latestOrder = companyOrders.sort((a, b) => b.id - a.id)[0];
+
+                                          // Download FTR from master data
+                                          const response = await axios.post(`${API_BASE_URL}/api/master/download-ftr-by-serials`, {
+                                            order_id: latestOrder.id,
+                                            serial_range: {
+                                              start: record.serialNumberStart,
+                                              end: record.serialNumberEnd
+                                            }
+                                          }, {
+                                            responseType: 'blob'
+                                          });
+
+                                          // Download file
+                                          const url = window.URL.createObjectURL(new Blob([response.data]));
+                                          const link = document.createElement('a');
+                                          link.href = url;
+                                          link.setAttribute('download', `FTR_${record.serialNumberStart}_to_${record.serialNumberEnd}.xlsx`);
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                          window.URL.revokeObjectURL(url);
+                                        } catch (error) {
+                                          console.error('FTR download error:', error);
+                                          alert('❌ Failed to download FTR: ' + (error.response?.data?.error || error.message));
+                                        }
+                                      }}
+                                      style={{
+                                        color: '#007bff',
+                                        backgroundColor: 'transparent',
+                                        border: 'none',
+                                        textDecoration: 'underline',
+                                        fontSize: '11px',
+                                        fontWeight: 'bold',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '3px',
+                                        margin: '0 auto'
+                                      }}
+                                      title={`FTR from Master Data (${record.serialCount} modules)`}
+                                    >
+                                      📥 View
+                                    </button>
+                                  );
+                                } else {
+                                  return <span style={{ color: '#999', fontSize: '10px' }}>-</span>;
+                                }
+                              })()}
+                            </td>
+                            <td>
+                              {(() => {
+                                const bomCount = record.bomMaterials?.length || 0;
+                                // Manual uploads only (from BOM modal)
+                                const hasManualIpqc = record.ipqcPdf ? 1 : 0;
+                                const hasManualFtr = record.ftrDocument ? 1 : 0;
+                                const totalManualDocs = bomCount + hasManualIpqc + hasManualFtr;
+
+                                return (
+                                  <button
+                                    className="btn-upload-bom"
+                                    onClick={() => handleOpenBomModal(record)}
+                                    disabled={isClosed}
+                                    style={{
+                                      padding: '4px 8px',
+                                      fontSize: '10px',
+                                      backgroundColor: isClosed ? '#ccc' : (totalManualDocs > 0 ? '#4CAF50' : '#2196F3'),
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '3px',
+                                      cursor: isClosed ? 'not-allowed' : 'pointer',
+                                      width: '75px',
+                                      margin: '0 auto',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: '3px'
+                                    }}
+                                    title={`Manual uploads - BOM: ${bomCount} | IPQC: ${hasManualIpqc ? 'Yes' : 'No'} | FTR: ${hasManualFtr ? 'Yes' : 'No'}`}
+                                  >
+                                    {totalManualDocs > 0 ? '📋 View' : '📋 Upload'}
+                                    {totalManualDocs > 0 && (
+                                      <span style={{
+                                        background: 'rgba(255,255,255,0.3)',
+                                        padding: '1px 4px',
+                                        borderRadius: '8px',
+                                        fontSize: '9px',
+                                        fontWeight: 'bold'
+                                      }}>
+                                        {totalManualDocs}
+                                      </span>
+                                    )}
+                                  </button>
+                                );
+                              })()}
+                            </td>
+                            <td>
+                              {isClosed ? (
+                                <span style={{ color: '#f44336', fontWeight: 'bold', fontSize: '9px' }}>🔒 Closed</span>
+                              ) : (
+                                <span style={{ color: '#4CAF50', fontWeight: 'bold', fontSize: '9px' }}>✓ Open</span>
+                              )}
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                                <button
+                                  onClick={() => handleSaveRecord(record)}
+                                  disabled={isClosed || loading}
+                                  style={{
+                                    padding: '5px 10px',
+                                    fontSize: '11px',
+                                    fontWeight: 'bold',
+                                    backgroundColor: isClosed ? '#ccc' : '#4CAF50',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '4px',
+                                    cursor: isClosed || loading ? 'not-allowed' : 'pointer',
+                                    opacity: isClosed || loading ? 0.5 : 1
+                                  }}
+                                  title="Save record and link FTR"
+                                >
+                                  ✔ Done
+                                </button>
+                                {isSuperAdmin() && (
+                                  <button
+                                    className="btn-delete-row"
+                                    onClick={() => handleDeleteProductionRecord(record.id)}
+                                    title="Delete this record"
+                                    disabled={isClosed}
+                                    style={{ fontSize: '14px', padding: '2px 6px' }}
+                                  >
+                                    🗑️
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
         )}
 
         {/* ========== CELL INVENTORY TAB CONTENT ========== */}
@@ -3878,10 +3878,10 @@ function DailyReport() {
               const cellEfficiencyReceived = selectedCompany?.cellEfficiencyReceived || {};
               const usedByEfficiency = {};
               efficiencyGrades.forEach(eff => { usedByEfficiency[eff] = 0; });
-              
+
               let totalRejectionPercent = 0;
               let recordsWithRejection = 0;
-              
+
               // Helper function to normalize efficiency value to match keys like "25.4", "25.5", etc.
               const normalizeEfficiency = (eff) => {
                 if (!eff) return null;
@@ -3890,7 +3890,7 @@ function DailyReport() {
                 // Round to 1 decimal and convert to string
                 return num.toFixed(1);
               };
-              
+
               // SMART LOGIC: If only one efficiency is set, count TOTAL production for that efficiency
               (selectedCompany?.productionRecords || []).forEach(record => {
                 const dayEff = normalizeEfficiency(record.dayCellEfficiency);
@@ -3898,7 +3898,7 @@ function DailyReport() {
                 const dayProd = record.dayProduction || 0;
                 const nightProd = record.nightProduction || 0;
                 const totalProd = dayProd + nightProd;
-                
+
                 // Case 1: Both Day and Night efficiency set - count separately
                 if (dayEff && nightEff) {
                   if (usedByEfficiency.hasOwnProperty(dayEff)) {
@@ -3920,61 +3920,61 @@ function DailyReport() {
                     usedByEfficiency[nightEff] += totalProd * 66;
                   }
                 }
-                
+
                 if (record.cellRejectionPercent > 0) {
                   totalRejectionPercent += record.cellRejectionPercent;
                   recordsWithRejection++;
                 }
               });
-              
-              const avgRejectionPercent = recordsWithRejection > 0 
-                ? (totalRejectionPercent / recordsWithRejection).toFixed(2) 
+
+              const avgRejectionPercent = recordsWithRejection > 0
+                ? (totalRejectionPercent / recordsWithRejection).toFixed(2)
                 : 0;
-              
+
               let grandTotalReceived = 0;
               let grandTotalUsed = 0;
-              
+
               efficiencyGrades.forEach(eff => {
                 const effData = cellEfficiencyReceived[eff] || {};
-                const totalForEff = typeof effData === 'object' 
+                const totalForEff = typeof effData === 'object'
                   ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0)
                   : (effData || 0);
                 grandTotalReceived += totalForEff;
                 grandTotalUsed += usedByEfficiency[eff] || 0;
               });
-              
+
               const grandRemaining = grandTotalReceived - grandTotalUsed;
               const afterRejection = Math.floor(grandRemaining * (1 - avgRejectionPercent / 100));
               const estimatedModules = Math.floor(afterRejection / 66);
-              
+
               return (
                 <div>
                   {/* Header with Add Button */}
-                  <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px'}}>
-                    <h2 style={{margin: 0, color: '#FF5722', display: 'flex', alignItems: 'center', gap: '10px'}}>
-                      <span style={{fontSize: '32px'}}>⚡</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
+                    <h2 style={{ margin: 0, color: '#FF5722', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '32px' }}>⚡</span>
                       Cell Efficiency Inventory
                     </h2>
-                    <div style={{display: 'flex', gap: '15px'}}>
+                    <div style={{ display: 'flex', gap: '15px' }}>
                       {/* DETAILED EXCEL EXPORT BUTTON */}
                       <button
                         onClick={() => {
                           const XLSXStyle = require('xlsx-js-style');
                           const wb = XLSXStyle.utils.book_new();
                           const records = selectedCompany?.productionRecords || [];
-                          
+
                           // Recalculate all values fresh
                           const effGrades = ['25.4', '25.5', '25.6', '25.7', '25.8'];
                           const cellEffReceived = selectedCompany?.cellEfficiencyReceived || {};
                           const usedByEff = {};
                           effGrades.forEach(eff => { usedByEff[eff] = 0; });
-                          
+
                           let totalRejPct = 0;
                           let recsWithRej = 0;
-                          
+
                           // Helper to normalize efficiency
                           const normEff = (e) => e ? parseFloat(e).toFixed(1) : null;
-                          
+
                           // Calculate used cells - SMART LOGIC
                           // If only one efficiency is set, use TOTAL production for that efficiency
                           records.forEach(record => {
@@ -3983,7 +3983,7 @@ function DailyReport() {
                             const dayProd = record.dayProduction || 0;
                             const nightProd = record.nightProduction || 0;
                             const totalProd = dayProd + nightProd;
-                            
+
                             // Case 1: Both Day and Night efficiency set - count separately
                             if (dayEff && nightEff) {
                               if (usedByEff.hasOwnProperty(dayEff)) {
@@ -4005,139 +4005,185 @@ function DailyReport() {
                                 usedByEff[nightEff] += totalProd * 66;
                               }
                             }
-                            
+
                             if (record.cellRejectionPercent > 0) {
                               totalRejPct += record.cellRejectionPercent;
                               recsWithRej++;
                             }
                           });
-                          
+
                           const avgRejPct = recsWithRej > 0 ? (totalRejPct / recsWithRej).toFixed(2) : 0;
-                          
+
                           // ======== STYLES ========
-                          const titleStyle = { 
-                            font: { bold: true, sz: 22, color: { rgb: 'FFFFFF' } }, 
-                            fill: { fgColor: { rgb: 'D84315' } }, 
+                          const titleStyle = {
+                            font: { bold: true, sz: 22, color: { rgb: 'FFFFFF' } },
+                            fill: { fgColor: { rgb: 'D84315' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { bottom: {style: 'thick', color: {rgb: 'BF360C'}} }
+                            border: { bottom: { style: 'thick', color: { rgb: 'BF360C' } } }
                           };
-                          const headerStyle = { 
-                            font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' } }, 
-                            fill: { fgColor: { rgb: '1565C0' } }, 
+                          const headerStyle = {
+                            font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' } },
+                            fill: { fgColor: { rgb: '1565C0' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
+                            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                           };
-                          const subHeaderStyle = { 
-                            font: { bold: true, sz: 11, color: { rgb: '000000' } }, 
-                            fill: { fgColor: { rgb: 'BBDEFB' } }, 
+                          const subHeaderStyle = {
+                            font: { bold: true, sz: 11, color: { rgb: '000000' } },
+                            fill: { fgColor: { rgb: 'BBDEFB' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
+                            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                           };
-                          const dataStyle = { 
-                            font: { sz: 11 }, 
+                          const dataStyle = {
+                            font: { sz: 11 },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin', color: {rgb: 'E0E0E0'}}, bottom: {style: 'thin', color: {rgb: 'E0E0E0'}}, left: {style: 'thin', color: {rgb: 'E0E0E0'}}, right: {style: 'thin', color: {rgb: 'E0E0E0'}} }
+                            border: { top: { style: 'thin', color: { rgb: 'E0E0E0' } }, bottom: { style: 'thin', color: { rgb: 'E0E0E0' } }, left: { style: 'thin', color: { rgb: 'E0E0E0' } }, right: { style: 'thin', color: { rgb: 'E0E0E0' } } }
                           };
-                          const greenStyle = { 
-                            font: { bold: true, sz: 12, color: { rgb: '1B5E20' } }, 
-                            fill: { fgColor: { rgb: 'C8E6C9' } }, 
+                          const greenStyle = {
+                            font: { bold: true, sz: 12, color: { rgb: '1B5E20' } },
+                            fill: { fgColor: { rgb: 'C8E6C9' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
+                            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                           };
-                          const redStyle = { 
-                            font: { bold: true, sz: 12, color: { rgb: 'C62828' } }, 
-                            fill: { fgColor: { rgb: 'FFCDD2' } }, 
+                          const redStyle = {
+                            font: { bold: true, sz: 12, color: { rgb: 'C62828' } },
+                            fill: { fgColor: { rgb: 'FFCDD2' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
+                            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                           };
-                          const blueStyle = { 
-                            font: { bold: true, sz: 12, color: { rgb: '0D47A1' } }, 
-                            fill: { fgColor: { rgb: 'E3F2FD' } }, 
+                          const blueStyle = {
+                            font: { bold: true, sz: 12, color: { rgb: '0D47A1' } },
+                            fill: { fgColor: { rgb: 'E3F2FD' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
+                            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                           };
-                          const orangeStyle = { 
-                            font: { bold: true, sz: 12, color: { rgb: 'E65100' } }, 
-                            fill: { fgColor: { rgb: 'FFE0B2' } }, 
+                          const orangeStyle = {
+                            font: { bold: true, sz: 12, color: { rgb: 'E65100' } },
+                            fill: { fgColor: { rgb: 'FFE0B2' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
+                            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                           };
-                          const purpleStyle = { 
-                            font: { bold: true, sz: 12, color: { rgb: '4A148C' } }, 
-                            fill: { fgColor: { rgb: 'E1BEE7' } }, 
+                          const purpleStyle = {
+                            font: { bold: true, sz: 12, color: { rgb: '4A148C' } },
+                            fill: { fgColor: { rgb: 'E1BEE7' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin'}, bottom: {style: 'thin'}, left: {style: 'thin'}, right: {style: 'thin'} }
+                            border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                           };
-                          const totalRowStyle = { 
-                            font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } }, 
-                            fill: { fgColor: { rgb: '2E7D32' } }, 
+                          const totalRowStyle = {
+                            font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } },
+                            fill: { fgColor: { rgb: '2E7D32' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thick'}, bottom: {style: 'thick'}, left: {style: 'thick'}, right: {style: 'thick'} }
+                            border: { top: { style: 'thick' }, bottom: { style: 'thick' }, left: { style: 'thick' }, right: { style: 'thick' } }
                           };
-                          const altRowStyle1 = { 
-                            font: { sz: 11 }, 
+                          const altRowStyle1 = {
+                            font: { sz: 11 },
                             fill: { fgColor: { rgb: 'FFFFFF' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin', color: {rgb: 'E0E0E0'}}, bottom: {style: 'thin', color: {rgb: 'E0E0E0'}}, left: {style: 'thin', color: {rgb: 'E0E0E0'}}, right: {style: 'thin', color: {rgb: 'E0E0E0'}} }
+                            border: { top: { style: 'thin', color: { rgb: 'E0E0E0' } }, bottom: { style: 'thin', color: { rgb: 'E0E0E0' } }, left: { style: 'thin', color: { rgb: 'E0E0E0' } }, right: { style: 'thin', color: { rgb: 'E0E0E0' } } }
                           };
-                          const altRowStyle2 = { 
-                            font: { sz: 11 }, 
+                          const altRowStyle2 = {
+                            font: { sz: 11 },
                             fill: { fgColor: { rgb: 'F5F5F5' } },
                             alignment: { horizontal: 'center', vertical: 'center' },
-                            border: { top: {style: 'thin', color: {rgb: 'E0E0E0'}}, bottom: {style: 'thin', color: {rgb: 'E0E0E0'}}, left: {style: 'thin', color: {rgb: 'E0E0E0'}}, right: {style: 'thin', color: {rgb: 'E0E0E0'}} }
+                            border: { top: { style: 'thin', color: { rgb: 'E0E0E0' } }, bottom: { style: 'thin', color: { rgb: 'E0E0E0' } }, left: { style: 'thin', color: { rgb: 'E0E0E0' } }, right: { style: 'thin', color: { rgb: 'E0E0E0' } } }
                           };
-                          
-                          // ======== SHEET 1: GRAND SUMMARY ========
+
+                          // ======== CALCULATIONS FOR DETAILED INVENTORY ========
+
+                          // 1. Total Received (Cell Efficiency Received)
+                          const grandTotalReceived = Object.values(cellEfficiencyReceived)
+                            .flatMap(eff => Object.values(eff))
+                            .reduce((a, b) => a + (b || 0), 0);
+
+                          // 2. OK (A-grade) Modules
+                          const okModules = records.reduce((s, r) => s + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
+
+                          // 3. OK (A-grade) Cells Used
+                          const okCellsUsed = okModules * 66;
+
+                          // 4. B-grade Calculation
+                          // Calculate weighted average of module rejection %
+                          let weightedModRejSum = 0;
+                          let totalProdForWeight = 0;
+                          records.forEach(r => {
+                            const prod = (r.dayProduction || 0) + (r.nightProduction || 0);
+                            if (prod > 0) {
+                              weightedModRejSum += prod * (r.moduleRejectionPercent || 0);
+                              totalProdForWeight += prod;
+                            }
+                          });
+                          const avgModRejPct = totalProdForWeight > 0 ? (weightedModRejSum / totalProdForWeight) : 0;
+
+                          const bGradeModules = Math.round(okModules * (avgModRejPct / 100)); // Derived from OK modules
+                          const bGradeCellsUsed = bGradeModules * 66;
+
+                          // 5. R-grade Calculation (Scrap) - Fixed 0.7% as per requirement
+                          const rGradePct = 0.7; // Fixed scrap rate
+                          const rGradeModules = Math.round(okModules * (rGradePct / 100));
+                          const rGradeCellsUsed = rGradeModules * 66;
+
+                          // 6. Total Processed Cells (OK + B + R)
+                          const totalProcessedCells = okCellsUsed + bGradeCellsUsed + rGradeCellsUsed;
+
+                          // 7. Cell Rejection
+                          // Calculate weighted average of cell rejection %
+                          let weightedCellRejSum = 0;
+                          records.forEach(r => {
+                            const prod = (r.dayProduction || 0) + (r.nightProduction || 0);
+                            if (prod > 0) {
+                              weightedCellRejSum += prod * (r.cellRejectionPercent || 0);
+                            }
+                          });
+                          const avgCellRejPct = totalProdForWeight > 0 ? (weightedCellRejSum / totalProdForWeight) : 0;
+
+                          const cellRejectionQty = Math.round(totalProcessedCells * (avgCellRejPct / 100)); // % of processed cells
+
+                          // 8. TOTAL Cells Used
+                          const grandTotalUsed = totalProcessedCells + cellRejectionQty;
+
+                          // 9. Cells Remaining
+                          const grandRemaining = grandTotalReceived - grandTotalUsed;
+
+                          // 10. Est. Modules (Yield)
+                          // Net usable modules from remaining cells (considering future B & R loss)
+                          const totalLossPct = (avgModRejPct + rGradePct) / 100;
+                          const estimatedModules = Math.floor((grandRemaining / 66) * (1 - totalLossPct));
+
+                          // ======== SHEET 1: GRAND SUMMARY (DETAILED) ========
                           const summaryData = [];
-                          summaryData.push(['📊 CELL EFFICIENCY INVENTORY - DETAILED SUMMARY REPORT']);
+                          summaryData.push(['📊 CELL EFFICIENCY INVENTORY - DETAILED REPORT']);
                           summaryData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
                           summaryData.push([`Report Generated: ${new Date().toLocaleString()}`]);
-                          summaryData.push([`Total Production Records: ${records.length}`]);
                           summaryData.push([]);
                           summaryData.push(['════════════════════════════════════════════════════════════════════']);
-                          summaryData.push(['⚡ EFFICIENCY GRADE WISE SUMMARY']);
+                          summaryData.push(['⚡ DETAILED INVENTORY BREAKDOWN']);
                           summaryData.push(['════════════════════════════════════════════════════════════════════']);
                           summaryData.push([]);
-                          summaryData.push(['EFFICIENCY', 'RECEIVED', 'USED', 'REMAINING', 'AFTER REJ.', 'EST. MODULES', 'STATUS', '% USED']);
-                          
-                          let grandReceived = 0, grandUsed = 0, grandRemaining = 0, grandAfterRej = 0, grandEstModules = 0;
-                          
-                          effGrades.forEach(eff => {
-                            const effData = cellEffReceived[eff] || {};
-                            const totalReceived = typeof effData === 'object' 
-                              ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0) : (effData || 0);
-                            const used = usedByEff[eff] || 0;
-                            const remaining = totalReceived - used;
-                            const afterRej = Math.floor(remaining * (1 - avgRejPct / 100));
-                            const estModules = Math.floor(afterRej / 66);
-                            const status = remaining < 0 ? '🔴 SHORTAGE' : remaining === 0 ? '🟡 ZERO' : '🟢 OK';
-                            const percentUsed = totalReceived > 0 ? ((used / totalReceived) * 100).toFixed(1) + '%' : '0%';
-                            
-                            grandReceived += totalReceived;
-                            grandUsed += used;
-                            grandRemaining += remaining;
-                            grandAfterRej += afterRej;
-                            grandEstModules += estModules;
-                            
-                            summaryData.push([`${eff}%`, totalReceived, used, remaining, afterRej, estModules, status, percentUsed]);
-                          });
-                          
-                          summaryData.push([]);
-                          summaryData.push(['🏆 GRAND TOTAL', grandReceived, grandUsed, grandRemaining, grandAfterRej, grandEstModules, '', grandReceived > 0 ? ((grandUsed / grandReceived) * 100).toFixed(1) + '%' : '0%']);
-                          summaryData.push([]);
-                          summaryData.push(['════════════════════════════════════════════════════════════════════']);
-                          summaryData.push(['📈 KEY METRICS']);
-                          summaryData.push(['════════════════════════════════════════════════════════════════════']);
-                          summaryData.push([]);
-                          summaryData.push(['Metric', 'Value', 'Description']);
-                          summaryData.push(['Average Rejection %', `${avgRejPct}%`, 'Average cell rejection rate from production']);
-                          summaryData.push(['Cells Per Module', '66', 'Standard cells required per module']);
-                          summaryData.push(['Total Days Operated', records.length, 'Number of production days']);
-                          summaryData.push(['Total Day Production', records.reduce((s, r) => s + (r.dayProduction || 0), 0), 'Sum of all day shift modules']);
-                          summaryData.push(['Total Night Production', records.reduce((s, r) => s + (r.nightProduction || 0), 0), 'Sum of all night shift modules']);
-                          
+
+                          // Detailed Calculation Table
+                          summaryData.push(['ITEM', 'VALUE', 'UNIT/NOTES', 'MODULES (IF APPLICABLE)']);
+                          summaryData.push(['Total Cells Received', grandTotalReceived, 'cells', '']);
+                          summaryData.push(['Cells per Module', '66', 'cells/module', '']);
+                          summaryData.push(['OK (A-grade) Modules', okModules, 'modules', '']);
+                          summaryData.push(['OK (A-grade) Cells Used', okCellsUsed, 'cells', okModules]);
+                          summaryData.push(['B-grade % (of OK)', `${avgModRejPct.toFixed(2)} %`, '', '']);
+                          summaryData.push(['B-grade Modules (rounded)', bGradeModules, 'modules', '']);
+                          summaryData.push(['B-grade Cells Used', bGradeCellsUsed, 'cells', bGradeModules]);
+                          summaryData.push(['R-grade % (of OK)', `${rGradePct} %`, 'Scrap Rate', '']);
+                          summaryData.push(['R-grade Modules (rounded)', rGradeModules, 'modules', '']);
+                          summaryData.push(['R-grade Cells Used', rGradeCellsUsed, 'cells', rGradeModules]);
+                          summaryData.push(['Total Processed Cells (OK+B+R)', totalProcessedCells, 'cells', '']);
+                          summaryData.push(['Cell Rejection %', `${avgCellRejPct.toFixed(2)} %`, '% of processed cells', '']);
+                          summaryData.push(['Cell Rejection (rounded)', cellRejectionQty, 'cells', '']);
+                          summaryData.push(['TOTAL Cells Used', grandTotalUsed, 'cells', '']);
+                          summaryData.push(['Cells Remaining', grandRemaining, 'cells', '']);
+                          summaryData.push(['Yield (Est. Modules)', estimatedModules, 'Net A-grade modules', '']);
+
+                          // Keep existing efficiency wise summary below if needed, or remove it. 
+                          // For now, I will keep key metrics simplified as the table above is comprehensive.
+
+
                           const ws1 = XLSXStyle.utils.aoa_to_sheet(summaryData);
-                          
+
                           // Apply styles to Sheet 1
                           if (ws1['A1']) ws1['A1'].s = titleStyle;
                           ws1['!merges'] = [
@@ -4160,14 +4206,14 @@ function DailyReport() {
                           ws1['!cols'] = [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
                           ws1['!rows'] = [{ hpt: 35 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws1, 'Grand Summary');
-                          
+
                           // ======== SHEET 2: SUPPLIER WISE INVENTORY ========
                           const supplierData = [];
                           supplierData.push(['🏭 SUPPLIER WISE CELL INVENTORY']);
                           supplierData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
                           supplierData.push([]);
                           supplierData.push(['EFFICIENCY', 'SUPPLIER', 'QTY RECEIVED', 'EST. MODULES', '% OF TOTAL']);
-                          
+
                           let supplierRow = 5;
                           effGrades.forEach(eff => {
                             const effData = cellEffReceived[eff] || {};
@@ -4183,21 +4229,21 @@ function DailyReport() {
                               supplierRow++;
                             }
                           });
-                          
+
                           const ws2 = XLSXStyle.utils.aoa_to_sheet(supplierData);
                           if (ws2['A1']) ws2['A1'].s = titleStyle;
                           ws2['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
                           ['A4', 'B4', 'C4', 'D4', 'E4'].forEach(cell => { if (ws2[cell]) ws2[cell].s = headerStyle; });
                           ws2['!cols'] = [{ wch: 14 }, { wch: 25 }, { wch: 16 }, { wch: 14 }, { wch: 12 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws2, 'Supplier Inventory');
-                          
+
                           // ======== SHEET 3: DAILY CELL USAGE (DETAILED) ========
                           const usageData = [];
                           usageData.push(['📅 DAILY CELL USAGE - DETAILED REPORT']);
                           usageData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
                           usageData.push([]);
                           usageData.push(['DATE', 'DAY PROD', 'DAY EFF', 'DAY CELLS', 'NIGHT PROD', 'NIGHT EFF', 'NIGHT CELLS', 'TOTAL CELLS', 'REJECTION %', 'REMARKS']);
-                          
+
                           let totalDayCells = 0, totalNightCells = 0;
                           records.forEach(r => {
                             const dayCells = (r.dayProduction || 0) * 66;
@@ -4217,10 +4263,10 @@ function DailyReport() {
                               r.remarks || ''
                             ]);
                           });
-                          
+
                           usageData.push([]);
                           usageData.push(['TOTAL', records.reduce((s, r) => s + (r.dayProduction || 0), 0), '', totalDayCells, records.reduce((s, r) => s + (r.nightProduction || 0), 0), '', totalNightCells, totalDayCells + totalNightCells, '', '']);
-                          
+
                           const ws3 = XLSXStyle.utils.aoa_to_sheet(usageData);
                           if (ws3['A1']) ws3['A1'].s = titleStyle;
                           ws3['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 9 } }];
@@ -4241,25 +4287,25 @@ function DailyReport() {
                           });
                           ws3['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 25 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws3, 'Daily Usage');
-                          
+
                           // ======== SHEET 4: EFFICIENCY WISE USAGE BREAKDOWN ========
                           const effUsageData = [];
                           effUsageData.push(['⚡ EFFICIENCY WISE DAILY USAGE BREAKDOWN']);
                           effUsageData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
                           effUsageData.push([]);
                           effUsageData.push(['DATE', '25.4% USED', '25.5% USED', '25.6% USED', '25.7% USED', '25.8% USED', 'TOTAL']);
-                          
+
                           // Track daily usage per efficiency
                           const dailyEffUsage = {};
                           // Use already defined normEff from above
                           records.forEach(r => {
                             if (!dailyEffUsage[r.date]) {
-                              dailyEffUsage[r.date] = {'25.4': 0, '25.5': 0, '25.6': 0, '25.7': 0, '25.8': 0};
+                              dailyEffUsage[r.date] = { '25.4': 0, '25.5': 0, '25.6': 0, '25.7': 0, '25.8': 0 };
                             }
                             const dayEff2 = normEff(r.dayCellEfficiency);
                             const nightEff2 = normEff(r.nightCellEfficiency);
                             const totalProd2 = (r.dayProduction || 0) + (r.nightProduction || 0);
-                            
+
                             // Smart logic: if only one efficiency set, count total production
                             if (dayEff2 && nightEff2) {
                               if (dailyEffUsage[r.date].hasOwnProperty(dayEff2)) dailyEffUsage[r.date][dayEff2] += (r.dayProduction || 0) * 66;
@@ -4270,17 +4316,17 @@ function DailyReport() {
                               if (dailyEffUsage[r.date].hasOwnProperty(nightEff2)) dailyEffUsage[r.date][nightEff2] += totalProd2 * 66;
                             }
                           });
-                          
-                          let effTotals = {'25.4': 0, '25.5': 0, '25.6': 0, '25.7': 0, '25.8': 0};
+
+                          let effTotals = { '25.4': 0, '25.5': 0, '25.6': 0, '25.7': 0, '25.8': 0 };
                           Object.entries(dailyEffUsage).sort((a, b) => new Date(a[0]) - new Date(b[0])).forEach(([date, usage]) => {
                             const rowTotal = Object.values(usage).reduce((s, v) => s + v, 0);
                             effUsageData.push([date, usage['25.4'], usage['25.5'], usage['25.6'], usage['25.7'], usage['25.8'], rowTotal]);
                             Object.keys(usage).forEach(k => { effTotals[k] += usage[k]; });
                           });
-                          
+
                           effUsageData.push([]);
                           effUsageData.push(['TOTAL', effTotals['25.4'], effTotals['25.5'], effTotals['25.6'], effTotals['25.7'], effTotals['25.8'], Object.values(effTotals).reduce((s, v) => s + v, 0)]);
-                          
+
                           const ws4 = XLSXStyle.utils.aoa_to_sheet(effUsageData);
                           if (ws4['A1']) ws4['A1'].s = titleStyle;
                           ws4['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
@@ -4301,18 +4347,18 @@ function DailyReport() {
                           });
                           ws4['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws4, 'Efficiency Usage');
-                          
+
                           // ======== SHEET 5: BALANCE ANALYSIS ========
                           const balanceData = [];
                           balanceData.push(['📊 BALANCE ANALYSIS & FORECAST']);
                           balanceData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
                           balanceData.push([]);
                           balanceData.push(['EFFICIENCY', 'RECEIVED', 'USED', 'BALANCE', 'AFTER REJ', 'EST. MODULES', 'DAYS LEFT (EST)', 'REORDER NEEDED']);
-                          
+
                           const avgDailyUsage = grandUsed / (records.length || 1);
                           effGrades.forEach(eff => {
                             const effData = cellEffReceived[eff] || {};
-                            const totalReceived = typeof effData === 'object' 
+                            const totalReceived = typeof effData === 'object'
                               ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0) : (effData || 0);
                             const used = usedByEff[eff] || 0;
                             const remaining = totalReceived - used;
@@ -4321,16 +4367,16 @@ function DailyReport() {
                             const avgEffUsage = used / (records.length || 1);
                             const daysLeft = avgEffUsage > 0 ? Math.floor(remaining / avgEffUsage) : remaining > 0 ? '∞' : 0;
                             const reorder = remaining < avgEffUsage * 7 ? '⚠️ YES - LOW STOCK' : remaining < 0 ? '🔴 CRITICAL - SHORTAGE' : '✅ NO';
-                            
+
                             balanceData.push([`${eff}%`, totalReceived, used, remaining, afterRej, estModules, daysLeft, reorder]);
                           });
-                          
+
                           balanceData.push([]);
                           balanceData.push(['📈 FORECAST NOTES:']);
                           balanceData.push(['• Days Left calculation based on average daily usage per efficiency']);
                           balanceData.push(['• Reorder warning when stock < 7 days of average usage']);
                           balanceData.push([`• Current Avg Daily Cell Usage: ${avgDailyUsage.toLocaleString()} cells/day`]);
-                          
+
                           const ws5 = XLSXStyle.utils.aoa_to_sheet(balanceData);
                           if (ws5['A1']) ws5['A1'].s = titleStyle;
                           ws5['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
@@ -4344,7 +4390,7 @@ function DailyReport() {
                           });
                           ws5['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }, { wch: 22 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws5, 'Balance Analysis');
-                          
+
                           // Download file
                           const fileName = `Cell_Inventory_DETAILED_${selectedCompany?.companyName || 'Company'}_${new Date().toISOString().split('T')[0]}.xlsx`;
                           XLSXStyle.writeFile(wb, fileName);
@@ -4367,7 +4413,7 @@ function DailyReport() {
                       >
                         📊 EXPORT DETAILED EXCEL REPORT
                       </button>
-                      
+
                       <button
                         onClick={() => setShowCellReceivedModal(true)}
                         style={{
@@ -4389,90 +4435,135 @@ function DailyReport() {
                       </button>
                     </div>
                   </div>
-                  
+
                   {/* GRAND SUMMARY STATS */}
+                  {/* DETAILED INVENTORY BREAKDOWN UI */}
                   <div style={{
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(6, 1fr)',
-                    gap: '15px', 
-                    marginBottom: '30px'
+                    marginBottom: '30px',
+                    background: 'white',
+                    borderRadius: '16px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                    overflow: 'hidden',
+                    border: '1px solid #e0e0e0'
                   }}>
                     <div style={{
-                      textAlign: 'center', 
-                      padding: '20px', 
-                      background: 'linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%)',
-                      borderRadius: '12px',
-                      border: '2px solid #1976d2'
+                      padding: '15px 20px',
+                      background: 'linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)',
+                      color: 'white',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
                     }}>
-                      <div style={{fontSize: '13px', color: '#1565c0', fontWeight: '600', marginBottom: '8px'}}>📦 TOTAL RECEIVED</div>
-                      <div style={{fontSize: '32px', fontWeight: 'bold', color: '#1976d2'}}>{grandTotalReceived.toLocaleString()}</div>
-                      <div style={{fontSize: '12px', color: '#666'}}>Cells</div>
+                      <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>📊</span> Detailed Inventory Breakdown
+                      </h3>
+                      <div style={{ fontSize: '12px', opacity: 0.9 }}>
+                        Updated: {new Date().toLocaleDateString()}
+                      </div>
                     </div>
-                    <div style={{
-                      textAlign: 'center', 
-                      padding: '20px', 
-                      background: 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
-                      borderRadius: '12px',
-                      border: '2px solid #d32f2f'
-                    }}>
-                      <div style={{fontSize: '13px', color: '#c62828', fontWeight: '600', marginBottom: '8px'}}>🔧 TOTAL USED</div>
-                      <div style={{fontSize: '32px', fontWeight: 'bold', color: '#d32f2f'}}>{grandTotalUsed.toLocaleString()}</div>
-                      <div style={{fontSize: '12px', color: '#666'}}>Cells</div>
-                    </div>
-                    <div style={{
-                      textAlign: 'center', 
-                      padding: '20px', 
-                      background: grandRemaining >= 0 
-                        ? 'linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)' 
-                        : 'linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%)',
-                      borderRadius: '12px',
-                      border: `2px solid ${grandRemaining >= 0 ? '#4caf50' : '#f44336'}`
-                    }}>
-                      <div style={{fontSize: '13px', color: grandRemaining >= 0 ? '#2e7d32' : '#c62828', fontWeight: '600', marginBottom: '8px'}}>📊 REMAINING</div>
-                      <div style={{fontSize: '32px', fontWeight: 'bold', color: grandRemaining >= 0 ? '#4caf50' : '#f44336'}}>{grandRemaining.toLocaleString()}</div>
-                      <div style={{fontSize: '12px', color: '#666'}}>Cells</div>
-                    </div>
-                    <div style={{
-                      textAlign: 'center', 
-                      padding: '20px', 
-                      background: 'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%)',
-                      borderRadius: '12px',
-                      border: '2px solid #ff9800'
-                    }}>
-                      <div style={{fontSize: '13px', color: '#e65100', fontWeight: '600', marginBottom: '8px'}}>⚠️ AVG REJECTION</div>
-                      <div style={{fontSize: '32px', fontWeight: 'bold', color: '#ff9800'}}>{avgRejectionPercent}%</div>
-                      <div style={{fontSize: '12px', color: '#666'}}>Rate</div>
-                    </div>
-                    <div style={{
-                      textAlign: 'center', 
-                      padding: '20px', 
-                      background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)',
-                      borderRadius: '12px',
-                      border: '2px solid #9c27b0'
-                    }}>
-                      <div style={{fontSize: '13px', color: '#7b1fa2', fontWeight: '600', marginBottom: '8px'}}>✅ AFTER REJECTION</div>
-                      <div style={{fontSize: '32px', fontWeight: 'bold', color: '#9c27b0'}}>{afterRejection.toLocaleString()}</div>
-                      <div style={{fontSize: '12px', color: '#666'}}>Usable Cells</div>
-                    </div>
-                    <div style={{
-                      textAlign: 'center', 
-                      padding: '20px', 
-                      background: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)',
-                      borderRadius: '12px',
-                      boxShadow: '0 4px 20px rgba(76,175,80,0.4)'
-                    }}>
-                      <div style={{fontSize: '13px', color: 'rgba(255,255,255,0.9)', fontWeight: '600', marginBottom: '8px'}}>🏭 EST. MODULES</div>
-                      <div style={{fontSize: '36px', fontWeight: 'bold', color: 'white'}}>{estimatedModules.toLocaleString()}</div>
-                      <div style={{fontSize: '12px', color: 'rgba(255,255,255,0.8)'}}>Can Produce</div>
+
+                    <div style={{ padding: '20px' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                            <th style={{ textAlign: 'left', padding: '12px', color: '#546e7a' }}>Item</th>
+                            <th style={{ textAlign: 'right', padding: '12px', color: '#546e7a' }}>Value</th>
+                            <th style={{ textAlign: 'left', padding: '12px', paddingLeft: '20px', color: '#90a4ae', fontSize: '12px' }}>Unit/Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {/* 1. Total Received */}
+                          <tr style={{ borderBottom: '1px solid #f5f5f5' }}>
+                            <td style={{ padding: '12px', fontWeight: '600', color: '#1a237e' }}>Total Cells Received</td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', fontSize: '16px', color: '#1565c0' }}>{grandTotalReceived.toLocaleString()}</td>
+                            <td style={{ padding: '12px', paddingLeft: '20px', color: '#78909c' }}>cells</td>
+                          </tr>
+
+                          {/* 2. OK Modules */}
+                          <tr style={{ borderBottom: '1px solid #f5f5f5', backgroundColor: '#f9fbe7' }}>
+                            <td style={{ padding: '12px', fontWeight: '500' }}>OK (A-grade) Modules</td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600' }}>{okModules.toLocaleString()}</td>
+                            <td style={{ padding: '12px', paddingLeft: '20px', color: '#78909c' }}>modules</td>
+                          </tr>
+
+                          {/* 3. OK Cells Used */}
+                          <tr style={{ borderBottom: '1px solid #f5f5f5' }}>
+                            <td style={{ padding: '12px', paddingLeft: '30px', color: '#455a64' }}>↳ OK Cells Used</td>
+                            <td style={{ padding: '12px', textAlign: 'right', color: '#2e7d32' }}>{okCellsUsed.toLocaleString()}</td>
+                            <td style={{ padding: '12px', paddingLeft: '20px', color: '#78909c' }}>cells (66/mod)</td>
+                          </tr>
+
+                          {/* 4. B-Grade */}
+                          <tr style={{ borderBottom: '1px solid #f5f5f5' }}>
+                            <td style={{ padding: '12px', paddingLeft: '30px', color: '#455a64' }}>
+                              ↳ B-grade Modules <span style={{ fontSize: '11px', color: '#ef6c00', backgroundColor: '#fff3e0', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px' }}>{avgModRejPct.toFixed(2)}%</span>
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right', color: '#ef6c00' }}>{bGradeModules.toLocaleString()}</td>
+                            <td style={{ padding: '12px', paddingLeft: '20px', color: '#78909c' }}>modules</td>
+                          </tr>
+                          <tr style={{ borderBottom: '1px solid #f5f5f5' }}>
+                            <td style={{ padding: '12px', paddingLeft: '50px', color: '#78909c', fontSize: '13px' }}>Using: {bGradeCellsUsed.toLocaleString()} cells</td>
+                            <td style={{ padding: '12px', textAlign: 'right' }}></td>
+                            <td style={{ padding: '12px', paddingLeft: '20px' }}></td>
+                          </tr>
+
+                          {/* 5. R-Grade (Scrap) */}
+                          <tr style={{ borderBottom: '1px solid #f5f5f5' }}>
+                            <td style={{ padding: '12px', paddingLeft: '30px', color: '#455a64' }}>
+                              ↳ R-grade / Scrap <span style={{ fontSize: '11px', color: '#c62828', backgroundColor: '#ffebee', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px' }}>{rGradePct}%</span>
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right', color: '#c62828' }}>{rGradeModules.toLocaleString()}</td>
+                            <td style={{ padding: '12px', paddingLeft: '20px', color: '#78909c' }}>modules</td>
+                          </tr>
+                          <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
+                            <td style={{ padding: '12px', paddingLeft: '50px', color: '#78909c', fontSize: '13px' }}>Using: {rGradeCellsUsed.toLocaleString()} cells</td>
+                            <td style={{ padding: '12px', textAlign: 'right' }}></td>
+                            <td style={{ padding: '12px', paddingLeft: '20px' }}></td>
+                          </tr>
+
+                          {/* 6. Processed Cells */}
+                          <tr style={{ borderBottom: '1px solid #f5f5f5', backgroundColor: '#e3f2fd' }}>
+                            <td style={{ padding: '12px', fontWeight: '600', color: '#1565c0' }}>Total Processed Cells</td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', color: '#1565c0' }}>{totalProcessedCells.toLocaleString()}</td>
+                            <td style={{ padding: '12px', paddingLeft: '20px', color: '#1565c0' }}>OK + B + R</td>
+                          </tr>
+
+                          {/* 7. Cell Rejection */}
+                          <tr style={{ borderBottom: '2px solid #e0e0e0' }}>
+                            <td style={{ padding: '12px', color: '#c62828' }}>
+                              + Cell Rejection <span style={{ fontSize: '11px', color: '#c62828', backgroundColor: '#ffebee', padding: '2px 6px', borderRadius: '4px', marginLeft: '8px' }}>{avgCellRejPct.toFixed(2)}%</span>
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right', color: '#c62828', fontWeight: '600' }}>{cellRejectionQty.toLocaleString()}</td>
+                            <td style={{ padding: '12px', paddingLeft: '20px', color: '#78909c' }}>cells</td>
+                          </tr>
+
+                          {/* 8. TOTAL USED */}
+                          <tr style={{ borderBottom: '1px solid #f5f5f5', backgroundColor: '#ffebee' }}>
+                            <td style={{ padding: '12px', fontWeight: '700', color: '#d32f2f', fontSize: '15px' }}>TOTAL CELLS USED</td>
+                            <td style={{ padding: '12px', textAlign: 'right', fontWeight: '700', fontSize: '18px', color: '#d32f2f' }}>{grandTotalUsed.toLocaleString()}</td>
+                            <td style={{ padding: '12px', paddingLeft: '20px', color: '#d32f2f' }}>Processed + Rej</td>
+                          </tr>
+
+                          {/* 9. REMAINING */}
+                          <tr style={{ backgroundColor: grandRemaining >= 0 ? '#e8f5e9' : '#ffebee' }}>
+                            <td style={{ padding: '15px', fontWeight: '700', color: grandRemaining >= 0 ? '#2e7d32' : '#c62828', fontSize: '16px' }}>CELLS REMAINING</td>
+                            <td style={{ padding: '15px', textAlign: 'right', fontWeight: '700', fontSize: '22px', color: grandRemaining >= 0 ? '#2e7d32' : '#c62828' }}>{grandRemaining.toLocaleString()}</td>
+                            <td style={{ padding: '15px', paddingLeft: '20px', color: grandRemaining >= 0 ? '#2e7d32' : '#c62828' }}>
+                              <div>Estimated Yield:</div>
+                              <div style={{ fontWeight: '700', fontSize: '14px' }}>~{estimatedModules.toLocaleString()} modules</div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                  
+
                   {/* EFFICIENCY-WISE CARDS */}
-                  <h3 style={{color: '#37474f', marginBottom: '20px', borderBottom: '2px solid #e0e0e0', paddingBottom: '10px'}}>
+                  <h3 style={{ color: '#37474f', marginBottom: '20px', borderBottom: '2px solid #e0e0e0', paddingBottom: '10px' }}>
                     📊 Efficiency Grade Wise Breakdown
                   </h3>
                   <div style={{
-                    display: 'grid', 
+                    display: 'grid',
                     gridTemplateColumns: 'repeat(5, 1fr)',
                     gap: '20px',
                     marginBottom: '30px'
@@ -4480,7 +4571,7 @@ function DailyReport() {
                     {efficiencyGrades.map(eff => {
                       const effData = cellEfficiencyReceived[eff] || {};
                       const companies = typeof effData === 'object' ? effData : {};
-                      const totalReceived = typeof effData === 'object' 
+                      const totalReceived = typeof effData === 'object'
                         ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0)
                         : (effData || 0);
                       const used = usedByEfficiency[eff] || 0;
@@ -4488,9 +4579,9 @@ function DailyReport() {
                       const afterRej = Math.floor(remaining * (1 - avgRejectionPercent / 100));
                       const estModules = Math.floor(afterRej / 66);
                       const hasData = totalReceived > 0 || used > 0;
-                      
+
                       return (
-                        <div 
+                        <div
                           key={eff}
                           style={{
                             padding: '20px',
@@ -4502,8 +4593,8 @@ function DailyReport() {
                         >
                           {/* Efficiency Header */}
                           <div style={{
-                            fontSize: '26px', 
-                            fontWeight: 'bold', 
+                            fontSize: '26px',
+                            fontWeight: 'bold',
                             color: '#1565c0',
                             marginBottom: '15px',
                             textAlign: 'center',
@@ -4513,57 +4604,57 @@ function DailyReport() {
                           }}>
                             ⚡ {eff}%
                           </div>
-                          
+
                           {/* Company-wise breakdown */}
                           {Object.keys(companies).length > 0 && (
                             <div style={{
-                              marginBottom: '15px', 
-                              padding: '12px', 
-                              backgroundColor: '#f5f5f5', 
+                              marginBottom: '15px',
+                              padding: '12px',
+                              backgroundColor: '#f5f5f5',
                               borderRadius: '10px'
                             }}>
-                              <div style={{fontSize: '12px', color: '#666', marginBottom: '8px', fontWeight: '600'}}>SUPPLIER WISE:</div>
+                              <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px', fontWeight: '600' }}>SUPPLIER WISE:</div>
                               {Object.entries(companies).map(([company, qty]) => (
                                 <div key={company} style={{
-                                  display: 'flex', 
-                                  justifyContent: 'space-between', 
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
                                   padding: '6px 0',
                                   borderBottom: '1px dashed #e0e0e0',
                                   fontSize: '14px'
                                 }}>
-                                  <span style={{color: '#555'}}>🏭 {company}</span>
-                                  <strong style={{color: '#1976d2'}}>{(qty || 0).toLocaleString()}</strong>
+                                  <span style={{ color: '#555' }}>🏭 {company}</span>
+                                  <strong style={{ color: '#1976d2' }}>{(qty || 0).toLocaleString()}</strong>
                                 </div>
                               ))}
                             </div>
                           )}
-                          
+
                           {/* Stats Grid */}
-                          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px'}}>
-                            <div style={{padding: '12px', backgroundColor: '#e3f2fd', borderRadius: '10px', textAlign: 'center'}}>
-                              <div style={{fontSize: '11px', color: '#1565c0', fontWeight: '600'}}>RECEIVED</div>
-                              <div style={{fontSize: '20px', fontWeight: 'bold', color: '#1976d2'}}>{totalReceived.toLocaleString()}</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '15px' }}>
+                            <div style={{ padding: '12px', backgroundColor: '#e3f2fd', borderRadius: '10px', textAlign: 'center' }}>
+                              <div style={{ fontSize: '11px', color: '#1565c0', fontWeight: '600' }}>RECEIVED</div>
+                              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#1976d2' }}>{totalReceived.toLocaleString()}</div>
                             </div>
-                            <div style={{padding: '12px', backgroundColor: '#ffebee', borderRadius: '10px', textAlign: 'center'}}>
-                              <div style={{fontSize: '11px', color: '#c62828', fontWeight: '600'}}>USED</div>
-                              <div style={{fontSize: '20px', fontWeight: 'bold', color: '#d32f2f'}}>{used.toLocaleString()}</div>
+                            <div style={{ padding: '12px', backgroundColor: '#ffebee', borderRadius: '10px', textAlign: 'center' }}>
+                              <div style={{ fontSize: '11px', color: '#c62828', fontWeight: '600' }}>USED</div>
+                              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#d32f2f' }}>{used.toLocaleString()}</div>
                             </div>
                           </div>
-                          
+
                           {/* Balance */}
                           <div style={{
-                            padding: '15px', 
-                            backgroundColor: remaining >= 0 ? '#e8f5e9' : '#ffebee', 
-                            borderRadius: '10px', 
+                            padding: '15px',
+                            backgroundColor: remaining >= 0 ? '#e8f5e9' : '#ffebee',
+                            borderRadius: '10px',
                             textAlign: 'center',
                             marginBottom: '12px'
                           }}>
-                            <div style={{fontSize: '11px', color: remaining >= 0 ? '#2e7d32' : '#c62828', fontWeight: '600'}}>BALANCE</div>
-                            <div style={{fontSize: '26px', fontWeight: 'bold', color: remaining >= 0 ? '#4caf50' : '#f44336'}}>
+                            <div style={{ fontSize: '11px', color: remaining >= 0 ? '#2e7d32' : '#c62828', fontWeight: '600' }}>BALANCE</div>
+                            <div style={{ fontSize: '26px', fontWeight: 'bold', color: remaining >= 0 ? '#4caf50' : '#f44336' }}>
                               {remaining.toLocaleString()}
                             </div>
                           </div>
-                          
+
                           {/* Estimated Modules */}
                           <div style={{
                             padding: '15px',
@@ -4572,16 +4663,16 @@ function DailyReport() {
                             textAlign: 'center',
                             color: 'white'
                           }}>
-                            <div style={{fontSize: '11px', fontWeight: '600', opacity: 0.9}}>EST. MODULES</div>
-                            <div style={{fontSize: '28px', fontWeight: 'bold'}}>🔧 {estModules.toLocaleString()}</div>
+                            <div style={{ fontSize: '11px', fontWeight: '600', opacity: 0.9 }}>EST. MODULES</div>
+                            <div style={{ fontSize: '28px', fontWeight: 'bold' }}>🔧 {estModules.toLocaleString()}</div>
                           </div>
                         </div>
                       );
                     })}
                   </div>
-                  
+
                   {/* All Entries Table */}
-                  <h3 style={{color: '#37474f', marginBottom: '20px', borderBottom: '2px solid #e0e0e0', paddingBottom: '10px'}}>
+                  <h3 style={{ color: '#37474f', marginBottom: '20px', borderBottom: '2px solid #e0e0e0', paddingBottom: '10px' }}>
                     📋 All Cell Received Entries (Click to Edit/Delete)
                   </h3>
                   <div style={{
@@ -4594,43 +4685,43 @@ function DailyReport() {
                       const effData = cellEfficiencyReceived[eff] || {};
                       return typeof effData === 'object' && Object.keys(effData).length > 0;
                     }) ? (
-                      <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                         <thead>
-                          <tr style={{backgroundColor: '#1976d2', color: 'white'}}>
-                            <th style={{padding: '15px', textAlign: 'left', borderRadius: '8px 0 0 0'}}>Efficiency</th>
-                            <th style={{padding: '15px', textAlign: 'left'}}>Supplier</th>
-                            <th style={{padding: '15px', textAlign: 'right'}}>Quantity</th>
-                            <th style={{padding: '15px', textAlign: 'right'}}>Est. Modules</th>
-                            <th style={{padding: '15px', textAlign: 'center', borderRadius: '0 8px 0 0'}}>Actions</th>
+                          <tr style={{ backgroundColor: '#1976d2', color: 'white' }}>
+                            <th style={{ padding: '15px', textAlign: 'left', borderRadius: '8px 0 0 0' }}>Efficiency</th>
+                            <th style={{ padding: '15px', textAlign: 'left' }}>Supplier</th>
+                            <th style={{ padding: '15px', textAlign: 'right' }}>Quantity</th>
+                            <th style={{ padding: '15px', textAlign: 'right' }}>Est. Modules</th>
+                            <th style={{ padding: '15px', textAlign: 'center', borderRadius: '0 8px 0 0' }}>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {efficiencyGrades.map(eff => {
                             const effData = cellEfficiencyReceived[eff] || {};
                             const companies = typeof effData === 'object' ? effData : {};
-                            
+
                             return Object.entries(companies).map(([company, qty], idx) => (
                               <tr key={`${eff}-${company}`} style={{
                                 backgroundColor: idx % 2 === 0 ? 'white' : '#f5f5f5',
                                 borderBottom: '1px solid #e0e0e0'
                               }}>
-                                <td style={{padding: '15px', fontWeight: '700', color: '#1565c0', fontSize: '16px'}}>
+                                <td style={{ padding: '15px', fontWeight: '700', color: '#1565c0', fontSize: '16px' }}>
                                   ⚡ {eff}%
                                 </td>
-                                <td style={{padding: '15px', fontSize: '15px'}}>
+                                <td style={{ padding: '15px', fontSize: '15px' }}>
                                   🏭 {company}
                                 </td>
-                                <td style={{padding: '15px', textAlign: 'right', fontSize: '18px', fontWeight: '700', color: '#1976d2'}}>
+                                <td style={{ padding: '15px', textAlign: 'right', fontSize: '18px', fontWeight: '700', color: '#1976d2' }}>
                                   {(qty || 0).toLocaleString()}
                                 </td>
-                                <td style={{padding: '15px', textAlign: 'right', fontSize: '16px', fontWeight: '600', color: '#4caf50'}}>
+                                <td style={{ padding: '15px', textAlign: 'right', fontSize: '16px', fontWeight: '600', color: '#4caf50' }}>
                                   ~{Math.floor((qty || 0) / 66).toLocaleString()}
                                 </td>
-                                <td style={{padding: '15px', textAlign: 'center'}}>
+                                <td style={{ padding: '15px', textAlign: 'center' }}>
                                   <button
                                     onClick={() => {
                                       setCellReceivedEditMode(true);
-                                      setCellReceivedEditKey({eff, company});
+                                      setCellReceivedEditKey({ eff, company });
                                       setCellReceivedForm({
                                         efficiency: eff,
                                         supplierCompany: company,
@@ -4657,15 +4748,15 @@ function DailyReport() {
                                   <button
                                     onClick={async () => {
                                       if (!window.confirm(`Delete ${company} (${qty.toLocaleString()} cells) from ${eff}%?`)) return;
-                                      
-                                      const currentReceived = {...(selectedCompany?.cellEfficiencyReceived || {})};
+
+                                      const currentReceived = { ...(selectedCompany?.cellEfficiencyReceived || {}) };
                                       if (currentReceived[eff] && currentReceived[eff][company]) {
                                         delete currentReceived[eff][company];
                                         if (Object.keys(currentReceived[eff]).length === 0) {
                                           delete currentReceived[eff];
                                         }
                                       }
-                                      
+
                                       try {
                                         const API_BASE_URL = getAPIBaseURL();
                                         const response = await fetch(`${API_BASE_URL}/api/companies/${selectedCompany.id}`, {
@@ -4673,11 +4764,11 @@ function DailyReport() {
                                           headers: { 'Content-Type': 'application/json' },
                                           body: JSON.stringify({ cellEfficiencyReceived: currentReceived })
                                         });
-                                        
+
                                         if (response.ok) {
                                           alert('✅ Deleted successfully!');
                                           await loadCompanies();
-                                          setSelectedCompany(prev => ({...prev, cellEfficiencyReceived: currentReceived}));
+                                          setSelectedCompany(prev => ({ ...prev, cellEfficiencyReceived: currentReceived }));
                                         }
                                       } catch (error) {
                                         alert('❌ Error deleting');
@@ -4703,10 +4794,10 @@ function DailyReport() {
                         </tbody>
                       </table>
                     ) : (
-                      <div style={{textAlign: 'center', padding: '50px', color: '#999'}}>
-                        <span style={{fontSize: '50px', display: 'block', marginBottom: '15px'}}>📦</span>
-                        <p style={{fontSize: '18px'}}>No cell inventory data yet.</p>
-                        <p style={{fontSize: '14px'}}>Click "ADD CELL RECEIVED ENTRY" button to add your first entry!</p>
+                      <div style={{ textAlign: 'center', padding: '50px', color: '#999' }}>
+                        <span style={{ fontSize: '50px', display: 'block', marginBottom: '15px' }}>📦</span>
+                        <p style={{ fontSize: '18px' }}>No cell inventory data yet.</p>
+                        <p style={{ fontSize: '14px' }}>Click "ADD CELL RECEIVED ENTRY" button to add your first entry!</p>
                       </div>
                     )}
                   </div>
@@ -4738,7 +4829,7 @@ function DailyReport() {
           <h3>Remarks</h3>
           <textarea
             value={reportData.remarks}
-            onChange={(e) => setReportData({...reportData, remarks: e.target.value})}
+            onChange={(e) => setReportData({ ...reportData, remarks: e.target.value })}
             placeholder="Enter any additional remarks for the report..."
             rows="4"
           />
@@ -4768,7 +4859,7 @@ function DailyReport() {
               <input
                 type="text"
                 value={newRejection.serialNumber}
-                onChange={(e) => setNewRejection({...newRejection, serialNumber: e.target.value})}
+                onChange={(e) => setNewRejection({ ...newRejection, serialNumber: e.target.value })}
                 placeholder="Enter serial number"
               />
             </div>
@@ -4777,14 +4868,14 @@ function DailyReport() {
               <input
                 type="date"
                 value={newRejection.rejectionDate}
-                onChange={(e) => setNewRejection({...newRejection, rejectionDate: e.target.value})}
+                onChange={(e) => setNewRejection({ ...newRejection, rejectionDate: e.target.value })}
               />
             </div>
             <div className="form-group">
               <label>Reason</label>
               <select
                 value={newRejection.reason}
-                onChange={(e) => setNewRejection({...newRejection, reason: e.target.value})}
+                onChange={(e) => setNewRejection({ ...newRejection, reason: e.target.value })}
               >
                 <optgroup label="🔴 MAJOR DEFECTS (Critical)">
                   <option value="EL Major Micro-crack / Cell Crack">EL Major Micro-crack / Cell Crack</option>
@@ -4819,7 +4910,7 @@ function DailyReport() {
               <label>Stage</label>
               <select
                 value={newRejection.stage}
-                onChange={(e) => setNewRejection({...newRejection, stage: e.target.value})}
+                onChange={(e) => setNewRejection({ ...newRejection, stage: e.target.value })}
               >
                 <option value="Visual Inspection">Visual Inspection</option>
                 <option value="Electrical Test">Electrical Test</option>
@@ -4843,7 +4934,7 @@ function DailyReport() {
         <div className="modal-overlay" onClick={() => setShowAddDayModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h3>Add New Production Day</h3>
-            
+
             <div className="form-group">
               <label>Select Date *</label>
               <input
@@ -4853,14 +4944,14 @@ function DailyReport() {
                 required
               />
             </div>
-            
+
             <div className="form-group">
               <label>PDI Number *</label>
               <select
                 value={newDayPdiNumber}
                 onChange={(e) => setNewDayPdiNumber(e.target.value)}
                 required
-                style={{borderColor: newDayPdiNumber ? '#4CAF50' : '#ff9800'}}
+                style={{ borderColor: newDayPdiNumber ? '#4CAF50' : '#ff9800' }}
               >
                 <option value="">Select PDI Number</option>
                 <option value="PDI-1">PDI-1</option>
@@ -4875,7 +4966,7 @@ function DailyReport() {
                 <option value="PDI-10">PDI-10</option>
               </select>
               {!newDayPdiNumber && (
-                <small style={{color: '#f44336', marginTop: '5px', display: 'block'}}>
+                <small style={{ color: '#f44336', marginTop: '5px', display: 'block' }}>
                   ⚠️ PDI Number is mandatory
                 </small>
               )}
@@ -4887,7 +4978,7 @@ function DailyReport() {
                 value={newDayRunningOrder}
                 onChange={(e) => setNewDayRunningOrder(e.target.value)}
                 required
-                style={{borderColor: newDayRunningOrder ? '#4CAF50' : '#ff9800'}}
+                style={{ borderColor: newDayRunningOrder ? '#4CAF50' : '#ff9800' }}
               >
                 <option value="">Select Running Order</option>
                 <option value="R1">R1</option>
@@ -4902,18 +4993,18 @@ function DailyReport() {
                 <option value="R10">R10</option>
               </select>
               {!newDayRunningOrder && (
-                <small style={{color: '#f44336', marginTop: '5px', display: 'block'}}>
+                <small style={{ color: '#f44336', marginTop: '5px', display: 'block' }}>
                   ⚠️ Running Order is mandatory
                 </small>
               )}
             </div>
-            
+
             <div className="modal-actions">
-              <button 
-                className="btn-save" 
+              <button
+                className="btn-save"
                 onClick={handleSaveNewDay}
                 disabled={!newDayPdiNumber || !newDayRunningOrder}
-                style={{opacity: (newDayPdiNumber && newDayRunningOrder) ? 1 : 0.5, cursor: (newDayPdiNumber && newDayRunningOrder) ? 'pointer' : 'not-allowed'}}
+                style={{ opacity: (newDayPdiNumber && newDayRunningOrder) ? 1 : 0.5, cursor: (newDayPdiNumber && newDayRunningOrder) ? 'pointer' : 'not-allowed' }}
               >
                 Add Day
               </button>
@@ -4926,15 +5017,15 @@ function DailyReport() {
       {/* BOM Materials Upload Modal */}
       {showBomModal && (
         <div className="modal-overlay" onClick={() => setShowBomModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto'}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3>📦 Upload BOM Materials & Documents - {selectedRecordForBom?.date}</h3>
-            
+
             {/* Wattage and Shift Selection */}
-            <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f0f0f0', borderRadius: '8px'}}>
-              <div style={{display: 'flex', gap: '30px', alignItems: 'center', flexWrap: 'wrap'}}>
+            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f0f0f0', borderRadius: '8px' }}>
+              <div style={{ display: 'flex', gap: '30px', alignItems: 'center', flexWrap: 'wrap' }}>
                 {/* Wattage Selection */}
                 <div>
-                  <label style={{fontWeight: 'bold', marginRight: '10px', fontSize: '16px'}}>
+                  <label style={{ fontWeight: 'bold', marginRight: '10px', fontSize: '16px' }}>
                     ⚡ Module Wattage:
                   </label>
                   <select
@@ -4954,7 +5045,7 @@ function DailyReport() {
                       });
                       setBomMaterials(materialsData);
                     }}
-                    style={{padding: '8px 15px', fontSize: '15px', fontWeight: 'bold', borderRadius: '5px', border: '2px solid #1976d2'}}
+                    style={{ padding: '8px 15px', fontSize: '15px', fontWeight: 'bold', borderRadius: '5px', border: '2px solid #1976d2' }}
                   >
                     <option value="625wp">625 Wp</option>
                     <option value="630wp">630 Wp</option>
@@ -4963,10 +5054,10 @@ function DailyReport() {
 
                 {/* Day/Night Shift Selection */}
                 <div>
-                  <label style={{fontWeight: 'bold', marginRight: '10px', fontSize: '16px'}}>
+                  <label style={{ fontWeight: 'bold', marginRight: '10px', fontSize: '16px' }}>
                     🌞/🌙 Production Shift:
                   </label>
-                  <div style={{display: 'inline-flex', gap: '10px'}}>
+                  <div style={{ display: 'inline-flex', gap: '10px' }}>
                     <button
                       onClick={() => setSelectedShift('day')}
                       style={{
@@ -5003,29 +5094,29 @@ function DailyReport() {
                 </div>
               </div>
             </div>
-            
-            <div style={{marginBottom: '20px'}}>
-              <h4 style={{color: '#1976d2', marginBottom: '10px'}}>
+
+            <div style={{ marginBottom: '20px' }}>
+              <h4 style={{ color: '#1976d2', marginBottom: '10px' }}>
                 📋 BOM Materials for {selectedShift === 'day' ? '🌞 Day' : '🌙 Night'} Production
               </h4>
-              <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px'}}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
                 {(BOM_MATERIALS_BY_WATTAGE[selectedWattage] || []).map(material => (
-                  <div key={material.name} style={{border: '1px solid #ddd', padding: '10px', borderRadius: '5px', backgroundColor: '#f9f9f9'}}>
-                    <label style={{fontWeight: 'bold', marginBottom: '5px', display: 'block'}}>
+                  <div key={material.name} style={{ border: '1px solid #ddd', padding: '10px', borderRadius: '5px', backgroundColor: '#f9f9f9' }}>
+                    <label style={{ fontWeight: 'bold', marginBottom: '5px', display: 'block' }}>
                       {material.name}
-                      {material.product_type && <span style={{fontSize: '11px', color: '#666', display: 'block'}}>({material.product_type})</span>}
-                      <span style={{fontSize: '11px', color: '#1976d2', display: 'block'}}>Qty: {material.qty}</span>
+                      {material.product_type && <span style={{ fontSize: '11px', color: '#666', display: 'block' }}>({material.product_type})</span>}
+                      <span style={{ fontSize: '11px', color: '#1976d2', display: 'block' }}>Qty: {material.qty}</span>
                     </label>
-                    
+
                     {/* Company/Supplier Name - Proper Dropdown */}
                     {bomMaterials[material.name]?.showCustomCompany ? (
-                      <div style={{display: 'flex', gap: '5px'}}>
+                      <div style={{ display: 'flex', gap: '5px' }}>
                         <input
                           type="text"
                           placeholder="Enter new supplier name"
                           value={bomMaterials[material.name]?.company || ''}
                           onChange={(e) => handleBomMaterialChange(material.name, 'company', e.target.value)}
-                          style={{flex: 1, padding: '5px', border: '1px solid #1976d2'}}
+                          style={{ flex: 1, padding: '5px', border: '1px solid #1976d2' }}
                           autoFocus
                         />
                         <button
@@ -5033,7 +5124,7 @@ function DailyReport() {
                             const current = bomMaterials[material.name] || {};
                             handleBomMaterialChange(material.name, 'showCustomCompany', false);
                           }}
-                          style={{padding: '5px 10px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                          style={{ padding: '5px 10px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
                         >
                           ✕
                         </button>
@@ -5049,35 +5140,35 @@ function DailyReport() {
                             handleBomMaterialChange(material.name, 'company', e.target.value);
                           }
                         }}
-                        style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #1976d2'}}
+                        style={{ width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #1976d2' }}
                       >
                         <option value="">Select Supplier/Company</option>
                         {(bomMaterials[material.name]?.suppliers || []).map((supplier, idx) => (
                           <option key={idx} value={supplier}>{supplier}</option>
                         ))}
-                        <option value="__ADD_NEW__" style={{fontWeight: 'bold', color: '#1976d2'}}>+ Add New Supplier</option>
+                        <option value="__ADD_NEW__" style={{ fontWeight: 'bold', color: '#1976d2' }}>+ Add New Supplier</option>
                       </select>
                     )}
-                    
+
                     {/* Lot/Batch Number */}
                     <input
                       type="text"
                       placeholder="Lot/Batch Number"
                       value={bomMaterials[material.name]?.lotBatchNo || ''}
                       onChange={(e) => handleBomMaterialChange(material.name, 'lotBatchNo', e.target.value)}
-                      style={{width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #ccc'}}
+                      style={{ width: '100%', marginBottom: '5px', padding: '5px', border: '1px solid #ccc' }}
                     />
-                    
+
                     {/* Cell Efficiency - Only for Solar Cell */}
                     {material.name === 'Solar Cell' && (
-                      <div style={{marginBottom: '5px'}}>
-                        <label style={{fontSize: '11px', color: '#1976d2', display: 'block', marginBottom: '2px'}}>
+                      <div style={{ marginBottom: '5px' }}>
+                        <label style={{ fontSize: '11px', color: '#1976d2', display: 'block', marginBottom: '2px' }}>
                           ⚡ Cell Efficiency (%):
                         </label>
                         <select
                           value={bomMaterials[material.name]?.cellEfficiency || ''}
                           onChange={(e) => handleBomMaterialChange(material.name, 'cellEfficiency', e.target.value)}
-                          style={{width: '100%', padding: '5px', border: '2px solid #FF9800', borderRadius: '4px', backgroundColor: '#FFF8E1'}}
+                          style={{ width: '100%', padding: '5px', border: '2px solid #FF9800', borderRadius: '4px', backgroundColor: '#FFF8E1' }}
                         >
                           <option value="">Select Efficiency</option>
                           <option value="25.4">25.4%</option>
@@ -5088,19 +5179,19 @@ function DailyReport() {
                         </select>
                       </div>
                     )}
-                    
+
                     {/* Multiple Images Upload */}
                     <input
                       type="file"
                       accept="image/*,.pdf"
                       multiple
                       onChange={(e) => handleBomMaterialChange(material.name, 'images', e.target.files)}
-                      style={{width: '100%', fontSize: '11px', marginBottom: '3px'}}
+                      style={{ width: '100%', fontSize: '11px', marginBottom: '3px' }}
                     />
-                    
+
                     {/* Show selected images count */}
                     {bomMaterials[material.name]?.images && bomMaterials[material.name].images.length > 0 && (
-                      <small style={{color: '#4CAF50', display: 'block'}}>
+                      <small style={{ color: '#4CAF50', display: 'block' }}>
                         ✓ {bomMaterials[material.name].images.length} image(s) selected
                       </small>
                     )}
@@ -5109,16 +5200,16 @@ function DailyReport() {
               </div>
             </div>
 
-            <div style={{marginBottom: '20px', border: '2px solid #4CAF50', padding: '15px', borderRadius: '5px'}}>
-              <h4 style={{color: '#4CAF50', marginBottom: '10px'}}>📄 IPQC PDF Upload</h4>
+            <div style={{ marginBottom: '20px', border: '2px solid #4CAF50', padding: '15px', borderRadius: '5px' }}>
+              <h4 style={{ color: '#4CAF50', marginBottom: '10px' }}>📄 IPQC PDF Upload</h4>
               {selectedRecordForBom?.ipqcPdf && (
-                <div style={{marginBottom: '10px', padding: '8px', backgroundColor: '#d1ecf1', borderRadius: '4px'}}>
-                  <small style={{color: '#0c5460', display: 'block', fontWeight: 'bold'}}>✓ Current IPQC:</small>
+                <div style={{ marginBottom: '10px', padding: '8px', backgroundColor: '#d1ecf1', borderRadius: '4px' }}>
+                  <small style={{ color: '#0c5460', display: 'block', fontWeight: 'bold' }}>✓ Current IPQC:</small>
                   <button
                     onClick={() => {
                       const path = selectedRecordForBom.ipqcPdf.startsWith('/') ? selectedRecordForBom.ipqcPdf : `/${selectedRecordForBom.ipqcPdf}`;
-                      const url = selectedRecordForBom.ipqcPdf.startsWith('http') 
-                        ? selectedRecordForBom.ipqcPdf 
+                      const url = selectedRecordForBom.ipqcPdf.startsWith('http')
+                        ? selectedRecordForBom.ipqcPdf
                         : `http://localhost:5003${path}`;
                       window.open(url, '_blank', 'noopener,noreferrer');
                     }}
@@ -5140,25 +5231,25 @@ function DailyReport() {
                 type="file"
                 accept=".pdf"
                 onChange={(e) => setIpqcPdf(e.target.files[0])}
-                style={{width: '100%'}}
+                style={{ width: '100%' }}
               />
               {ipqcPdf && (
-                <small style={{color: '#4CAF50', display: 'block', marginTop: '5px'}}>
+                <small style={{ color: '#4CAF50', display: 'block', marginTop: '5px' }}>
                   ✓ Selected: {ipqcPdf.name}
                 </small>
               )}
             </div>
 
-            <div style={{marginBottom: '20px', border: '2px solid #FF9800', padding: '15px', borderRadius: '5px'}}>
-              <h4 style={{color: '#FF9800', marginBottom: '10px'}}>📑 FTR Document Upload</h4>
+            <div style={{ marginBottom: '20px', border: '2px solid #FF9800', padding: '15px', borderRadius: '5px' }}>
+              <h4 style={{ color: '#FF9800', marginBottom: '10px' }}>📑 FTR Document Upload</h4>
               {selectedRecordForBom?.ftrDocument && (
-                <div style={{marginBottom: '10px', padding: '8px', backgroundColor: '#d4edda', borderRadius: '4px'}}>
-                  <small style={{color: '#155724', display: 'block', fontWeight: 'bold'}}>✓ Current FTR:</small>
+                <div style={{ marginBottom: '10px', padding: '8px', backgroundColor: '#d4edda', borderRadius: '4px' }}>
+                  <small style={{ color: '#155724', display: 'block', fontWeight: 'bold' }}>✓ Current FTR:</small>
                   <button
                     onClick={() => {
                       const path = selectedRecordForBom.ftrDocument.startsWith('/') ? selectedRecordForBom.ftrDocument : `/${selectedRecordForBom.ftrDocument}`;
-                      const url = selectedRecordForBom.ftrDocument.startsWith('http') 
-                        ? selectedRecordForBom.ftrDocument 
+                      const url = selectedRecordForBom.ftrDocument.startsWith('http')
+                        ? selectedRecordForBom.ftrDocument
                         : `http://localhost:5003${path}`;
                       window.open(url, '_blank', 'noopener,noreferrer');
                     }}
@@ -5180,10 +5271,10 @@ function DailyReport() {
                 type="file"
                 accept=".pdf,.xlsx,.xls,.doc,.docx"
                 onChange={(e) => setFtrDocument(e.target.files[0])}
-                style={{width: '100%'}}
+                style={{ width: '100%' }}
               />
               {ftrDocument && (
-                <small style={{color: '#4CAF50', display: 'block', marginTop: '5px'}}>
+                <small style={{ color: '#4CAF50', display: 'block', marginTop: '5px' }}>
                   ✓ Selected: {ftrDocument.name}
                 </small>
               )}
@@ -5201,104 +5292,104 @@ function DailyReport() {
 
       {showPDFModal && (
         <div className="modal-overlay" onClick={() => setShowPDFModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '600px'}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <h3>📊 Configure Production Report</h3>
-            
+
             <div className="form-section">
-              <h4 style={{color: '#1976d2', marginBottom: '10px'}}>📅 Date Range</h4>
-              <div style={{display: 'flex', gap: '15px'}}>
-                <div className="form-group" style={{flex: 1}}>
+              <h4 style={{ color: '#1976d2', marginBottom: '10px' }}>📅 Date Range</h4>
+              <div style={{ display: 'flex', gap: '15px' }}>
+                <div className="form-group" style={{ flex: 1 }}>
                   <label>Start Date</label>
                   <input
                     type="date"
                     value={pdfDateRange.startDate}
-                    onChange={(e) => setPdfDateRange({...pdfDateRange, startDate: e.target.value})}
+                    onChange={(e) => setPdfDateRange({ ...pdfDateRange, startDate: e.target.value })}
                   />
                 </div>
-                <div className="form-group" style={{flex: 1}}>
+                <div className="form-group" style={{ flex: 1 }}>
                   <label>End Date</label>
                   <input
                     type="date"
                     value={pdfDateRange.endDate}
-                    onChange={(e) => setPdfDateRange({...pdfDateRange, endDate: e.target.value})}
+                    onChange={(e) => setPdfDateRange({ ...pdfDateRange, endDate: e.target.value })}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="form-section" style={{marginTop: '20px'}}>
-              <h4 style={{color: '#1976d2', marginBottom: '10px'}}>✅ Include in Report</h4>
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
-                <label style={{display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', cursor: 'pointer'}}>
+            <div className="form-section" style={{ marginTop: '20px' }}>
+              <h4 style={{ color: '#1976d2', marginBottom: '10px' }}>✅ Include in Report</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={reportOptions.includeProductionDetails}
-                    onChange={(e) => setReportOptions({...reportOptions, includeProductionDetails: e.target.checked})}
-                    style={{marginRight: '10px', width: '18px', height: '18px'}}
+                    onChange={(e) => setReportOptions({ ...reportOptions, includeProductionDetails: e.target.checked })}
+                    style={{ marginRight: '10px', width: '18px', height: '18px' }}
                   />
-                  <span style={{fontSize: '14px'}}>📈 Production Details</span>
+                  <span style={{ fontSize: '14px' }}>📈 Production Details</span>
                 </label>
 
-                <label style={{display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', cursor: 'pointer'}}>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={reportOptions.includeCellInventory}
-                    onChange={(e) => setReportOptions({...reportOptions, includeCellInventory: e.target.checked})}
-                    style={{marginRight: '10px', width: '18px', height: '18px'}}
+                    onChange={(e) => setReportOptions({ ...reportOptions, includeCellInventory: e.target.checked })}
+                    style={{ marginRight: '10px', width: '18px', height: '18px' }}
                   />
-                  <span style={{fontSize: '14px'}}>📦 Cell Inventory</span>
+                  <span style={{ fontSize: '14px' }}>📦 Cell Inventory</span>
                 </label>
 
-                <label style={{display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', cursor: 'pointer'}}>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={reportOptions.includeKPIMetrics}
-                    onChange={(e) => setReportOptions({...reportOptions, includeKPIMetrics: e.target.checked})}
-                    style={{marginRight: '10px', width: '18px', height: '18px'}}
+                    onChange={(e) => setReportOptions({ ...reportOptions, includeKPIMetrics: e.target.checked })}
+                    style={{ marginRight: '10px', width: '18px', height: '18px' }}
                   />
-                  <span style={{fontSize: '14px'}}>🎯 KPI Metrics</span>
+                  <span style={{ fontSize: '14px' }}>🎯 KPI Metrics</span>
                 </label>
 
-                <label style={{display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', cursor: 'pointer'}}>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '5px', cursor: 'pointer' }}>
                   <input
                     type="checkbox"
                     checked={reportOptions.includeDayWiseSummary}
-                    onChange={(e) => setReportOptions({...reportOptions, includeDayWiseSummary: e.target.checked})}
-                    style={{marginRight: '10px', width: '18px', height: '18px'}}
+                    onChange={(e) => setReportOptions({ ...reportOptions, includeDayWiseSummary: e.target.checked })}
+                    style={{ marginRight: '10px', width: '18px', height: '18px' }}
                   />
-                  <span style={{fontSize: '14px'}}>📊 Day-wise Summary</span>
+                  <span style={{ fontSize: '14px' }}>📊 Day-wise Summary</span>
                 </label>
 
-                <label style={{display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#fff3e0', borderRadius: '5px', cursor: 'pointer', gridColumn: '1 / -1'}}>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#fff3e0', borderRadius: '5px', cursor: 'pointer', gridColumn: '1 / -1' }}>
                   <input
                     type="checkbox"
                     checked={reportOptions.includeRejections}
-                    onChange={(e) => setReportOptions({...reportOptions, includeRejections: e.target.checked})}
-                    style={{marginRight: '10px', width: '18px', height: '18px'}}
+                    onChange={(e) => setReportOptions({ ...reportOptions, includeRejections: e.target.checked })}
+                    style={{ marginRight: '10px', width: '18px', height: '18px' }}
                   />
-                  <span style={{fontSize: '14px', fontWeight: 'bold'}}>❌ Rejection Details</span>
+                  <span style={{ fontSize: '14px', fontWeight: 'bold' }}>❌ Rejection Details</span>
                 </label>
 
-                <label style={{display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '5px', cursor: 'pointer', gridColumn: '1 / -1'}}>
+                <label style={{ display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#e3f2fd', borderRadius: '5px', cursor: 'pointer', gridColumn: '1 / -1' }}>
                   <input
                     type="checkbox"
                     checked={reportOptions.includeBomMaterials}
-                    onChange={(e) => setReportOptions({...reportOptions, includeBomMaterials: e.target.checked})}
-                    style={{marginRight: '10px', width: '18px', height: '18px'}}
+                    onChange={(e) => setReportOptions({ ...reportOptions, includeBomMaterials: e.target.checked })}
+                    style={{ marginRight: '10px', width: '18px', height: '18px' }}
                   />
-                  <span style={{fontSize: '14px', fontWeight: 'bold'}}>📦 BOM Materials & Documents</span>
+                  <span style={{ fontSize: '14px', fontWeight: 'bold' }}>📦 BOM Materials & Documents</span>
                 </label>
               </div>
             </div>
 
-            <div className="modal-actions" style={{marginTop: '25px', display: 'flex', gap: '10px', justifyContent: 'center'}}>
-              <button className="btn-save" onClick={handleGeneratePDF} style={{flex: 1, padding: '12px'}}>
+            <div className="modal-actions" style={{ marginTop: '25px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button className="btn-save" onClick={handleGeneratePDF} style={{ flex: 1, padding: '12px' }}>
                 📄 Generate PDF
               </button>
-              <button className="btn-save" onClick={handleGenerateExcel} style={{backgroundColor: '#4CAF50', flex: 1, padding: '12px'}}>
+              <button className="btn-save" onClick={handleGenerateExcel} style={{ backgroundColor: '#4CAF50', flex: 1, padding: '12px' }}>
                 📊 Generate Excel
               </button>
-              <button className="btn-cancel" onClick={() => setShowPDFModal(false)} style={{padding: '12px'}}>
+              <button className="btn-cancel" onClick={() => setShowPDFModal(false)} style={{ padding: '12px' }}>
                 Cancel
               </button>
             </div>
@@ -5309,25 +5400,25 @@ function DailyReport() {
       {/* COC Warning Modal */}
       {showCocWarningModal && cocValidation && (
         <div className="modal-overlay" onClick={() => setShowCocWarningModal(false)}>
-          <div className="modal-content" style={{maxWidth: '800px', maxHeight: '90vh', overflow: 'auto'}} onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content" style={{ maxWidth: '800px', maxHeight: '90vh', overflow: 'auto' }} onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>⚠️ COC Material Availability Check</h2>
               <button className="close-btn" onClick={() => setShowCocWarningModal(false)}>×</button>
             </div>
-            
-            <div style={{padding: '20px'}}>
-              <div style={{marginBottom: '20px', padding: '15px', background: cocValidation.valid ? '#d4edda' : '#f8d7da', borderRadius: '8px', border: `2px solid ${cocValidation.valid ? '#28a745' : '#dc3545'}`}}>
-                <h3 style={{margin: '0 0 10px 0', color: cocValidation.valid ? '#155724' : '#721c24'}}>
+
+            <div style={{ padding: '20px' }}>
+              <div style={{ marginBottom: '20px', padding: '15px', background: cocValidation.valid ? '#d4edda' : '#f8d7da', borderRadius: '8px', border: `2px solid ${cocValidation.valid ? '#28a745' : '#dc3545'}` }}>
+                <h3 style={{ margin: '0 0 10px 0', color: cocValidation.valid ? '#155724' : '#721c24' }}>
                   {cocValidation.valid ? '✅ All Materials Available' : '❌ Material Shortage Detected'}
                 </h3>
-                <p style={{margin: 0, fontSize: '14px', color: cocValidation.valid ? '#155724' : '#721c24'}}>
+                <p style={{ margin: 0, fontSize: '14px', color: cocValidation.valid ? '#155724' : '#721c24' }}>
                   Total Production: <strong>{cocValidation.total_production} modules</strong>
                 </p>
               </div>
 
               {cocValidation.warnings && cocValidation.warnings.length > 0 && (
-                <div style={{marginBottom: '20px'}}>
-                  <h3 style={{color: '#dc3545', marginBottom: '15px'}}>⚠️ Warnings:</h3>
+                <div style={{ marginBottom: '20px' }}>
+                  <h3 style={{ color: '#dc3545', marginBottom: '15px' }}>⚠️ Warnings:</h3>
                   {cocValidation.warnings.map((warning, idx) => (
                     <div key={idx} style={{
                       padding: '12px 15px',
@@ -5343,28 +5434,28 @@ function DailyReport() {
                 </div>
               )}
 
-              <div style={{marginBottom: '20px'}}>
-                <h3 style={{marginBottom: '15px'}}>📊 Material Status:</h3>
-                <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
+              <div style={{ marginBottom: '20px' }}>
+                <h3 style={{ marginBottom: '15px' }}>📊 Material Status:</h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                   <thead>
-                    <tr style={{background: '#f8f9fa'}}>
-                      <th style={{padding: '10px', border: '1px solid #dee2e6', textAlign: 'left'}}>Material</th>
-                      <th style={{padding: '10px', border: '1px solid #dee2e6', textAlign: 'right'}}>Required</th>
-                      <th style={{padding: '10px', border: '1px solid #dee2e6', textAlign: 'right'}}>Available</th>
-                      <th style={{padding: '10px', border: '1px solid #dee2e6', textAlign: 'right'}}>After Use</th>
-                      <th style={{padding: '10px', border: '1px solid #dee2e6', textAlign: 'center'}}>Status</th>
+                    <tr style={{ background: '#f8f9fa' }}>
+                      <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'left' }}>Material</th>
+                      <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'right' }}>Required</th>
+                      <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'right' }}>Available</th>
+                      <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'right' }}>After Use</th>
+                      <th style={{ padding: '10px', border: '1px solid #dee2e6', textAlign: 'center' }}>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {cocValidation.materials && cocValidation.materials.map((material, idx) => (
-                      <tr key={idx} style={{background: material.is_sufficient ? '#fff' : '#ffebee'}}>
-                        <td style={{padding: '8px', border: '1px solid #dee2e6'}}>{material.material}</td>
-                        <td style={{padding: '8px', border: '1px solid #dee2e6', textAlign: 'right'}}>{material.required.toLocaleString()}</td>
-                        <td style={{padding: '8px', border: '1px solid #dee2e6', textAlign: 'right'}}>{material.available.toLocaleString()}</td>
-                        <td style={{padding: '8px', border: '1px solid #dee2e6', textAlign: 'right', fontWeight: 'bold', color: material.is_sufficient ? '#28a745' : '#dc3545'}}>
+                      <tr key={idx} style={{ background: material.is_sufficient ? '#fff' : '#ffebee' }}>
+                        <td style={{ padding: '8px', border: '1px solid #dee2e6' }}>{material.material}</td>
+                        <td style={{ padding: '8px', border: '1px solid #dee2e6', textAlign: 'right' }}>{material.required.toLocaleString()}</td>
+                        <td style={{ padding: '8px', border: '1px solid #dee2e6', textAlign: 'right' }}>{material.available.toLocaleString()}</td>
+                        <td style={{ padding: '8px', border: '1px solid #dee2e6', textAlign: 'right', fontWeight: 'bold', color: material.is_sufficient ? '#28a745' : '#dc3545' }}>
                           {material.is_sufficient ? material.remaining_after.toLocaleString() : `-${material.shortage.toLocaleString()}`}
                         </td>
-                        <td style={{padding: '8px', border: '1px solid #dee2e6', textAlign: 'center'}}>
+                        <td style={{ padding: '8px', border: '1px solid #dee2e6', textAlign: 'center' }}>
                           {material.is_sufficient ? '✅' : '❌'}
                         </td>
                       </tr>
@@ -5373,25 +5464,25 @@ function DailyReport() {
                 </table>
               </div>
 
-              <div style={{padding: '15px', background: '#e7f3ff', borderRadius: '6px', border: '2px solid #2196F3'}}>
+              <div style={{ padding: '15px', background: '#e7f3ff', borderRadius: '6px', border: '2px solid #2196F3' }}>
                 <strong>💡 Note:</strong> COC materials are consumed automatically from the shared pool using FIFO (First In, First Out) method. Please ensure sufficient COC documents are added before proceeding with production.
               </div>
 
-              <div className="modal-actions" style={{marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center'}}>
+              <div className="modal-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
                 {!cocValidation.valid ? (
                   <>
-                    <button className="btn-cancel" onClick={() => setShowCocWarningModal(false)} style={{flex: 1}}>
+                    <button className="btn-cancel" onClick={() => setShowCocWarningModal(false)} style={{ flex: 1 }}>
                       ❌ Cannot Proceed - Add COC First
                     </button>
                     <button className="btn-save" onClick={() => {
                       setShowCocWarningModal(false);
                       window.open('/#/coc-dashboard', '_blank');
-                    }} style={{flex: 1, background: '#2196F3'}}>
+                    }} style={{ flex: 1, background: '#2196F3' }}>
                       📋 Go to COC Dashboard
                     </button>
                   </>
                 ) : (
-                  <button className="btn-save" onClick={() => setShowCocWarningModal(false)} style={{flex: 1}}>
+                  <button className="btn-save" onClick={() => setShowCocWarningModal(false)} style={{ flex: 1 }}>
                     ✅ Okay, Continue
                   </button>
                 )}
@@ -5402,7 +5493,7 @@ function DailyReport() {
       )}
 
       {/* COC Selection Modal */}
-      <COCSelectionModal 
+      <COCSelectionModal
         isOpen={showCOCModal}
         onClose={() => setShowCOCModal(false)}
         onConfirm={handleCOCConfirm}
@@ -5414,28 +5505,28 @@ function DailyReport() {
       {/* COC Upload to PDI Modal */}
       {showCocUploadModal && (
         <div className="modal-overlay" onClick={() => setShowCocUploadModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto'}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3>📤 Upload COC Materials to PDI Batch</h3>
-            <p style={{color: '#666', marginBottom: '20px'}}>
+            <p style={{ color: '#666', marginBottom: '20px' }}>
               Select COC materials to upload for PDI Done records. Data will be fetched from COC API.
             </p>
 
-            <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px'}}>
+            <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
               <h4>PDI Done Records:</h4>
-              <ul style={{margin: '10px 0', paddingLeft: '20px'}}>
+              <ul style={{ margin: '10px 0', paddingLeft: '20px' }}>
                 {selectedCompany.productionRecords
                   ?.filter(r => r.pdi && r.pdi.trim() !== '')
                   .map(record => (
-                    <li key={record.id} style={{marginBottom: '5px'}}>
+                    <li key={record.id} style={{ marginBottom: '5px' }}>
                       <strong>{record.date}</strong> - PDI: {record.pdi} - Production: {(record.dayProduction || 0) + (record.nightProduction || 0)} modules
                     </li>
                   ))}
               </ul>
             </div>
 
-            <div style={{marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center'}}>
-              <div style={{flex: 1}}>
-                <label style={{display: 'block', marginBottom: '5px', fontWeight: 'bold'}}>🔍 Search by Invoice Number:</label>
+            <div style={{ marginBottom: '20px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>🔍 Search by Invoice Number:</label>
                 <input
                   type="text"
                   placeholder="Enter invoice number to filter..."
@@ -5489,24 +5580,24 @@ function DailyReport() {
             </div>
 
             {availableCocData.length > 0 && (
-              <div style={{marginBottom: '20px'}}>
+              <div style={{ marginBottom: '20px' }}>
                 <h4>Available COC Materials ({availableCocData.length}):</h4>
-                <div style={{maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '5px', padding: '10px'}}>
-                  <table style={{width: '100%', fontSize: '12px'}}>
-                    <thead style={{position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>
+                <div style={{ maxHeight: '400px', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '5px', padding: '10px' }}>
+                  <table style={{ width: '100%', fontSize: '12px' }}>
+                    <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa' }}>
                       <tr>
-                        <th style={{textAlign: 'left', padding: '8px'}}>Select</th>
-                        <th style={{textAlign: 'left', padding: '8px'}}>Invoice No</th>
-                        <th style={{textAlign: 'left', padding: '8px'}}>Material</th>
-                        <th style={{textAlign: 'left', padding: '8px'}}>Lot Number</th>
-                        <th style={{textAlign: 'left', padding: '8px'}}>Quantity</th>
-                        <th style={{textAlign: 'left', padding: '8px'}}>Date</th>
+                        <th style={{ textAlign: 'left', padding: '8px' }}>Select</th>
+                        <th style={{ textAlign: 'left', padding: '8px' }}>Invoice No</th>
+                        <th style={{ textAlign: 'left', padding: '8px' }}>Material</th>
+                        <th style={{ textAlign: 'left', padding: '8px' }}>Lot Number</th>
+                        <th style={{ textAlign: 'left', padding: '8px' }}>Quantity</th>
+                        <th style={{ textAlign: 'left', padding: '8px' }}>Date</th>
                       </tr>
                     </thead>
                     <tbody>
                       {availableCocData.map((material, index) => (
-                        <tr key={index} style={{borderBottom: '1px solid #eee'}}>
-                          <td style={{padding: '8px'}}>
+                        <tr key={index} style={{ borderBottom: '1px solid #eee' }}>
+                          <td style={{ padding: '8px' }}>
                             <input
                               type="checkbox"
                               onChange={(e) => {
@@ -5518,11 +5609,11 @@ function DailyReport() {
                               }}
                             />
                           </td>
-                          <td style={{padding: '8px'}}>{material.invoice_no || 'N/A'}</td>
-                          <td style={{padding: '8px'}}>{material.material_name || 'N/A'}</td>
-                          <td style={{padding: '8px'}}>{material.lot_number || 'N/A'}</td>
-                          <td style={{padding: '8px'}}>{material.quantity || 'N/A'}</td>
-                          <td style={{padding: '8px'}}>{material.date || 'N/A'}</td>
+                          <td style={{ padding: '8px' }}>{material.invoice_no || 'N/A'}</td>
+                          <td style={{ padding: '8px' }}>{material.material_name || 'N/A'}</td>
+                          <td style={{ padding: '8px' }}>{material.lot_number || 'N/A'}</td>
+                          <td style={{ padding: '8px' }}>{material.quantity || 'N/A'}</td>
+                          <td style={{ padding: '8px' }}>{material.date || 'N/A'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -5531,24 +5622,24 @@ function DailyReport() {
               </div>
             )}
 
-            <div className="modal-actions" style={{display: 'flex', gap: '10px', justifyContent: 'flex-end'}}>
-              <button 
-                className="btn-save" 
+            <div className="modal-actions" style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                className="btn-save"
                 onClick={async () => {
                   if (selectedPdiRecords.length === 0) {
                     alert('Please select at least one material!');
                     return;
                   }
-                  
+
                   try {
                     setLoading(true);
                     const API_BASE_URL = getAPIBaseURL();
-                    
+
                     const response = await axios.post(`${API_BASE_URL}/api/pdi/upload-coc-materials`, {
                       company_id: selectedCompany.id,
                       materials: selectedPdiRecords
                     });
-                    
+
                     if (response.data.success) {
                       alert(`✅ Successfully uploaded ${selectedPdiRecords.length} materials to PDI batch!`);
                       setShowCocUploadModal(false);
@@ -5576,12 +5667,12 @@ function DailyReport() {
       )}
 
       {/* Bulk PDI Assignment Modal */}
-      
+
       {/* PDI Details Modal - BOM Materials & COC Upload */}
       {showPdiDetailsModal && selectedPdiForDetails && (() => {
         const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === selectedPdiForDetails);
         const totalProduction = pdiRecords.reduce((sum, r) => sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0);
-        
+
         // COC Materials - Independent of production BOM uploads
         // These are the ONLY materials that require COC documentation
         const COC_MATERIALS = [
@@ -5598,7 +5689,7 @@ function DailyReport() {
           { name: 'JB Potting (A and B)', unit: 'KG', spec: '' },
           { name: 'JUNCTION BOX', unit: 'SETS', spec: '1200mm-' }
         ];
-        
+
         // Get assigned COCs from production records (COC linking - separate from BOM)
         const assignedCocsMap = {};
         pdiRecords.forEach(record => {
@@ -5622,10 +5713,10 @@ function DailyReport() {
             });
           }
         });
-        
+
         // Build display list: Show ALL COCs separately (multiple rows for same material)
         const consolidatedBom = [];
-        
+
         // Get current company short name for matching with MRP data
         const getCompanyShortName = (companyName) => {
           if (!companyName) return '';
@@ -5636,7 +5727,7 @@ function DailyReport() {
           return name;
         };
         const currentCompanyShort = getCompanyShortName(selectedCompany?.companyName);
-        
+
         // Helper function to find assigned COC data from MRP API
         const getAssignedCocForMaterial = (materialName, pdiNumber) => {
           // Normalize material name for matching with MRP API material_name
@@ -5657,9 +5748,9 @@ function DailyReport() {
             if (lower.includes('eva')) return 'eva';
             return lower;
           };
-          
+
           const normalizedMaterial = normalizeMatName(materialName);
-          
+
           // Map company name for MRP API matching
           const companyMap = {
             'Sterlin and Wilson': 'S&W',
@@ -5667,19 +5758,19 @@ function DailyReport() {
             'Rays Power': 'Rays Power'
           };
           const mrpCompanyName = companyMap[selectedCompany?.name] || selectedCompany?.name;
-          
+
           // Filter by company, material, and PDI
           return assignedCocData.filter(rec => {
             const recMaterial = normalizeMatName(rec.material_name);
             const recPdi = (rec.pdi_no || '').toLowerCase();
             const targetPdi = (pdiNumber || '').toLowerCase();
-            
+
             // Match company (assigned_to field from MRP API)
             const companyMatch = rec.assigned_to === mrpCompanyName;
-            
+
             // Match material
             const materialMatch = recMaterial === normalizedMaterial;
-            
+
             // Match PDI - flexible matching for Lot 1 = PDI-1, etc.
             // Extract number from PDI format: "PDI-1" -> "1", "Lot 1" -> "1", "Lot 2.2" -> "2.2"
             const extractPdiNum = (pdi) => {
@@ -5688,15 +5779,15 @@ function DailyReport() {
             };
             const targetNum = extractPdiNum(targetPdi);
             const recNum = extractPdiNum(recPdi);
-            const pdiMatch = targetNum === recNum || 
-                            recPdi.includes(`lot ${targetNum}`) || 
-                            recPdi.includes(`pdi-${targetNum}`) ||
-                            targetPdi.includes(`lot ${recNum}`);
-            
+            const pdiMatch = targetNum === recNum ||
+              recPdi.includes(`lot ${targetNum}`) ||
+              recPdi.includes(`pdi-${targetNum}`) ||
+              targetPdi.includes(`lot ${recNum}`);
+
             return companyMatch && materialMatch && pdiMatch;
           });
         };
-        
+
         // First, collect all unique material-invoice combinations from COC linking
         const materialCocPairs = [];
         pdiRecords.forEach(record => {
@@ -5706,8 +5797,8 @@ function DailyReport() {
                 const key = `${cm.materialName}_${cm.invoiceNo}`;
                 const exists = materialCocPairs.find(p => p.key === key);
                 if (!exists) {
-                  materialCocPairs.push({ 
-                    key, 
+                  materialCocPairs.push({
+                    key,
                     materialName: cm.materialName,
                     lotNumber: cm.invoiceNo,
                     lotBatchNo: cm.lotBatchNo,
@@ -5721,7 +5812,7 @@ function DailyReport() {
             });
           }
         });
-        
+
         // Now create consolidated list showing each COC as separate row
         COC_MATERIALS.forEach(material => {
           // Find all COCs for this material - match by base name for busbar
@@ -5730,7 +5821,7 @@ function DailyReport() {
             const bmNameLower = bm.materialName.toLowerCase();
             const materialNameLower = material.name.toLowerCase();
             const baseNameLower = baseName.toLowerCase();
-            
+
             // For Ribbon(BUSBAR) 4mm and 6mm, match by spec
             if (materialNameLower.includes('busbar') && materialNameLower.includes('4mm')) {
               return bmNameLower.includes('busbar') && (bmNameLower.includes('4.0') || bmNameLower.includes('4mm'));
@@ -5738,25 +5829,25 @@ function DailyReport() {
             if (materialNameLower.includes('busbar') && materialNameLower.includes('6mm')) {
               return bmNameLower.includes('busbar') && (bmNameLower.includes('6.0') || bmNameLower.includes('6mm'));
             }
-            
+
             // Default matching
-            return bm.materialName === material.name || 
-                   bm.materialName.includes(baseName) ||
-                   baseName.includes(bm.materialName);
+            return bm.materialName === material.name ||
+              bm.materialName.includes(baseName) ||
+              baseName.includes(bm.materialName);
           });
-          
+
           // Get assigned COC data from MRP API for this material
           const mrpAssignedCocs = getAssignedCocForMaterial(material.name, selectedPdiForDetails);
-          
+
           if (assignedCocs.length > 0) {
             // Add each COC as separate row with spec from COC_MATERIALS
             assignedCocs.forEach(coc => {
               // Find matching MRP data for this invoice
-              const mrpMatch = mrpAssignedCocs.find(m => 
-                m.invoice_no === coc.lotNumber || 
+              const mrpMatch = mrpAssignedCocs.find(m =>
+                m.invoice_no === coc.lotNumber ||
                 m.lot_batch_no === coc.lotBatchNo
               );
-              
+
               consolidatedBom.push({
                 ...coc,
                 spec: material.spec || coc.spec || '',
@@ -5805,56 +5896,56 @@ function DailyReport() {
             }
           }
         });
-        
+
         return (
           <div className="modal-overlay" onClick={() => setShowPdiDetailsModal(false)}>
-            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto'}}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto' }}>
               <h3>📋 {selectedPdiForDetails} - BOM Materials & COC Details</h3>
-              
+
               {/* MRP Data Status Indicator */}
               {loadingAssignedCoc ? (
-                <div style={{padding: '10px', backgroundColor: '#fff3cd', borderRadius: '5px', marginBottom: '10px', textAlign: 'center'}}>
+                <div style={{ padding: '10px', backgroundColor: '#fff3cd', borderRadius: '5px', marginBottom: '10px', textAlign: 'center' }}>
                   ⏳ Loading COC assignments from MRP...
                 </div>
               ) : assignedCocData.length > 0 && (
-                <div style={{padding: '10px', backgroundColor: '#d4edda', borderRadius: '5px', marginBottom: '10px', fontSize: '12px'}}>
-                  ✅ <strong>MRP Data Loaded:</strong> {assignedCocData.length} COC assignments found | 
+                <div style={{ padding: '10px', backgroundColor: '#d4edda', borderRadius: '5px', marginBottom: '10px', fontSize: '12px' }}>
+                  ✅ <strong>MRP Data Loaded:</strong> {assignedCocData.length} COC assignments found |
                   Data shows remaining quantities per material assigned to PDIs (Lot 1 = PDI-1, Lot 2 = PDI-2, etc.)
                 </div>
               )}
-              
-              <div style={{padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '5px', marginBottom: '20px', border: '2px solid #28a745'}}>
-                <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Total Records:</strong> {pdiRecords.length} days</p>
-                <p style={{margin: '5px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px'}}>
-                  <strong>Total Production:</strong> 
+
+              <div style={{ padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '5px', marginBottom: '20px', border: '2px solid #28a745' }}>
+                <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Total Records:</strong> {pdiRecords.length} days</p>
+                <p style={{ margin: '5px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <strong>Total Production:</strong>
                   {editingPdiProduction ? (
                     <>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={tempPdiProduction}
                         onChange={(e) => setTempPdiProduction(e.target.value)}
-                        style={{width: '100px', padding: '4px', border: '1px solid #ccc', borderRadius: '3px'}}
+                        style={{ width: '100px', padding: '4px', border: '1px solid #ccc', borderRadius: '3px' }}
                         autoFocus
                       />
                       <button
                         onClick={() => {
-                          setPdiProductionOverrides({...pdiProductionOverrides, [selectedPdiForDetails]: parseInt(tempPdiProduction) || totalProduction});
+                          setPdiProductionOverrides({ ...pdiProductionOverrides, [selectedPdiForDetails]: parseInt(tempPdiProduction) || totalProduction });
                           setEditingPdiProduction(false);
                         }}
-                        style={{padding: '4px 8px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                        style={{ padding: '4px 8px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
                       >
                         ✓
                       </button>
                       <button
                         onClick={() => setEditingPdiProduction(false)}
-                        style={{padding: '4px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                        style={{ padding: '4px 8px', background: '#dc3545', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
                       >
                         ✕
                       </button>
                     </>
                   ) : (
                     <>
-                      <span style={{fontWeight: 'bold', color: pdiProductionOverrides[selectedPdiForDetails] ? '#ff6b00' : '#000'}}>
+                      <span style={{ fontWeight: 'bold', color: pdiProductionOverrides[selectedPdiForDetails] ? '#ff6b00' : '#000' }}>
                         {pdiProductionOverrides[selectedPdiForDetails] || totalProduction} modules
                         {pdiProductionOverrides[selectedPdiForDetails] && ' (edited)'}
                       </span>
@@ -5863,18 +5954,18 @@ function DailyReport() {
                           setTempPdiProduction((pdiProductionOverrides[selectedPdiForDetails] || totalProduction).toString());
                           setEditingPdiProduction(true);
                         }}
-                        style={{padding: '4px 8px', background: '#007bff', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '11px'}}
+                        style={{ padding: '4px 8px', background: '#007bff', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '11px' }}
                       >
                         ✏️ Edit
                       </button>
                       {pdiProductionOverrides[selectedPdiForDetails] && (
                         <button
                           onClick={() => {
-                            const newOverrides = {...pdiProductionOverrides};
+                            const newOverrides = { ...pdiProductionOverrides };
                             delete newOverrides[selectedPdiForDetails];
                             setPdiProductionOverrides(newOverrides);
                           }}
-                          style={{padding: '4px 8px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '11px'}}
+                          style={{ padding: '4px 8px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontSize: '11px' }}
                         >
                           Reset
                         </button>
@@ -5882,8 +5973,8 @@ function DailyReport() {
                     </>
                   )}
                 </p>
-                <p style={{margin: '5px 0', fontSize: '14px'}}><strong>Date Range:</strong> {pdiRecords[0]?.date} to {pdiRecords[pdiRecords.length - 1]?.date}</p>
-                <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
+                <p style={{ margin: '5px 0', fontSize: '14px' }}><strong>Date Range:</strong> {pdiRecords[0]?.date} to {pdiRecords[pdiRecords.length - 1]?.date}</p>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
                   <button
                     onClick={() => {
                       const wattage = pdiRecords[0]?.wattage || '625wp';
@@ -5925,50 +6016,50 @@ function DailyReport() {
 
               {/* Required COCs Report Section */}
               {requiredCocsReport.length > 0 && (
-                <div style={{marginBottom: '25px', padding: '20px', backgroundColor: '#fff3cd', borderRadius: '5px', border: '2px solid #FF9800'}}>
-                  <h4 style={{marginTop: 0, color: '#FF6F00'}}>📊 Required COCs for {selectedPdiForDetails}</h4>
-                  <p style={{fontSize: '12px', color: '#666', marginBottom: '15px'}}>
+                <div style={{ marginBottom: '25px', padding: '20px', backgroundColor: '#fff3cd', borderRadius: '5px', border: '2px solid #FF9800' }}>
+                  <h4 style={{ marginTop: 0, color: '#FF6F00' }}>📊 Required COCs for {selectedPdiForDetails}</h4>
+                  <p style={{ fontSize: '12px', color: '#666', marginBottom: '15px' }}>
                     Based on <strong>{totalProduction} modules</strong> production
                   </p>
-                  
+
                   {requiredCocsReport.map((req, idx) => (
-                    <div key={idx} style={{marginBottom: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '5px', border: '1px solid #dee2e6'}}>
-                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+                    <div key={idx} style={{ marginBottom: '20px', padding: '15px', backgroundColor: 'white', borderRadius: '5px', border: '1px solid #dee2e6' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
                         <div>
-                          <strong style={{fontSize: '14px', color: '#1976d2'}}>{req.materialName}</strong>
-                          {req.productType && <span style={{fontSize: '11px', color: '#666', marginLeft: '8px'}}>({req.productType})</span>}
+                          <strong style={{ fontSize: '14px', color: '#1976d2' }}>{req.materialName}</strong>
+                          {req.productType && <span style={{ fontSize: '11px', color: '#666', marginLeft: '8px' }}>({req.productType})</span>}
                         </div>
-                        <div style={{fontSize: '13px', fontWeight: 'bold', color: '#d32f2f'}}>
-                          Required: {req.requiredQty} <span style={{fontSize: '10px', color: '#666'}}>({req.perModuleQty} per module)</span>
+                        <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#d32f2f' }}>
+                          Required: {req.requiredQty} <span style={{ fontSize: '10px', color: '#666' }}>({req.perModuleQty} per module)</span>
                         </div>
                       </div>
-                      
+
                       {/* Available COCs by Company */}
                       {Object.keys(req.availableCocs).length > 0 ? (
                         <div>
                           {Object.entries(req.availableCocs).map(([company, cocs]) => {
                             const totalAvailable = cocs.reduce((sum, coc) => sum + coc.cocQty, 0);
                             const isEnough = totalAvailable >= req.requiredQty;
-                            
+
                             return (
-                              <div key={company} style={{marginTop: '10px', padding: '10px', backgroundColor: isEnough ? '#e8f5e9' : '#ffebee', borderRadius: '4px', border: `1px solid ${isEnough ? '#4caf50' : '#f44336'}`}}>
-                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
-                                  <strong style={{fontSize: '12px', color: '#333'}}>{company}</strong>
-                                  <span style={{fontSize: '12px', fontWeight: 'bold', color: isEnough ? '#4caf50' : '#f44336'}}>
+                              <div key={company} style={{ marginTop: '10px', padding: '10px', backgroundColor: isEnough ? '#e8f5e9' : '#ffebee', borderRadius: '4px', border: `1px solid ${isEnough ? '#4caf50' : '#f44336'}` }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                                  <strong style={{ fontSize: '12px', color: '#333' }}>{company}</strong>
+                                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: isEnough ? '#4caf50' : '#f44336' }}>
                                     Available: {totalAvailable} {isEnough ? '✅' : '⚠️'}
                                   </span>
                                 </div>
-                                
+
                                 {/* Individual COCs */}
-                                <div style={{maxHeight: '120px', overflowY: 'auto'}}>
+                                <div style={{ maxHeight: '120px', overflowY: 'auto' }}>
                                   {cocs.map((coc, cocIdx) => (
-                                    <div key={cocIdx} style={{padding: '5px', backgroundColor: 'white', marginBottom: '5px', borderRadius: '3px', fontSize: '11px'}}>
-                                      <div style={{display: 'flex', justifyContent: 'space-between'}}>
+                                    <div key={cocIdx} style={{ padding: '5px', backgroundColor: 'white', marginBottom: '5px', borderRadius: '3px', fontSize: '11px' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                         <span>Invoice: <strong>{coc.invoiceNo}</strong></span>
                                         <span>Qty: <strong>{coc.cocQty}</strong></span>
                                       </div>
-                                      {coc.lotBatchNo && <div style={{color: '#666'}}>Lot: {coc.lotBatchNo}</div>}
-                                      {coc.invoiceDate && <div style={{color: '#666'}}>Date: {coc.invoiceDate}</div>}
+                                      {coc.lotBatchNo && <div style={{ color: '#666' }}>Lot: {coc.lotBatchNo}</div>}
+                                      {coc.invoiceDate && <div style={{ color: '#666' }}>Date: {coc.invoiceDate}</div>}
                                     </div>
                                   ))}
                                 </div>
@@ -5977,7 +6068,7 @@ function DailyReport() {
                           })}
                         </div>
                       ) : (
-                        <div style={{padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px', textAlign: 'center', color: '#d32f2f', fontSize: '12px'}}>
+                        <div style={{ padding: '10px', backgroundColor: '#ffebee', borderRadius: '4px', textAlign: 'center', color: '#d32f2f', fontSize: '12px' }}>
                           ❌ No COC available in database
                         </div>
                       )}
@@ -5988,252 +6079,252 @@ function DailyReport() {
 
               {/* OLD BOM Table - Hidden, using new MRP table below */}
               {false && (
-                <><h4 style={{marginTop: '20px', marginBottom: '15px'}}>📦 BOM Materials for Complete PDI:</h4>
-              {consolidatedBom.length > 0 ? (
-                <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px', border: '1px solid #dee2e6'}}>
-                  <table style={{width: '100%', fontSize: '11px'}}>
-                    <thead>
-                      <tr style={{backgroundColor: '#e9ecef'}}>
-                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Material</th>
-                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Specification</th>
-                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Invoice No</th>
-                        <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>COC Qty</th>
-                        <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Used Qty</th>
-                        <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Gap</th>
-                        <th style={{padding: '8px', textAlign: 'left', border: '1px solid #dee2e6'}}>Used in PDI</th>
-                        <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Image</th>
-                        <th style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>Unassign</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {consolidatedBom.map((bm, idx) => {
-                        const materialLower = bm.materialName.toLowerCase();
-                        
-                        // Use edited production quantity if available
-                        const actualProduction = pdiProductionOverrides[selectedPdiForDetails] || totalProduction;
-                        
-                        // Calculate used quantity based on production
-                        let usedQty = 0;
-                        if (materialLower.includes('cell')) {
-                          usedQty = actualProduction * 66;
-                        } else if (materialLower.includes('glass')) {
-                          usedQty = actualProduction * 1;
-                        } else if (materialLower.includes('ribbon') && !materialLower.includes('bus')) {
-                          usedQty = actualProduction * 0.212;
-                        } else if (materialLower.includes('flux')) {
-                          usedQty = actualProduction * 0.02;
-                        } else if (materialLower.includes('busbar') && materialLower.includes('4mm')) {
-                          usedQty = actualProduction * 0.038;
-                        } else if (materialLower.includes('busbar') && materialLower.includes('6mm')) {
-                          usedQty = actualProduction * 0.018;
-                        } else if (materialLower.includes('epe')) {
-                          usedQty = actualProduction * 5.2;
-                        } else if (materialLower.includes('frame')) {
-                          usedQty = actualProduction * 1; // 1 set = 2 LONG + 2 SHORT combined
-                        } else if (materialLower.includes('sealent') || materialLower.includes('sealant') || materialLower.includes('silicone')) {
-                          usedQty = actualProduction * 0.35;
-                        } else if (materialLower.includes('potting')) {
-                          usedQty = actualProduction * 0.021; // A + B combined
-                        } else if (materialLower.includes('jb') || materialLower.includes('junction')) {
-                          usedQty = actualProduction * 1;
-                        } else {
-                          usedQty = actualProduction * 1;
-                        }
-                        
-                        usedQty = Math.round(usedQty * 100) / 100;
-                        
-                        // Calculate individual gap for this specific COC/invoice
-                        // Get all COCs for this material in order they were added
-                        const allCocsForMaterial = consolidatedBom.filter(item => 
-                          item.materialName === bm.materialName && item.lotNumber
-                        );
-                        
-                        // Find index of current COC in the list
-                        const currentCocIndex = allCocsForMaterial.findIndex(item => 
-                          item.lotNumber === bm.lotNumber
-                        );
-                        
-                        // Calculate how much was consumed by previous COCs
-                        let remainingToConsume = usedQty;
-                        let individualGap = 0;
-                        
-                        if (bm.cocQty && bm.lotNumber) {
-                          // Calculate consumption for each COC in order
-                          for (let i = 0; i <= currentCocIndex; i++) {
-                            const cocQty = parseFloat(allCocsForMaterial[i].cocQty) || 0;
-                            
-                            if (i < currentCocIndex) {
-                              // Previous COCs - subtract their full qty from remaining
-                              remainingToConsume = Math.max(0, remainingToConsume - cocQty);
-                            } else {
-                              // Current COC - calculate its individual gap
-                              const consumedFromThis = Math.min(cocQty, remainingToConsume);
-                              individualGap = Math.round((cocQty - consumedFromThis) * 100) / 100;
-                            }
-                          }
-                        }
-                        
-                        // For display: show individual gap for this COC
-                        const gap = individualGap;
-                        
-                        // Get specification from COC_MATERIALS directly
-                        const getSpecFromCOCMaterials = (materialName) => {
-                          const COC_SPEC_MAP = {
-                            'Solar Cell': '25.30%',
-                            'FRONT GLASS': '2376x1128x2.0 mm',
-                            'BACK GLASS': '2376x1128x2.0 mm (3 hole)',
-                            'RIBBON': '0.26mm',
-                            'Ribbon(BUSBAR) 4mm': '4.0X0.4 mm',
-                            'Ribbon(BUSBAR) 6mm': '6.0X0.4 mm',
-                            'FLUX': '-',
-                            'EPE FRONT': '-',
-                            'Aluminium Frame': '-',
-                            'SEALENT': '-',
-                            'JB Potting (A and B)': '-',
-                            'JUNCTION BOX': '1200mm'
-                          };
-                          return COC_SPEC_MAP[materialName] || '-';
-                        };
-                        
-                        // Use spec from bm first, then lookup from COC_SPEC_MAP
-                        const specification = bm.spec && bm.spec !== '' ? bm.spec : getSpecFromCOCMaterials(bm.materialName);
-                        
-                        // Check if COC is assigned (has lotNumber/invoiceNo)
-                        const hasCocAssigned = bm.lotNumber && bm.lotNumber !== '-';
-                        
-                        return (
-                          <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
-                            <td style={{padding: '8px', border: '1px solid #dee2e6'}}>
-                              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px'}}>
-                                <span style={{fontWeight: '500', fontSize: '11px'}}>
-                                  {bm.materialName}
-                                </span>
-                              </div>
-                            </td>
-                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px', color: '#666'}}>
-                              {specification}
-                            </td>
-                            <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
-                              {bm.lotNumber || '-'}
-                              {bm.isFromMrp && bm.lotNumber && (
-                                <span style={{marginLeft: '5px', fontSize: '8px', color: '#28a745'}}>(MRP)</span>
-                              )}
-                            </td>
-                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>
-                              {bm.isFromMrp ? (
-                                <span style={{color: '#28a745'}}>{bm.mrpRemainingQty?.toLocaleString() || '-'}</span>
-                              ) : (
-                                bm.cocQty || '-'
-                              )}
-                            </td>
-                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                              {usedQty || '-'}
-                            </td>
-                            <td style={{
-                              padding: '8px', 
-                              textAlign: 'center', 
-                              border: '1px solid #dee2e6',
-                              fontWeight: '500',
-                              color: bm.isFromMrp 
-                                ? (bm.mrpRemainingQty > usedQty ? '#28a745' : '#dc3545')
-                                : (gap >= 0 ? '#28a745' : '#dc3545')
-                            }}>
-                              {bm.isFromMrp ? (
-                                // For MRP data: Gap = remaining - used
-                                (() => {
-                                  const mrpGap = Math.round((bm.mrpRemainingQty - usedQty) * 100) / 100;
-                                  return mrpGap >= 0 ? `+${mrpGap.toLocaleString()}` : mrpGap.toLocaleString();
-                                })()
-                              ) : (
-                                bm.cocQty ? (gap >= 0 ? `+${gap}` : gap) : '-'
-                              )}
-                            </td>
-                            <td style={{
-                              padding: '8px', 
-                              border: '1px solid #dee2e6',
-                              fontSize: '10px'
-                            }}>
-                              {/* Show MRP PDI assignment */}
-                              {bm.mrpPdiNo ? (
-                                <span style={{
-                                  padding: '3px 8px',
-                                  backgroundColor: bm.mrpIsExhausted ? '#dc3545' : '#28a745',
-                                  color: 'white',
-                                  borderRadius: '4px',
-                                  fontSize: '9px',
-                                  fontWeight: '500'
-                                }}>
-                                  {bm.mrpPdiNo}
-                                </span>
-                              ) : bm.isFromMrp ? (
-                                <span style={{
-                                  padding: '3px 8px',
-                                  backgroundColor: '#28a745',
-                                  color: 'white',
-                                  borderRadius: '4px',
-                                  fontSize: '9px',
-                                  fontWeight: '500'
-                                }}>
-                                  {selectedPdiForDetails}
-                                </span>
-                              ) : '-'}
-                            </td>
-                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                              {bm.imagePath ? (
-                                <button
-                                  onClick={() => {
-                                    const API_BASE_URL = getAPIBaseURL();
-                                    window.open(`${API_BASE_URL}/${bm.imagePath}`, '_blank');
-                                  }}
-                                  style={{
-                                    padding: '3px 8px',
-                                    background: '#17a2b8',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '3px',
-                                    cursor: 'pointer',
-                                    fontSize: '10px'
-                                  }}
-                                >
-                                  📄 View
-                                </button>
-                              ) : '-'}
-                            </td>
-                            <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                              {bm.lotNumber && (
-                                <button
-                                  onClick={() => handleDeleteBomMaterial(bm)}
-                                  style={{
-                                    padding: '3px 8px',
-                                    background: '#dc3545',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '3px',
-                                    cursor: 'pointer',
-                                    fontSize: '10px',
-                                    fontWeight: 'bold'
-                                  }}
-                                  title="Unassign this COC from PDI"
-                                >
-                                  ✖️
-                                </button>
-                              )}
-                            </td>
+                <><h4 style={{ marginTop: '20px', marginBottom: '15px' }}>📦 BOM Materials for Complete PDI:</h4>
+                  {consolidatedBom.length > 0 ? (
+                    <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px', border: '1px solid #dee2e6' }}>
+                      <table style={{ width: '100%', fontSize: '11px' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: '#e9ecef' }}>
+                            <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #dee2e6' }}>Material</th>
+                            <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #dee2e6' }}>Specification</th>
+                            <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #dee2e6' }}>Invoice No</th>
+                            <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>COC Qty</th>
+                            <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>Used Qty</th>
+                            <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>Gap</th>
+                            <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #dee2e6' }}>Used in PDI</th>
+                            <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>Image</th>
+                            <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>Unassign</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p style={{color: '#999', fontStyle: 'italic', fontSize: '12px', padding: '20px', textAlign: 'center', backgroundColor: '#f8f9fa', borderRadius: '5px'}}>
-                  No BOM materials uploaded yet. Use the "COC Link" button in the production table to add materials.
-                </p>
-              )}</>
+                        </thead>
+                        <tbody>
+                          {consolidatedBom.map((bm, idx) => {
+                            const materialLower = bm.materialName.toLowerCase();
+
+                            // Use edited production quantity if available
+                            const actualProduction = pdiProductionOverrides[selectedPdiForDetails] || totalProduction;
+
+                            // Calculate used quantity based on production
+                            let usedQty = 0;
+                            if (materialLower.includes('cell')) {
+                              usedQty = actualProduction * 66;
+                            } else if (materialLower.includes('glass')) {
+                              usedQty = actualProduction * 1;
+                            } else if (materialLower.includes('ribbon') && !materialLower.includes('bus')) {
+                              usedQty = actualProduction * 0.212;
+                            } else if (materialLower.includes('flux')) {
+                              usedQty = actualProduction * 0.02;
+                            } else if (materialLower.includes('busbar') && materialLower.includes('4mm')) {
+                              usedQty = actualProduction * 0.038;
+                            } else if (materialLower.includes('busbar') && materialLower.includes('6mm')) {
+                              usedQty = actualProduction * 0.018;
+                            } else if (materialLower.includes('epe')) {
+                              usedQty = actualProduction * 5.2;
+                            } else if (materialLower.includes('frame')) {
+                              usedQty = actualProduction * 1; // 1 set = 2 LONG + 2 SHORT combined
+                            } else if (materialLower.includes('sealent') || materialLower.includes('sealant') || materialLower.includes('silicone')) {
+                              usedQty = actualProduction * 0.35;
+                            } else if (materialLower.includes('potting')) {
+                              usedQty = actualProduction * 0.021; // A + B combined
+                            } else if (materialLower.includes('jb') || materialLower.includes('junction')) {
+                              usedQty = actualProduction * 1;
+                            } else {
+                              usedQty = actualProduction * 1;
+                            }
+
+                            usedQty = Math.round(usedQty * 100) / 100;
+
+                            // Calculate individual gap for this specific COC/invoice
+                            // Get all COCs for this material in order they were added
+                            const allCocsForMaterial = consolidatedBom.filter(item =>
+                              item.materialName === bm.materialName && item.lotNumber
+                            );
+
+                            // Find index of current COC in the list
+                            const currentCocIndex = allCocsForMaterial.findIndex(item =>
+                              item.lotNumber === bm.lotNumber
+                            );
+
+                            // Calculate how much was consumed by previous COCs
+                            let remainingToConsume = usedQty;
+                            let individualGap = 0;
+
+                            if (bm.cocQty && bm.lotNumber) {
+                              // Calculate consumption for each COC in order
+                              for (let i = 0; i <= currentCocIndex; i++) {
+                                const cocQty = parseFloat(allCocsForMaterial[i].cocQty) || 0;
+
+                                if (i < currentCocIndex) {
+                                  // Previous COCs - subtract their full qty from remaining
+                                  remainingToConsume = Math.max(0, remainingToConsume - cocQty);
+                                } else {
+                                  // Current COC - calculate its individual gap
+                                  const consumedFromThis = Math.min(cocQty, remainingToConsume);
+                                  individualGap = Math.round((cocQty - consumedFromThis) * 100) / 100;
+                                }
+                              }
+                            }
+
+                            // For display: show individual gap for this COC
+                            const gap = individualGap;
+
+                            // Get specification from COC_MATERIALS directly
+                            const getSpecFromCOCMaterials = (materialName) => {
+                              const COC_SPEC_MAP = {
+                                'Solar Cell': '25.30%',
+                                'FRONT GLASS': '2376x1128x2.0 mm',
+                                'BACK GLASS': '2376x1128x2.0 mm (3 hole)',
+                                'RIBBON': '0.26mm',
+                                'Ribbon(BUSBAR) 4mm': '4.0X0.4 mm',
+                                'Ribbon(BUSBAR) 6mm': '6.0X0.4 mm',
+                                'FLUX': '-',
+                                'EPE FRONT': '-',
+                                'Aluminium Frame': '-',
+                                'SEALENT': '-',
+                                'JB Potting (A and B)': '-',
+                                'JUNCTION BOX': '1200mm'
+                              };
+                              return COC_SPEC_MAP[materialName] || '-';
+                            };
+
+                            // Use spec from bm first, then lookup from COC_SPEC_MAP
+                            const specification = bm.spec && bm.spec !== '' ? bm.spec : getSpecFromCOCMaterials(bm.materialName);
+
+                            // Check if COC is assigned (has lotNumber/invoiceNo)
+                            const hasCocAssigned = bm.lotNumber && bm.lotNumber !== '-';
+
+                            return (
+                              <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa' }}>
+                                <td style={{ padding: '8px', border: '1px solid #dee2e6' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontWeight: '500', fontSize: '11px' }}>
+                                      {bm.materialName}
+                                    </span>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '8px', border: '1px solid #dee2e6', fontSize: '10px', color: '#666' }}>
+                                  {specification}
+                                </td>
+                                <td style={{ padding: '8px', border: '1px solid #dee2e6', fontSize: '10px' }}>
+                                  {bm.lotNumber || '-'}
+                                  {bm.isFromMrp && bm.lotNumber && (
+                                    <span style={{ marginLeft: '5px', fontSize: '8px', color: '#28a745' }}>(MRP)</span>
+                                  )}
+                                </td>
+                                <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500' }}>
+                                  {bm.isFromMrp ? (
+                                    <span style={{ color: '#28a745' }}>{bm.mrpRemainingQty?.toLocaleString() || '-'}</span>
+                                  ) : (
+                                    bm.cocQty || '-'
+                                  )}
+                                </td>
+                                <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>
+                                  {usedQty || '-'}
+                                </td>
+                                <td style={{
+                                  padding: '8px',
+                                  textAlign: 'center',
+                                  border: '1px solid #dee2e6',
+                                  fontWeight: '500',
+                                  color: bm.isFromMrp
+                                    ? (bm.mrpRemainingQty > usedQty ? '#28a745' : '#dc3545')
+                                    : (gap >= 0 ? '#28a745' : '#dc3545')
+                                }}>
+                                  {bm.isFromMrp ? (
+                                    // For MRP data: Gap = remaining - used
+                                    (() => {
+                                      const mrpGap = Math.round((bm.mrpRemainingQty - usedQty) * 100) / 100;
+                                      return mrpGap >= 0 ? `+${mrpGap.toLocaleString()}` : mrpGap.toLocaleString();
+                                    })()
+                                  ) : (
+                                    bm.cocQty ? (gap >= 0 ? `+${gap}` : gap) : '-'
+                                  )}
+                                </td>
+                                <td style={{
+                                  padding: '8px',
+                                  border: '1px solid #dee2e6',
+                                  fontSize: '10px'
+                                }}>
+                                  {/* Show MRP PDI assignment */}
+                                  {bm.mrpPdiNo ? (
+                                    <span style={{
+                                      padding: '3px 8px',
+                                      backgroundColor: bm.mrpIsExhausted ? '#dc3545' : '#28a745',
+                                      color: 'white',
+                                      borderRadius: '4px',
+                                      fontSize: '9px',
+                                      fontWeight: '500'
+                                    }}>
+                                      {bm.mrpPdiNo}
+                                    </span>
+                                  ) : bm.isFromMrp ? (
+                                    <span style={{
+                                      padding: '3px 8px',
+                                      backgroundColor: '#28a745',
+                                      color: 'white',
+                                      borderRadius: '4px',
+                                      fontSize: '9px',
+                                      fontWeight: '500'
+                                    }}>
+                                      {selectedPdiForDetails}
+                                    </span>
+                                  ) : '-'}
+                                </td>
+                                <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>
+                                  {bm.imagePath ? (
+                                    <button
+                                      onClick={() => {
+                                        const API_BASE_URL = getAPIBaseURL();
+                                        window.open(`${API_BASE_URL}/${bm.imagePath}`, '_blank');
+                                      }}
+                                      style={{
+                                        padding: '3px 8px',
+                                        background: '#17a2b8',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        fontSize: '10px'
+                                      }}
+                                    >
+                                      📄 View
+                                    </button>
+                                  ) : '-'}
+                                </td>
+                                <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>
+                                  {bm.lotNumber && (
+                                    <button
+                                      onClick={() => handleDeleteBomMaterial(bm)}
+                                      style={{
+                                        padding: '3px 8px',
+                                        background: '#dc3545',
+                                        color: 'white',
+                                        border: 'none',
+                                        borderRadius: '3px',
+                                        cursor: 'pointer',
+                                        fontSize: '10px',
+                                        fontWeight: 'bold'
+                                      }}
+                                      title="Unassign this COC from PDI"
+                                    >
+                                      ✖️
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p style={{ color: '#999', fontStyle: 'italic', fontSize: '12px', padding: '20px', textAlign: 'center', backgroundColor: '#f8f9fa', borderRadius: '5px' }}>
+                      No BOM materials uploaded yet. Use the "COC Link" button in the production table to add materials.
+                    </p>
+                  )}</>
               )}
 
               {/* NEW: MRP Assigned COC Table - Shows ALL materials with FIFO suggestions */}
-              <h4 style={{marginTop: '30px', marginBottom: '15px', color: '#1976d2'}}>📋 COC Status & FIFO Suggestions (MRP Data)</h4>
+              <h4 style={{ marginTop: '30px', marginBottom: '15px', color: '#1976d2' }}>📋 COC Status & FIFO Suggestions (MRP Data)</h4>
               {(() => {
                 // Map company name for MRP API matching
                 const companyMap = {
@@ -6242,23 +6333,23 @@ function DailyReport() {
                   'Rays Power': 'Rays Power'
                 };
                 const mrpCompanyName = companyMap[selectedCompany?.companyName] || selectedCompany?.companyName;
-                
+
                 // Extract PDI number for matching (PDI-1 -> 1, PDI-2.2 -> 2.2)
                 const extractPdiNum = (pdi) => {
                   const match = (pdi || '').match(/(\d+\.?\d*)/);
                   return match ? match[1] : pdi;
                 };
                 const targetPdiNum = extractPdiNum(selectedPdiForDetails);
-                
+
                 // All MRP material names
                 const MRP_MATERIALS = [
-                  'Solar Cell', 'Glass', 'Ribbon', 'Flux', 'EPE', 
+                  'Solar Cell', 'Glass', 'Ribbon', 'Flux', 'EPE',
                   'Aluminium Frame', 'Sealent', 'JB Potting', 'Junction Box', 'RFID', 'EVA'
                 ];
-                
+
                 // Get records for current PDI
                 const pdiRecords = (selectedCompany?.productionRecords || []).filter(r => r.pdi === selectedPdiForDetails);
-                
+
                 // Calculate qty per unit based on material (BOM doesn't store qty, so calculate from production)
                 const getQtyMultiplier = (materialName) => {
                   const mat = (materialName || '').toLowerCase();
@@ -6276,13 +6367,13 @@ function DailyReport() {
                   if (mat.includes('eva')) return 2;
                   return 1;
                 };
-                
+
                 // Get companies used in Daily BOM for each material in this PDI (with detailed usage)
                 const getBomCompaniesForMaterial = (materialName, includeDetails = false) => {
                   const companies = new Map(); // company -> {qty, brand, details: []}
                   const matLower = materialName.toLowerCase();
                   const qtyMultiplier = getQtyMultiplier(materialName);
-                  
+
                   pdiRecords.forEach(record => {
                     if (record.bomMaterials && Array.isArray(record.bomMaterials)) {
                       record.bomMaterials.forEach(bom => {
@@ -6298,15 +6389,15 @@ function DailyReport() {
                           (matLower.includes('sealent') && (bomMatLower.includes('sealent') || bomMatLower.includes('sealant'))) ||
                           (matLower.includes('potting') && bomMatLower.includes('potting')) ||
                           (matLower.includes('junction') && (bomMatLower.includes('junction') || bomMatLower.includes('jb')));
-                        
+
                         if (isMatch && bom.company) {
                           const existing = companies.get(bom.company) || { qty: 0, brand: bom.company, details: [] };
-                          
+
                           // Calculate qty from production (Day + Night) for this record
                           const dayProd = parseInt(record.dayProduction) || 0;
                           const nightProd = parseInt(record.nightProduction) || 0;
                           const totalProd = dayProd + nightProd;
-                          
+
                           // Use shift-specific production if shift is specified, else use total
                           let shiftProd = totalProd;
                           let shiftName = 'total';
@@ -6317,13 +6408,13 @@ function DailyReport() {
                             shiftProd = nightProd;
                             shiftName = 'night';
                           }
-                          
+
                           const calculatedQty = Math.round(shiftProd * qtyMultiplier * 100) / 100;
-                          
+
                           console.log(`[BOM DEBUG] Material: ${bom.materialName}, Company: ${bom.company}, Date: ${record.date}, Shift: ${bom.shift}, DayProd: ${dayProd}, NightProd: ${nightProd}, UsedProd: ${shiftProd}, Multiplier: ${qtyMultiplier}, CalcQty: ${calculatedQty}, Efficiency: ${bom.cellEfficiency || '-'}`);
-                          
+
                           existing.qty += calculatedQty;
-                          
+
                           // Add detail record
                           if (includeDetails) {
                             existing.details.push({
@@ -6343,14 +6434,14 @@ function DailyReport() {
                       });
                     }
                   });
-                  
+
                   return Array.from(companies.entries()).map(([company, data]) => ({
                     company,
                     usedQty: data.qty,
                     details: data.details || []
                   }));
                 };
-                
+
                 // Filter assigned COCs for this company and PDI
                 const getAssignedCocs = (materialName) => {
                   return assignedCocData.filter(coc => {
@@ -6361,46 +6452,46 @@ function DailyReport() {
                     return companyMatch && pdiMatch && materialMatch;
                   });
                 };
-                
+
                 // Get FIFO suggestions from Master COC data (oldest first by invoice_date, matched by BOM company/brand)
                 const getFifoSuggestions = (materialName) => {
                   if (!masterCocData || masterCocData.length === 0) {
                     console.log('⚠️ No master COC data loaded');
                     return [];
                   }
-                  
+
                   // Get companies used in BOM for this material
                   const bomCompanies = getBomCompaniesForMaterial(materialName);
-                  
+
                   // Get all assigned invoice numbers to exclude
                   const assignedInvoices = assignedCocData.map(c => c.invoice_no);
-                  
+
                   // Sort master data by invoice_date (FIFO - oldest first)
                   const sortedMasterData = [...masterCocData].sort((a, b) => {
                     const dateA = new Date(a.invoice_date || a.entry_date || '2099-01-01');
                     const dateB = new Date(b.invoice_date || b.entry_date || '2099-01-01');
                     return dateA - dateB;
                   });
-                  
+
                   const suggestions = [];
-                  
+
                   // If BOM companies found, get suggestion for each company
                   if (bomCompanies.length > 0) {
                     bomCompanies.forEach(({ company, usedQty }) => {
                       const suggestion = sortedMasterData.find(coc => {
                         const cocMaterial = (coc.material_name || '').toLowerCase();
                         const targetMaterial = materialName.toLowerCase();
-                        const materialMatch = cocMaterial === targetMaterial || 
-                                             cocMaterial.includes(targetMaterial) ||
-                                             targetMaterial.includes(cocMaterial);
+                        const materialMatch = cocMaterial === targetMaterial ||
+                          cocMaterial.includes(targetMaterial) ||
+                          targetMaterial.includes(cocMaterial);
                         const notAssigned = !assignedInvoices.includes(coc.invoice_no);
                         const hasQty = parseFloat(coc.coc_qty || 0) > 0;
                         // Match brand/company from BOM
                         const brandMatch = (coc.brand || '').toLowerCase().includes(company.toLowerCase()) ||
-                                          company.toLowerCase().includes((coc.brand || '').toLowerCase().substring(0, 10));
+                          company.toLowerCase().includes((coc.brand || '').toLowerCase().substring(0, 10));
                         return materialMatch && notAssigned && hasQty && brandMatch;
                       });
-                      
+
                       if (suggestion) {
                         suggestions.push({
                           ...suggestion,
@@ -6410,28 +6501,28 @@ function DailyReport() {
                       }
                     });
                   }
-                  
+
                   // If no BOM-matched suggestions, get general FIFO suggestion
                   if (suggestions.length === 0) {
                     const generalSuggestion = sortedMasterData.find(coc => {
                       const cocMaterial = (coc.material_name || '').toLowerCase();
                       const targetMaterial = materialName.toLowerCase();
-                      const materialMatch = cocMaterial === targetMaterial || 
-                                           cocMaterial.includes(targetMaterial) ||
-                                           targetMaterial.includes(cocMaterial);
+                      const materialMatch = cocMaterial === targetMaterial ||
+                        cocMaterial.includes(targetMaterial) ||
+                        targetMaterial.includes(cocMaterial);
                       const notAssigned = !assignedInvoices.includes(coc.invoice_no);
                       const hasQty = parseFloat(coc.coc_qty || 0) > 0;
                       return materialMatch && notAssigned && hasQty;
                     });
-                    
+
                     if (generalSuggestion) {
                       suggestions.push(generalSuggestion);
                     }
                   }
-                  
+
                   return suggestions;
                 };
-                
+
                 // Calculate used qty based on production for each material
                 const actualProduction = pdiProductionOverrides[selectedPdiForDetails] || totalProduction;
                 const getUsedQtyForMaterial = (materialName) => {
@@ -6454,10 +6545,10 @@ function DailyReport() {
                 const exportCocSuggestionReport = () => {
                   // Import xlsx-js-style for colorful Excel
                   const XLSXStyle = require('xlsx-js-style');
-                  
+
                   const reportData = [];
                   const statusColors = []; // Track status for coloring
-                  
+
                   MRP_MATERIALS.forEach(material => {
                     const assignedCocs = getAssignedCocs(material);
                     const fifoSuggestions = getFifoSuggestions(material);
@@ -6465,29 +6556,29 @@ function DailyReport() {
                     const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
                     const totalAssignedQty = assignedCocs.reduce((sum, coc) => sum + (parseFloat(coc.remaining_qty) || 0), 0);
                     const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
-                    
+
                     if (fifoSuggestions.length > 0) {
                       fifoSuggestions.forEach((suggestion, idx) => {
-                        const matchingBom = bomCompanies.find(bc => 
+                        const matchingBom = bomCompanies.find(bc =>
                           (suggestion.brand || '').toLowerCase().includes(bc.company.toLowerCase()) ||
                           bc.company.toLowerCase().includes((suggestion.brand || '').toLowerCase().substring(0, 10))
                         );
-                        
+
                         let reason = '';
                         let reasonType = 'bom'; // bom, fifo, none
                         let efficiencyInfo = '';
-                        
+
                         if (matchingBom && matchingBom.details && matchingBom.details.length > 0) {
                           const usageDetails = matchingBom.details.map(d => {
-                            const unit = material.toLowerCase().includes('cell') ? 'pcs' : 
-                                        (material.toLowerCase().includes('glass') || material.toLowerCase().includes('frame') || material.toLowerCase().includes('junction') || material.toLowerCase().includes('rfid')) ? 'pcs' : 'kg';
+                            const unit = material.toLowerCase().includes('cell') ? 'pcs' :
+                              (material.toLowerCase().includes('glass') || material.toLowerCase().includes('frame') || material.toLowerCase().includes('junction') || material.toLowerCase().includes('rfid')) ? 'pcs' : 'kg';
                             const effStr = d.cellEfficiency ? ` [Eff: ${d.cellEfficiency}%]` : '';
                             return `${d.date} (${d.shift || 'both'}): ${d.production} modules → ${d.qty} ${unit}${effStr}`;
                           }).slice(0, 5).join(' | ');
-                          const totalUnit = material.toLowerCase().includes('cell') ? 'pcs' : 
-                                           (material.toLowerCase().includes('glass') || material.toLowerCase().includes('frame') || material.toLowerCase().includes('junction') || material.toLowerCase().includes('rfid')) ? 'pcs' : 'kg';
+                          const totalUnit = material.toLowerCase().includes('cell') ? 'pcs' :
+                            (material.toLowerCase().includes('glass') || material.toLowerCase().includes('frame') || material.toLowerCase().includes('junction') || material.toLowerCase().includes('rfid')) ? 'pcs' : 'kg';
                           reason = `✅ BOM MATCH: ${matchingBom.company} - Total ${Math.round(matchingBom.usedQty * 100) / 100} ${totalUnit} used [${usageDetails}]`;
-                          
+
                           // Extract efficiency info for Solar Cell
                           if (material === 'Solar Cell') {
                             const efficiencies = matchingBom.details
@@ -6501,7 +6592,7 @@ function DailyReport() {
                           reason = '📅 FIFO: Oldest available stock (no specific BOM match)';
                           reasonType = 'fifo';
                         }
-                        
+
                         reportData.push([
                           selectedPdiForDetails,
                           mrpCompanyName,
@@ -6536,8 +6627,8 @@ function DailyReport() {
                         0,
                         '-',
                         '-',  // Cell Efficiency column (empty for no suggestion)
-                        bomCompanies.length > 0 ? 
-                          `⚠️ No matching COC for: ${bomCompanies.map(b => b.company).join(', ')}` : 
+                        bomCompanies.length > 0 ?
+                          `⚠️ No matching COC for: ${bomCompanies.map(b => b.company).join(', ')}` :
                           '❌ No BOM data - Load FIFO Suggestions first',
                         bomCompanies.map(b => b.company).join(', ') || '-',
                         bomCompanies.reduce((sum, b) => sum + b.usedQty, 0) || 0,
@@ -6550,36 +6641,36 @@ function DailyReport() {
                       statusColors.push({ gap, reasonType: 'none', hasSuggestion: false });
                     }
                   });
-                  
+
                   // Create workbook with styling
                   const wb = XLSXStyle.utils.book_new();
-                  
+
                   // Headers
                   const headers = [
-                    'PDI No', 'Company', 'Material', 'Suggestion #', 'COC Invoice', 
+                    'PDI No', 'Company', 'Material', 'Suggestion #', 'COC Invoice',
                     'Lot/Batch', 'Invoice Date', 'Available Qty', 'Brand/Company',
                     'CELL EFFICIENCY', 'REASON FOR SUGGESTION', 'BOM Brand', 'BOM Qty Used',
                     'Currently Assigned', 'Assigned Qty', 'Production Used', 'Gap', 'Status'
                   ];
-                  
+
                   // Title row
                   const titleRow = [`COC SUGGESTION REPORT - ${mrpCompanyName} - ${selectedPdiForDetails} - Generated: ${new Date().toLocaleDateString()}`];
                   const emptyRow = [''];
-                  
+
                   // Build worksheet data
                   const wsData = [titleRow, emptyRow, headers, ...reportData];
                   const ws = XLSXStyle.utils.aoa_to_sheet(wsData);
-                  
+
                   // Merge title cell
                   ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 17 } }];
-                  
+
                   // Style definitions
                   const titleStyle = {
                     font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } },
                     fill: { fgColor: { rgb: '1976D2' } },
                     alignment: { horizontal: 'center', vertical: 'center' }
                   };
-                  
+
                   const headerStyle = {
                     font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
                     fill: { fgColor: { rgb: '2E7D32' } },
@@ -6591,7 +6682,7 @@ function DailyReport() {
                       right: { style: 'thin', color: { rgb: '000000' } }
                     }
                   };
-                  
+
                   const reasonHeaderStyle = {
                     font: { bold: true, sz: 11, color: { rgb: 'FFFFFF' } },
                     fill: { fgColor: { rgb: 'FF6F00' } },
@@ -6603,10 +6694,10 @@ function DailyReport() {
                       right: { style: 'thin', color: { rgb: '000000' } }
                     }
                   };
-                  
+
                   // Apply title style
                   if (ws['A1']) ws['A1'].s = titleStyle;
-                  
+
                   // Apply header styles (row 3, index 2)
                   const colLetters = 'ABCDEFGHIJKLMNOPQR'.split('');  // Added R for 18 columns
                   colLetters.forEach((col, idx) => {
@@ -6627,12 +6718,12 @@ function DailyReport() {
                       }
                     }
                   });
-                  
+
                   // Apply data row styles
                   reportData.forEach((row, rowIdx) => {
                     const excelRow = rowIdx + 4; // Data starts at row 4
                     const statusInfo = statusColors[rowIdx];
-                    
+
                     // Base cell style
                     const baseStyle = {
                       alignment: { vertical: 'center', wrapText: true },
@@ -6643,25 +6734,25 @@ function DailyReport() {
                         right: { style: 'thin', color: { rgb: 'CCCCCC' } }
                       }
                     };
-                    
+
                     // Alternating row colors
                     const rowBg = rowIdx % 2 === 0 ? 'F5F5F5' : 'FFFFFF';
-                    
+
                     colLetters.forEach((col, colIdx) => {
                       const cellRef = `${col}${excelRow}`;
                       if (ws[cellRef]) {
-                        let cellStyle = { 
+                        let cellStyle = {
                           ...baseStyle,
                           fill: { fgColor: { rgb: rowBg } }
                         };
-                        
+
                         // Special styling for specific columns
                         if (colIdx === 9) { // Cell Efficiency column - yellow highlight
                           cellStyle.fill = { fgColor: { rgb: 'FFF9C4' } }; // Light yellow
                           cellStyle.font = { bold: true, color: { rgb: 'E65100' } };
                           cellStyle.alignment = { horizontal: 'center', vertical: 'center' };
                         }
-                        
+
                         if (colIdx === 10) { // Reason column - highlight
                           if (statusInfo.hasSuggestion) {
                             cellStyle.fill = { fgColor: { rgb: 'E8F5E9' } }; // Light green
@@ -6671,7 +6762,7 @@ function DailyReport() {
                             cellStyle.font = { sz: 10, color: { rgb: 'B71C1C' } };
                           }
                         }
-                        
+
                         if (colIdx === 16) { // Gap column
                           if (statusInfo.gap >= 0) {
                             cellStyle.fill = { fgColor: { rgb: 'C8E6C9' } }; // Green
@@ -6681,7 +6772,7 @@ function DailyReport() {
                             cellStyle.font = { bold: true, color: { rgb: 'B71C1C' } };
                           }
                         }
-                        
+
                         if (colIdx === 17) { // Status column
                           if (statusInfo.gap >= 0) {
                             cellStyle.fill = { fgColor: { rgb: '4CAF50' } }; // Green
@@ -6692,33 +6783,33 @@ function DailyReport() {
                           }
                           cellStyle.alignment = { horizontal: 'center', vertical: 'center' };
                         }
-                        
+
                         if (colIdx === 4) { // Invoice column - blue
                           cellStyle.font = { color: { rgb: '1565C0' }, bold: true };
                         }
-                        
+
                         if (colIdx === 2) { // Material column - bold
                           cellStyle.font = { bold: true };
                         }
-                        
+
                         ws[cellRef].s = cellStyle;
                       }
                     });
                   });
-                  
+
                   // Column widths (18 columns now)
                   ws['!cols'] = [
-                    {wch: 10}, {wch: 12}, {wch: 14}, {wch: 10}, {wch: 16}, 
-                    {wch: 14}, {wch: 12}, {wch: 12}, {wch: 25}, {wch: 25},
-                    {wch: 55}, {wch: 18}, {wch: 10},
-                    {wch: 18}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 14}
+                    { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 10 }, { wch: 16 },
+                    { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 25 }, { wch: 25 },
+                    { wch: 55 }, { wch: 18 }, { wch: 10 },
+                    { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 14 }
                   ];
-                  
+
                   // Row height for header
                   ws['!rows'] = [{ hpt: 30 }, { hpt: 15 }, { hpt: 35 }];
-                  
+
                   XLSXStyle.utils.book_append_sheet(wb, ws, 'COC Suggestions');
-                  
+
                   // Summary sheet
                   const summaryData = [
                     ['📊 SUMMARY REPORT'],
@@ -6735,53 +6826,53 @@ function DailyReport() {
                     ['📅 FIFO', 'Oldest available COC (no specific brand match)', ''],
                     ['❌ No suggestion', 'No matching COC found in system', '']
                   ];
-                  
+
                   const wsSummary = XLSXStyle.utils.aoa_to_sheet(summaryData);
-                  wsSummary['!cols'] = [{wch: 25}, {wch: 45}, {wch: 10}];
-                  
+                  wsSummary['!cols'] = [{ wch: 25 }, { wch: 45 }, { wch: 10 }];
+
                   // Style summary
-                  if (wsSummary['A1']) wsSummary['A1'].s = { 
+                  if (wsSummary['A1']) wsSummary['A1'].s = {
                     font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } },
                     fill: { fgColor: { rgb: '673AB7' } },
                     alignment: { horizontal: 'center' }
                   };
                   wsSummary['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 2 } }];
-                  
+
                   XLSXStyle.utils.book_append_sheet(wb, wsSummary, 'Summary');
-                  
+
                   XLSXStyle.writeFile(wb, `COC_Report_${mrpCompanyName}_${selectedPdiForDetails}_${new Date().toISOString().split('T')[0]}.xlsx`);
                 };
-                
+
                 return (
-                  <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '5px', border: '1px solid #2196F3'}}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px'}}>
-                      <p style={{fontSize: '11px', color: '#666', margin: 0}}>
+                  <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '5px', border: '1px solid #2196F3' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '10px' }}>
+                      <p style={{ fontSize: '11px', color: '#666', margin: 0 }}>
                         <strong>{mrpCompanyName}</strong> - <strong>Lot {targetPdiNum}</strong> | Production: {actualProduction} modules
                       </p>
-                      <div style={{display: 'flex', gap: '8px'}}>
+                      <div style={{ display: 'flex', gap: '8px' }}>
                         <button
                           onClick={loadMasterCocData}
-                          style={{padding: '5px 10px', fontSize: '10px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                          style={{ padding: '5px 10px', fontSize: '10px', background: '#1976d2', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
                         >
                           🔄 Load FIFO Suggestions
                         </button>
                         <button
                           onClick={exportCocSuggestionReport}
-                          style={{padding: '5px 10px', fontSize: '10px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer'}}
+                          style={{ padding: '5px 10px', fontSize: '10px', background: '#28a745', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
                         >
                           📊 Export Report
                         </button>
                       </div>
                     </div>
-                    <table style={{width: '100%', fontSize: '11px'}}>
+                    <table style={{ width: '100%', fontSize: '11px' }}>
                       <thead>
-                        <tr style={{backgroundColor: '#1976d2', color: 'white'}}>
-                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Material</th>
-                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>Assigned COC</th>
-                          <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>COC Qty</th>
-                          <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>Used Qty</th>
-                          <th style={{padding: '8px', textAlign: 'center', border: '1px solid #1565c0'}}>Gap</th>
-                          <th style={{padding: '8px', textAlign: 'left', border: '1px solid #1565c0'}}>FIFO Suggestion</th>
+                        <tr style={{ backgroundColor: '#1976d2', color: 'white' }}>
+                          <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #1565c0' }}>Material</th>
+                          <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #1565c0' }}>Assigned COC</th>
+                          <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #1565c0' }}>COC Qty</th>
+                          <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #1565c0' }}>Used Qty</th>
+                          <th style={{ padding: '8px', textAlign: 'center', border: '1px solid #1565c0' }}>Gap</th>
+                          <th style={{ padding: '8px', textAlign: 'left', border: '1px solid #1565c0' }}>FIFO Suggestion</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -6790,7 +6881,7 @@ function DailyReport() {
                           const fifoSuggestions = getFifoSuggestions(material);
                           const bomCompanies = getBomCompaniesForMaterial(material);
                           const usedQty = Math.round(getUsedQtyForMaterial(material) * 100) / 100;
-                          
+
                           // Calculate total assigned qty from Assigned API (remaining_qty field)
                           // Note: remaining_qty shows what's left after usage
                           const totalAssignedQty = assignedCocs.reduce((sum, coc) => {
@@ -6798,89 +6889,89 @@ function DailyReport() {
                             const qty = parseFloat(coc.remaining_qty) || 0;
                             return sum + qty;
                           }, 0);
-                          
+
                           // Gap = COC Remaining - Used Required
                           // Positive = Extra COC available (green)
                           // Negative = Need more COC (red)
                           const gap = Math.round((totalAssignedQty - usedQty) * 100) / 100;
-                          
+
                           const hasAssigned = assignedCocs.length > 0;
                           const needsMore = !hasAssigned || gap < 0;
-                          
+
                           return (
-                            <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f5f5f5'}}>
-                              <td style={{padding: '8px', border: '1px solid #dee2e6', fontWeight: '500'}}>
+                            <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#f5f5f5' }}>
+                              <td style={{ padding: '8px', border: '1px solid #dee2e6', fontWeight: '500' }}>
                                 {material}
-                                {needsMore && <span style={{color: '#dc3545', marginLeft: '5px'}}>⚠️</span>}
+                                {needsMore && <span style={{ color: '#dc3545', marginLeft: '5px' }}>⚠️</span>}
                                 {bomCompanies.length > 0 && (
-                                  <div style={{fontSize: '8px', color: '#666', marginTop: '3px'}}>
+                                  <div style={{ fontSize: '8px', color: '#666', marginTop: '3px' }}>
                                     BOM: {bomCompanies.map(c => c.company).join(', ')}
                                   </div>
                                 )}
                               </td>
-                              <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
+                              <td style={{ padding: '8px', border: '1px solid #dee2e6', fontSize: '10px' }}>
                                 {hasAssigned ? (
                                   <div>
                                     {assignedCocs.map((coc, i) => (
-                                      <div key={i} style={{marginBottom: i < assignedCocs.length - 1 ? '3px' : 0}}>
-                                        {coc.invoice_no} <span style={{color: '#666'}}>({coc.lot_batch_no})</span>
-                                        <span style={{color: '#1976d2', marginLeft: '5px', fontSize: '9px'}}>
+                                      <div key={i} style={{ marginBottom: i < assignedCocs.length - 1 ? '3px' : 0 }}>
+                                        {coc.invoice_no} <span style={{ color: '#666' }}>({coc.lot_batch_no})</span>
+                                        <span style={{ color: '#1976d2', marginLeft: '5px', fontSize: '9px' }}>
                                           [{parseFloat(coc.remaining_qty || 0).toLocaleString()}]
                                         </span>
                                       </div>
                                     ))}
                                   </div>
                                 ) : (
-                                  <span style={{color: '#999'}}>Not Assigned</span>
+                                  <span style={{ color: '#999' }}>Not Assigned</span>
                                 )}
                               </td>
-                              <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500', color: hasAssigned ? '#1976d2' : '#999'}}>
+                              <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500', color: hasAssigned ? '#1976d2' : '#999' }}>
                                 {hasAssigned ? totalAssignedQty.toLocaleString() : '-'}
                               </td>
-                              <td style={{padding: '8px', textAlign: 'center', border: '1px solid #dee2e6'}}>
+                              <td style={{ padding: '8px', textAlign: 'center', border: '1px solid #dee2e6' }}>
                                 {usedQty.toLocaleString()}
                               </td>
                               <td style={{
-                                padding: '8px', 
-                                textAlign: 'center', 
+                                padding: '8px',
+                                textAlign: 'center',
                                 border: '1px solid #dee2e6',
                                 fontWeight: '500',
                                 color: !hasAssigned ? '#999' : (gap >= 0 ? '#28a745' : '#dc3545')
                               }}>
                                 {hasAssigned ? (gap >= 0 ? `+${gap.toLocaleString()}` : gap.toLocaleString()) : '-'}
                               </td>
-                              <td style={{padding: '8px', border: '1px solid #dee2e6', fontSize: '10px'}}>
+                              <td style={{ padding: '8px', border: '1px solid #dee2e6', fontSize: '10px' }}>
                                 {needsMore ? (
                                   fifoSuggestions.length > 0 ? (
-                                    <div style={{maxHeight: '150px', overflowY: 'auto'}}>
+                                    <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
                                       {fifoSuggestions.map((suggestion, sIdx) => (
-                                        <div key={sIdx} style={{backgroundColor: '#fff3cd', padding: '6px', borderRadius: '3px', marginBottom: sIdx < fifoSuggestions.length - 1 ? '5px' : 0}}>
-                                          <strong style={{color: '#856404'}}>💡 {suggestion.invoice_no}</strong>
+                                        <div key={sIdx} style={{ backgroundColor: '#fff3cd', padding: '6px', borderRadius: '3px', marginBottom: sIdx < fifoSuggestions.length - 1 ? '5px' : 0 }}>
+                                          <strong style={{ color: '#856404' }}>💡 {suggestion.invoice_no}</strong>
                                           {suggestion.bomCompany && (
-                                            <span style={{fontSize: '8px', color: '#28a745', marginLeft: '5px'}}>
+                                            <span style={{ fontSize: '8px', color: '#28a745', marginLeft: '5px' }}>
                                               (for {suggestion.bomCompany})
                                             </span>
                                           )}
-                                          <div style={{fontSize: '9px', color: '#333', marginTop: '3px'}}>
+                                          <div style={{ fontSize: '9px', color: '#333', marginTop: '3px' }}>
                                             <strong>Qty:</strong> {parseFloat(suggestion.coc_qty || 0).toLocaleString()}
                                           </div>
-                                          <div style={{fontSize: '8px', color: '#666'}}>
+                                          <div style={{ fontSize: '8px', color: '#666' }}>
                                             <strong>Lot:</strong> {suggestion.lot_batch_no}
                                           </div>
-                                          <div style={{fontSize: '8px', color: '#666'}}>
+                                          <div style={{ fontSize: '8px', color: '#666' }}>
                                             <strong>Date:</strong> {suggestion.invoice_date || suggestion.entry_date || '-'}
                                           </div>
-                                          <div style={{fontSize: '8px', color: '#999', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}} title={suggestion.brand}>
+                                          <div style={{ fontSize: '8px', color: '#999', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={suggestion.brand}>
                                             <strong>Brand:</strong> {suggestion.brand ? suggestion.brand.substring(0, 20) + (suggestion.brand.length > 20 ? '...' : '') : '-'}
                                           </div>
                                         </div>
                                       ))}
                                     </div>
                                   ) : (
-                                    <span style={{color: '#999', fontSize: '9px'}}>Click "Load FIFO" to see suggestions</span>
+                                    <span style={{ color: '#999', fontSize: '9px' }}>Click "Load FIFO" to see suggestions</span>
                                   )
                                 ) : (
-                                  <span style={{color: '#28a745'}}>✅ Sufficient</span>
+                                  <span style={{ color: '#28a745' }}>✅ Sufficient</span>
                                 )}
                               </td>
                             </tr>
@@ -6892,15 +6983,15 @@ function DailyReport() {
                 );
               })()}
 
-              <div style={{marginTop: '30px', padding: '20px', backgroundColor: '#e3f2fd', borderRadius: '5px', border: '2px solid #2196F3'}}>
-                <h4 style={{marginTop: 0}}>📑 Generate COC Report with PDFs</h4>
-                <p style={{fontSize: '13px', color: '#666'}}>Generate consolidated COC report with all PDF documents indexed</p>
+              <div style={{ marginTop: '30px', padding: '20px', backgroundColor: '#e3f2fd', borderRadius: '5px', border: '2px solid #2196F3' }}>
+                <h4 style={{ marginTop: 0 }}>📑 Generate COC Report with PDFs</h4>
+                <p style={{ fontSize: '13px', color: '#666' }}>Generate consolidated COC report with all PDF documents indexed</p>
                 <button
                   onClick={async () => {
                     setLoading(true);
                     try {
                       const API_BASE_URL = getAPIBaseURL();
-                      
+
                       // Collect all unique COC invoice numbers from cocMaterials AND bomMaterials
                       const cocInvoices = new Set();
                       pdiRecords.forEach(record => {
@@ -6923,7 +7014,7 @@ function DailyReport() {
                           }
                         });
                       });
-                      
+
                       // Also check consolidatedBom from the table
                       consolidatedBom.forEach(bm => {
                         if (bm.lotNumber) {
@@ -6956,7 +7047,7 @@ function DailyReport() {
                       link.click();
                       link.remove();
                       window.URL.revokeObjectURL(url);
-                      
+
                       alert(`✅ COC Report generated with ${cocInvoices.size} documents!`);
                     } catch (error) {
                       console.error('Failed to generate COC report:', error);
@@ -6983,7 +7074,7 @@ function DailyReport() {
                 </button>
               </div>
 
-              <div className="modal-actions" style={{marginTop: '20px'}}>
+              <div className="modal-actions" style={{ marginTop: '20px' }}>
                 <button className="btn-cancel" onClick={() => setShowPdiDetailsModal(false)}>Close</button>
               </div>
             </div>
@@ -6994,20 +7085,20 @@ function DailyReport() {
       {/* Material COC Selection Modal */}
       {showMaterialCocModal && selectedMaterial && (
         <div className="modal-overlay" onClick={() => setShowMaterialCocModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto'}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3>📦 Select COC for: {selectedMaterial}</h3>
-            <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>
+            <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>
               Click on any COC to assign it to <strong>{selectedMaterial}</strong> across all dates in PDI <strong>{selectedPdiForDetails}</strong>
             </p>
 
             {loadingMaterialCoc ? (
-              <div style={{textAlign: 'center', padding: '40px'}}>
+              <div style={{ textAlign: 'center', padding: '40px' }}>
                 <p>⏳ Loading COC data from API...</p>
               </div>
             ) : materialCocData.length === 0 ? (
-              <div style={{textAlign: 'center', padding: '40px'}}>
-                <p style={{color: '#999'}}>❌ No COC data available from API</p>
-                <p style={{fontSize: '12px', color: '#666', marginBottom: '20px'}}>You can add COC manually using the button below</p>
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <p style={{ color: '#999' }}>❌ No COC data available from API</p>
+                <p style={{ fontSize: '12px', color: '#666', marginBottom: '20px' }}>You can add COC manually using the button below</p>
                 <button
                   onClick={() => {
                     setManualCocForm({
@@ -7041,7 +7132,7 @@ function DailyReport() {
             ) : (
               <>
                 {/* Add Manual COC Button */}
-                <div style={{marginBottom: '15px', textAlign: 'right'}}>
+                <div style={{ marginBottom: '15px', textAlign: 'right' }}>
                   <button
                     onClick={() => {
                       setManualCocForm({
@@ -7073,13 +7164,13 @@ function DailyReport() {
                   </button>
                 </div>
                 {/* Filters */}
-                <div style={{display: 'flex', gap: '15px', marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px', border: '1px solid #dee2e6'}}>
-                  <div style={{flex: 1}}>
-                    <label style={{display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '5px', color: '#495057'}}>🔍 Material Filter:</label>
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '5px', border: '1px solid #dee2e6' }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '5px', color: '#495057' }}>🔍 Material Filter:</label>
                     <select
                       value={cocMaterialFilter}
                       onChange={(e) => setCocMaterialFilter(e.target.value)}
-                      style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                     >
                       <option value="all">All Materials</option>
                       {[...new Set(materialCocData.map(coc => coc.material_name).filter(Boolean))].map(material => (
@@ -7087,14 +7178,14 @@ function DailyReport() {
                       ))}
                     </select>
                   </div>
-                  <div style={{flex: 1}}>
-                    <label style={{display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '5px', color: '#495057'}}>🔎 Invoice Search:</label>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '5px', color: '#495057' }}>🔎 Invoice Search:</label>
                     <input
                       type="text"
                       value={cocInvoiceFilter}
                       onChange={(e) => setCocInvoiceFilter(e.target.value)}
                       placeholder="Search by invoice number..."
-                      style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                      style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                     />
                   </div>
                 </div>
@@ -7109,132 +7200,132 @@ function DailyReport() {
 
                   return (
                     <>
-                      <p style={{fontSize: '12px', color: '#666', marginBottom: '10px'}}>Showing {filteredData.length} of {materialCocData.length} records</p>
+                      <p style={{ fontSize: '12px', color: '#666', marginBottom: '10px' }}>Showing {filteredData.length} of {materialCocData.length} records</p>
                       {filteredData.length === 0 ? (
-                        <div style={{textAlign: 'center', padding: '40px'}}>
-                          <p style={{color: '#999'}}>No records match your filter</p>
+                        <div style={{ textAlign: 'center', padding: '40px' }}>
+                          <p style={{ color: '#999' }}>No records match your filter</p>
                         </div>
                       ) : (
-              <div style={{maxHeight: '500px', overflowY: 'auto'}}>
-                <table style={{width: '100%', fontSize: '11px', borderCollapse: 'collapse'}}>
-                  <thead style={{position: 'sticky', top: 0, backgroundColor: '#f8f9fa'}}>
-                    <tr style={{backgroundColor: '#007bff', color: 'white'}}>
-                      <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Material Name</th>
-                      <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Specification</th>
-                      <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Brand</th>
-                      <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Invoice No</th>
-                      <th style={{padding: '6px', textAlign: 'left', border: '1px solid #dee2e6'}}>Lot Number</th>
-                      <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>Invoice Date</th>
-                      <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>COC Qty</th>
-                      <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>Invoice Qty</th>
-                      <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>COC Doc</th>
-                      <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>IQC Doc</th>
-                      <th style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredData.map((coc, idx) => {
-                      // Get specification - use from API data first, else determine from material name
-                      const getSpec = (coc) => {
-                        // First check if spec/specification/product_type exists in COC data from API
-                        if (coc.specification) return coc.specification;
-                        if (coc.spec) return coc.spec;
-                        if (coc.product_type) return coc.product_type;
-                        
-                        // Fallback: determine from material name
-                        const materialName = (coc.material_name || '').toLowerCase();
-                        if (materialName.includes('back') && materialName.includes('glass')) {
-                          return '2376x1128x2.0 mm (3 hole)';
-                        } else if (materialName.includes('front') && materialName.includes('glass')) {
-                          return '2376x1128x2.0 mm';
-                        } else if (materialName.includes('glass')) {
-                          return '2376x1128x2.0 mm';
-                        } else if (materialName.includes('ribbon') && materialName.includes('4')) {
-                          return '4.0X0.4 mm';
-                        } else if (materialName.includes('ribbon') && materialName.includes('6')) {
-                          return '6.0X0.4 mm';
-                        } else if (materialName.includes('ribbon') || materialName.includes('busbar')) {
-                          return '0.26mm';
-                        } else if (materialName.includes('cell')) {
-                          return '25.30%';
-                        } else if (materialName.includes('junction')) {
-                          return '1200mm';
-                        }
-                        return '-';
-                      };
-                      
-                      return (
-                        <tr key={idx} style={{backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa'}}>
-                          <td style={{padding: '6px', border: '1px solid #dee2e6', fontWeight: '500'}}>{coc.material_name || '-'}</td>
-                          <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '9px', color: '#666'}}>{getSpec(coc)}</td>
-                        <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '10px'}}>{coc.brand || '-'}</td>
-                        <td style={{padding: '6px', border: '1px solid #dee2e6'}}>{coc.invoice_no || '-'}</td>
-                        <td style={{padding: '6px', border: '1px solid #dee2e6', fontSize: '10px'}}>{coc.lot_batch_no || '-'}</td>
-                        <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>{coc.invoice_date || '-'}</td>
-                        <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500'}}>{coc.coc_qty || '-'}</td>
-                        <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>{coc.invoice_qty || '-'}</td>
-                        <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                          {coc.coc_document_url ? (
-                            <button
-                              onClick={() => window.open(coc.coc_document_url, '_blank')}
-                              style={{
-                                padding: '3px 8px',
-                                background: '#17a2b8',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                                fontSize: '10px'
-                              }}
-                              title="View COC Document"
-                            >
-                              📄 View
-                            </button>
-                          ) : '-'}
-                        </td>
-                        <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                          {coc.iqc_document_url ? (
-                            <button
-                              onClick={() => window.open(coc.iqc_document_url, '_blank')}
-                              style={{
-                                padding: '3px 8px',
-                                background: '#6c757d',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                                fontSize: '10px'
-                              }}
-                              title="View IQC Document"
-                            >
-                              📋 View
-                            </button>
-                          ) : '-'}
-                        </td>
-                        <td style={{padding: '6px', textAlign: 'center', border: '1px solid #dee2e6'}}>
-                          <button
-                            onClick={() => handleSelectCoc(coc)}
-                            style={{
-                              padding: '4px 10px',
-                              background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
-                              color: 'white',
-                              border: 'none',
-                              borderRadius: '4px',
-                              cursor: 'pointer',
-                              fontSize: '10px',
-                              fontWeight: '500'
-                            }}
-                            title={`Assign this COC to ${selectedMaterial}`}
-                          >
-                            ✅ Select
-                          </button>
-                        </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                        <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
+                          <table style={{ width: '100%', fontSize: '11px', borderCollapse: 'collapse' }}>
+                            <thead style={{ position: 'sticky', top: 0, backgroundColor: '#f8f9fa' }}>
+                              <tr style={{ backgroundColor: '#007bff', color: 'white' }}>
+                                <th style={{ padding: '6px', textAlign: 'left', border: '1px solid #dee2e6' }}>Material Name</th>
+                                <th style={{ padding: '6px', textAlign: 'left', border: '1px solid #dee2e6' }}>Specification</th>
+                                <th style={{ padding: '6px', textAlign: 'left', border: '1px solid #dee2e6' }}>Brand</th>
+                                <th style={{ padding: '6px', textAlign: 'left', border: '1px solid #dee2e6' }}>Invoice No</th>
+                                <th style={{ padding: '6px', textAlign: 'left', border: '1px solid #dee2e6' }}>Lot Number</th>
+                                <th style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>Invoice Date</th>
+                                <th style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>COC Qty</th>
+                                <th style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>Invoice Qty</th>
+                                <th style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>COC Doc</th>
+                                <th style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>IQC Doc</th>
+                                <th style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {filteredData.map((coc, idx) => {
+                                // Get specification - use from API data first, else determine from material name
+                                const getSpec = (coc) => {
+                                  // First check if spec/specification/product_type exists in COC data from API
+                                  if (coc.specification) return coc.specification;
+                                  if (coc.spec) return coc.spec;
+                                  if (coc.product_type) return coc.product_type;
+
+                                  // Fallback: determine from material name
+                                  const materialName = (coc.material_name || '').toLowerCase();
+                                  if (materialName.includes('back') && materialName.includes('glass')) {
+                                    return '2376x1128x2.0 mm (3 hole)';
+                                  } else if (materialName.includes('front') && materialName.includes('glass')) {
+                                    return '2376x1128x2.0 mm';
+                                  } else if (materialName.includes('glass')) {
+                                    return '2376x1128x2.0 mm';
+                                  } else if (materialName.includes('ribbon') && materialName.includes('4')) {
+                                    return '4.0X0.4 mm';
+                                  } else if (materialName.includes('ribbon') && materialName.includes('6')) {
+                                    return '6.0X0.4 mm';
+                                  } else if (materialName.includes('ribbon') || materialName.includes('busbar')) {
+                                    return '0.26mm';
+                                  } else if (materialName.includes('cell')) {
+                                    return '25.30%';
+                                  } else if (materialName.includes('junction')) {
+                                    return '1200mm';
+                                  }
+                                  return '-';
+                                };
+
+                                return (
+                                  <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa' }}>
+                                    <td style={{ padding: '6px', border: '1px solid #dee2e6', fontWeight: '500' }}>{coc.material_name || '-'}</td>
+                                    <td style={{ padding: '6px', border: '1px solid #dee2e6', fontSize: '9px', color: '#666' }}>{getSpec(coc)}</td>
+                                    <td style={{ padding: '6px', border: '1px solid #dee2e6', fontSize: '10px' }}>{coc.brand || '-'}</td>
+                                    <td style={{ padding: '6px', border: '1px solid #dee2e6' }}>{coc.invoice_no || '-'}</td>
+                                    <td style={{ padding: '6px', border: '1px solid #dee2e6', fontSize: '10px' }}>{coc.lot_batch_no || '-'}</td>
+                                    <td style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>{coc.invoice_date || '-'}</td>
+                                    <td style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6', fontWeight: '500' }}>{coc.coc_qty || '-'}</td>
+                                    <td style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>{coc.invoice_qty || '-'}</td>
+                                    <td style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>
+                                      {coc.coc_document_url ? (
+                                        <button
+                                          onClick={() => window.open(coc.coc_document_url, '_blank')}
+                                          style={{
+                                            padding: '3px 8px',
+                                            background: '#17a2b8',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '3px',
+                                            cursor: 'pointer',
+                                            fontSize: '10px'
+                                          }}
+                                          title="View COC Document"
+                                        >
+                                          📄 View
+                                        </button>
+                                      ) : '-'}
+                                    </td>
+                                    <td style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>
+                                      {coc.iqc_document_url ? (
+                                        <button
+                                          onClick={() => window.open(coc.iqc_document_url, '_blank')}
+                                          style={{
+                                            padding: '3px 8px',
+                                            background: '#6c757d',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '3px',
+                                            cursor: 'pointer',
+                                            fontSize: '10px'
+                                          }}
+                                          title="View IQC Document"
+                                        >
+                                          📋 View
+                                        </button>
+                                      ) : '-'}
+                                    </td>
+                                    <td style={{ padding: '6px', textAlign: 'center', border: '1px solid #dee2e6' }}>
+                                      <button
+                                        onClick={() => handleSelectCoc(coc)}
+                                        style={{
+                                          padding: '4px 10px',
+                                          background: 'linear-gradient(135deg, #28a745 0%, #20c997 100%)',
+                                          color: 'white',
+                                          border: 'none',
+                                          borderRadius: '4px',
+                                          cursor: 'pointer',
+                                          fontSize: '10px',
+                                          fontWeight: '500'
+                                        }}
+                                        title={`Assign this COC to ${selectedMaterial}`}
+                                      >
+                                        ✅ Select
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       )}
                     </>
                   );
@@ -7242,7 +7333,7 @@ function DailyReport() {
               </>
             )}
 
-            <div style={{marginTop: '20px', textAlign: 'right'}}>
+            <div style={{ marginTop: '20px', textAlign: 'right' }}>
               <button
                 onClick={() => setShowMaterialCocModal(false)}
                 style={{
@@ -7269,8 +7360,8 @@ function DailyReport() {
           backdropFilter: 'blur(5px)'
         }}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{
-            maxWidth: '700px', 
-            maxHeight: '95vh', 
+            maxWidth: '700px',
+            maxHeight: '95vh',
             overflowY: 'auto',
             padding: '0',
             backgroundColor: '#ffffff',
@@ -7305,8 +7396,8 @@ function DailyReport() {
                 }}
               >×</button>
               <h2 style={{
-                margin: '0', 
-                color: 'white', 
+                margin: '0',
+                color: 'white',
                 fontSize: '26px',
                 fontWeight: '600',
                 display: 'flex',
@@ -7320,36 +7411,36 @@ function DailyReport() {
                 }}>⚡</span>
                 Cell Received Entry
               </h2>
-              <p style={{margin: '10px 0 0 0', color: 'rgba(255,255,255,0.8)', fontSize: '14px'}}>
+              <p style={{ margin: '10px 0 0 0', color: 'rgba(255,255,255,0.8)', fontSize: '14px' }}>
                 Enter solar cell inventory received from suppliers
               </p>
             </div>
 
             <form onSubmit={async (e) => {
               e.preventDefault();
-              
+
               if (!cellReceivedForm.supplierCompany || !cellReceivedForm.quantity) {
                 alert('Please fill in Supplier Company and Quantity');
                 return;
               }
-              
+
               const qty = parseInt(cellReceivedForm.quantity) || 0;
               if (qty <= 0) {
                 alert('Quantity must be greater than 0');
                 return;
               }
-              
-              const currentReceived = {...(selectedCompany?.cellEfficiencyReceived || {})};
+
+              const currentReceived = { ...(selectedCompany?.cellEfficiencyReceived || {}) };
               const eff = cellReceivedForm.efficiency;
               const company = cellReceivedForm.supplierCompany.trim();
-              
-              const newReceived = {...currentReceived};
-              
+
+              const newReceived = { ...currentReceived };
+
               // If in EDIT mode, first remove old entry if efficiency/company changed
               if (cellReceivedEditMode && cellReceivedEditKey) {
                 const oldEff = cellReceivedEditKey.eff;
                 const oldCompany = cellReceivedEditKey.company;
-                
+
                 // Remove old entry
                 if (newReceived[oldEff] && newReceived[oldEff][oldCompany]) {
                   delete newReceived[oldEff][oldCompany];
@@ -7357,7 +7448,7 @@ function DailyReport() {
                     delete newReceived[oldEff];
                   }
                 }
-                
+
                 // Set new entry (replace, not add)
                 if (!newReceived[eff]) {
                   newReceived[eff] = {};
@@ -7373,7 +7464,7 @@ function DailyReport() {
                 }
                 newReceived[eff][company] = (newReceived[eff][company] || 0) + qty;
               }
-              
+
               try {
                 const API_BASE_URL = getAPIBaseURL();
                 const response = await fetch(`${API_BASE_URL}/api/companies/${selectedCompany.id}`, {
@@ -7383,19 +7474,19 @@ function DailyReport() {
                     cellEfficiencyReceived: newReceived
                   })
                 });
-                
+
                 if (response.ok) {
                   alert(`✅ ${cellReceivedEditMode ? 'Updated' : 'Added'} Successfully!\n\n📦 ${qty.toLocaleString()} Cells\n⚡ Efficiency: ${eff}%\n🏭 Supplier: ${company}`);
-                  
+
                   // Refresh both companies list AND selected company
                   await loadCompanies();
-                  
+
                   // Also update selectedCompany directly so UI shows immediately
                   setSelectedCompany(prev => ({
                     ...prev,
                     cellEfficiencyReceived: newReceived
                   }));
-                  
+
                   // Reset form and edit mode
                   setCellReceivedEditMode(false);
                   setCellReceivedEditKey(null);
@@ -7413,13 +7504,13 @@ function DailyReport() {
                 console.error('Error:', error);
                 alert('Server Error');
               }
-            }} style={{padding: '30px'}}>
-              
+            }} style={{ padding: '30px' }}>
+
               {/* Efficiency Grade Selection */}
-              <div style={{marginBottom: '28px'}}>
+              <div style={{ marginBottom: '28px' }}>
                 <label style={{
-                  display: 'block', 
-                  fontWeight: '600', 
+                  display: 'block',
+                  fontWeight: '600',
                   marginBottom: '14px',
                   fontSize: '15px',
                   color: '#37474f',
@@ -7428,12 +7519,12 @@ function DailyReport() {
                 }}>
                   Cell Efficiency Grade
                 </label>
-                <div style={{display: 'flex', gap: '12px', flexWrap: 'wrap'}}>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => (
                     <button
                       key={eff}
                       type="button"
-                      onClick={() => setCellReceivedForm({...cellReceivedForm, efficiency: eff})}
+                      onClick={() => setCellReceivedForm({ ...cellReceivedForm, efficiency: eff })}
                       style={{
                         padding: '14px 28px',
                         fontSize: '17px',
@@ -7454,22 +7545,22 @@ function DailyReport() {
               </div>
 
               {/* Supplier Company */}
-              <div style={{marginBottom: '24px'}}>
+              <div style={{ marginBottom: '24px' }}>
                 <label style={{
-                  display: 'block', 
-                  fontWeight: '600', 
+                  display: 'block',
+                  fontWeight: '600',
                   marginBottom: '10px',
                   fontSize: '15px',
                   color: '#37474f',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
-                  Supplier Company <span style={{color: '#e53935'}}>*</span>
+                  Supplier Company <span style={{ color: '#e53935' }}>*</span>
                 </label>
                 <input
                   type="text"
                   value={cellReceivedForm.supplierCompany}
-                  onChange={(e) => setCellReceivedForm({...cellReceivedForm, supplierCompany: e.target.value})}
+                  onChange={(e) => setCellReceivedForm({ ...cellReceivedForm, supplierCompany: e.target.value })}
                   placeholder="Enter supplier name..."
                   style={{
                     width: '100%',
@@ -7485,12 +7576,12 @@ function DailyReport() {
                   onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
                   required
                 />
-                <div style={{marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
+                <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {['Longi', 'JA Solar', 'Trina', 'Jinko', 'Canadian Solar', 'Risen'].map(name => (
                     <button
                       key={name}
                       type="button"
-                      onClick={() => setCellReceivedForm({...cellReceivedForm, supplierCompany: name})}
+                      onClick={() => setCellReceivedForm({ ...cellReceivedForm, supplierCompany: name })}
                       style={{
                         padding: '8px 16px',
                         fontSize: '13px',
@@ -7510,24 +7601,24 @@ function DailyReport() {
               </div>
 
               {/* Two Column Layout */}
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px'}}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '24px' }}>
                 {/* Quantity */}
                 <div>
                   <label style={{
-                    display: 'block', 
-                    fontWeight: '600', 
+                    display: 'block',
+                    fontWeight: '600',
                     marginBottom: '10px',
                     fontSize: '15px',
                     color: '#37474f',
                     textTransform: 'uppercase',
                     letterSpacing: '0.5px'
                   }}>
-                    Quantity (Cells) <span style={{color: '#e53935'}}>*</span>
+                    Quantity (Cells) <span style={{ color: '#e53935' }}>*</span>
                   </label>
                   <input
                     type="number"
                     value={cellReceivedForm.quantity}
-                    onChange={(e) => setCellReceivedForm({...cellReceivedForm, quantity: e.target.value})}
+                    onChange={(e) => setCellReceivedForm({ ...cellReceivedForm, quantity: e.target.value })}
                     placeholder="e.g., 50000"
                     style={{
                       width: '100%',
@@ -7549,8 +7640,8 @@ function DailyReport() {
                 {/* Receive Date */}
                 <div>
                   <label style={{
-                    display: 'block', 
-                    fontWeight: '600', 
+                    display: 'block',
+                    fontWeight: '600',
                     marginBottom: '10px',
                     fontSize: '15px',
                     color: '#37474f',
@@ -7562,7 +7653,7 @@ function DailyReport() {
                   <input
                     type="date"
                     value={cellReceivedForm.receiveDate}
-                    onChange={(e) => setCellReceivedForm({...cellReceivedForm, receiveDate: e.target.value})}
+                    onChange={(e) => setCellReceivedForm({ ...cellReceivedForm, receiveDate: e.target.value })}
                     style={{
                       width: '100%',
                       padding: '14px 18px',
@@ -7579,22 +7670,22 @@ function DailyReport() {
               </div>
 
               {/* Invoice Number */}
-              <div style={{marginBottom: '28px'}}>
+              <div style={{ marginBottom: '28px' }}>
                 <label style={{
-                  display: 'block', 
-                  fontWeight: '600', 
+                  display: 'block',
+                  fontWeight: '600',
                   marginBottom: '10px',
                   fontSize: '15px',
                   color: '#37474f',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px'
                 }}>
-                  Invoice / Challan Number <span style={{color: '#9e9e9e', fontWeight: '400', textTransform: 'none'}}>(Optional)</span>
+                  Invoice / Challan Number <span style={{ color: '#9e9e9e', fontWeight: '400', textTransform: 'none' }}>(Optional)</span>
                 </label>
                 <input
                   type="text"
                   value={cellReceivedForm.invoiceNo}
-                  onChange={(e) => setCellReceivedForm({...cellReceivedForm, invoiceNo: e.target.value})}
+                  onChange={(e) => setCellReceivedForm({ ...cellReceivedForm, invoiceNo: e.target.value })}
                   placeholder="Enter invoice or challan number..."
                   style={{
                     width: '100%',
@@ -7619,33 +7710,33 @@ function DailyReport() {
                   borderRadius: '14px',
                   border: '1px solid #a5d6a7'
                 }}>
-                  <h4 style={{margin: '0 0 18px 0', color: '#2e7d32', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px'}}>
-                    <span style={{background: '#2e7d32', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px'}}>✓</span>
+                  <h4 style={{ margin: '0 0 18px 0', color: '#2e7d32', fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ background: '#2e7d32', color: 'white', width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>✓</span>
                     Entry Summary
                   </h4>
-                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px'}}>
-                    <div style={{background: 'white', padding: '16px', borderRadius: '10px'}}>
-                      <div style={{color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px'}}>Efficiency</div>
-                      <div style={{fontSize: '24px', fontWeight: '700', color: '#1a237e'}}>{cellReceivedForm.efficiency}%</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                    <div style={{ background: 'white', padding: '16px', borderRadius: '10px' }}>
+                      <div style={{ color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px' }}>Efficiency</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: '#1a237e' }}>{cellReceivedForm.efficiency}%</div>
                     </div>
-                    <div style={{background: 'white', padding: '16px', borderRadius: '10px'}}>
-                      <div style={{color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px'}}>Supplier</div>
-                      <div style={{fontSize: '18px', fontWeight: '600', color: '#37474f'}}>{cellReceivedForm.supplierCompany}</div>
+                    <div style={{ background: 'white', padding: '16px', borderRadius: '10px' }}>
+                      <div style={{ color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px' }}>Supplier</div>
+                      <div style={{ fontSize: '18px', fontWeight: '600', color: '#37474f' }}>{cellReceivedForm.supplierCompany}</div>
                     </div>
-                    <div style={{background: 'white', padding: '16px', borderRadius: '10px'}}>
-                      <div style={{color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px'}}>Total Cells</div>
-                      <div style={{fontSize: '24px', fontWeight: '700', color: '#d32f2f'}}>{parseInt(cellReceivedForm.quantity || 0).toLocaleString()}</div>
+                    <div style={{ background: 'white', padding: '16px', borderRadius: '10px' }}>
+                      <div style={{ color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px' }}>Total Cells</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: '#d32f2f' }}>{parseInt(cellReceivedForm.quantity || 0).toLocaleString()}</div>
                     </div>
-                    <div style={{background: 'white', padding: '16px', borderRadius: '10px'}}>
-                      <div style={{color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px'}}>Est. Modules</div>
-                      <div style={{fontSize: '24px', fontWeight: '700', color: '#7b1fa2'}}>~{Math.floor(parseInt(cellReceivedForm.quantity || 0) / 66).toLocaleString()}</div>
+                    <div style={{ background: 'white', padding: '16px', borderRadius: '10px' }}>
+                      <div style={{ color: '#78909c', fontSize: '12px', textTransform: 'uppercase', marginBottom: '4px' }}>Est. Modules</div>
+                      <div style={{ fontSize: '24px', fontWeight: '700', color: '#7b1fa2' }}>~{Math.floor(parseInt(cellReceivedForm.quantity || 0) / 66).toLocaleString()}</div>
                     </div>
                   </div>
                 </div>
               )}
 
               {/* Action Buttons */}
-              <div style={{display: 'flex', gap: '16px'}}>
+              <div style={{ display: 'flex', gap: '16px' }}>
                 <button
                   type="submit"
                   style={{
@@ -7705,24 +7796,24 @@ function DailyReport() {
               borderTop: '1px solid #e0e0e0',
               borderRadius: '0 0 16px 16px'
             }}>
-              <h4 style={{margin: '0 0 14px 0', color: '#546e7a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px'}}>
+              <h4 style={{ margin: '0 0 14px 0', color: '#546e7a', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Current Inventory - Click to Edit/Delete
               </h4>
-              
+
               {/* Show all entries with edit/delete */}
-              <div style={{maxHeight: '300px', overflowY: 'auto'}}>
+              <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                 {['25.4', '25.5', '25.6', '25.7', '25.8'].map(eff => {
                   const effData = selectedCompany?.cellEfficiencyReceived?.[eff] || {};
                   const companies = typeof effData === 'object' ? effData : {};
-                  
+
                   if (Object.keys(companies).length === 0) return null;
-                  
+
                   return (
-                    <div key={eff} style={{marginBottom: '15px'}}>
+                    <div key={eff} style={{ marginBottom: '15px' }}>
                       <div style={{
-                        fontWeight: '700', 
-                        color: '#1565c0', 
-                        fontSize: '16px', 
+                        fontWeight: '700',
+                        color: '#1565c0',
+                        fontSize: '16px',
                         marginBottom: '8px',
                         padding: '5px 10px',
                         backgroundColor: '#e3f2fd',
@@ -7742,18 +7833,18 @@ function DailyReport() {
                           border: '1px solid #e0e0e0'
                         }}>
                           <div>
-                            <span style={{fontWeight: '600', color: '#37474f'}}>🏭 {company}</span>
-                            <span style={{marginLeft: '15px', fontSize: '18px', fontWeight: '700', color: '#1976d2'}}>
+                            <span style={{ fontWeight: '600', color: '#37474f' }}>🏭 {company}</span>
+                            <span style={{ marginLeft: '15px', fontSize: '18px', fontWeight: '700', color: '#1976d2' }}>
                               {(qty || 0).toLocaleString()} cells
                             </span>
                           </div>
-                          <div style={{display: 'flex', gap: '8px'}}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
                             {/* EDIT Button */}
                             <button
                               type="button"
                               onClick={() => {
                                 setCellReceivedEditMode(true);
-                                setCellReceivedEditKey({eff, company});
+                                setCellReceivedEditKey({ eff, company });
                                 setCellReceivedForm({
                                   efficiency: eff,
                                   supplierCompany: company,
@@ -7780,8 +7871,8 @@ function DailyReport() {
                               type="button"
                               onClick={async () => {
                                 if (!window.confirm(`Delete ${company} (${qty.toLocaleString()} cells) from ${eff}%?`)) return;
-                                
-                                const currentReceived = {...(selectedCompany?.cellEfficiencyReceived || {})};
+
+                                const currentReceived = { ...(selectedCompany?.cellEfficiencyReceived || {}) };
                                 if (currentReceived[eff] && currentReceived[eff][company]) {
                                   delete currentReceived[eff][company];
                                   // If no companies left in this efficiency, remove the efficiency too
@@ -7789,7 +7880,7 @@ function DailyReport() {
                                     delete currentReceived[eff];
                                   }
                                 }
-                                
+
                                 try {
                                   const API_BASE_URL = getAPIBaseURL();
                                   const response = await fetch(`${API_BASE_URL}/api/companies/${selectedCompany.id}`, {
@@ -7797,11 +7888,11 @@ function DailyReport() {
                                     headers: { 'Content-Type': 'application/json' },
                                     body: JSON.stringify({ cellEfficiencyReceived: currentReceived })
                                   });
-                                  
+
                                   if (response.ok) {
                                     alert('✅ Deleted successfully!');
                                     await loadCompanies();
-                                    setSelectedCompany(prev => ({...prev, cellEfficiencyReceived: currentReceived}));
+                                    setSelectedCompany(prev => ({ ...prev, cellEfficiencyReceived: currentReceived }));
                                   }
                                 } catch (error) {
                                   alert('❌ Error deleting');
@@ -7826,16 +7917,16 @@ function DailyReport() {
                     </div>
                   );
                 })}
-                
+
                 {/* No data message */}
                 {!['25.4', '25.5', '25.6', '25.7', '25.8'].some(eff => {
                   const effData = selectedCompany?.cellEfficiencyReceived?.[eff] || {};
                   return typeof effData === 'object' && Object.keys(effData).length > 0;
                 }) && (
-                  <div style={{textAlign: 'center', padding: '30px', color: '#999'}}>
-                    No cell inventory data yet. Add your first entry above!
-                  </div>
-                )}
+                    <div style={{ textAlign: 'center', padding: '30px', color: '#999' }}>
+                      No cell inventory data yet. Add your first entry above!
+                    </div>
+                  )}
               </div>
             </div>
           </div>
@@ -7845,20 +7936,20 @@ function DailyReport() {
       {/* Manual COC Entry Modal */}
       {showManualCocModal && (
         <div className="modal-overlay" onClick={() => setShowManualCocModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto'}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '700px', maxHeight: '90vh', overflowY: 'auto' }}>
             <h3>➕ Add COC Manually</h3>
-            <p style={{fontSize: '13px', color: '#666', marginBottom: '20px'}}>
+            <p style={{ fontSize: '13px', color: '#666', marginBottom: '20px' }}>
               Fill in COC details and upload PDF documents (if available)
             </p>
 
             <form onSubmit={async (e) => {
               e.preventDefault();
               setLoading(true);
-              
+
               try {
                 const API_BASE_URL = getAPIBaseURL();
                 const formData = new FormData();
-                
+
                 // Add COC details
                 formData.append('material_name', manualCocForm.materialName);
                 formData.append('invoice_no', manualCocForm.invoiceNo);
@@ -7867,7 +7958,7 @@ function DailyReport() {
                 formData.append('coc_qty', manualCocForm.cocQty);
                 formData.append('invoice_qty', manualCocForm.invoiceQty);
                 formData.append('invoice_date', manualCocForm.invoiceDate);
-                
+
                 // Add PDF files if uploaded
                 if (manualCocForm.cocPdf) {
                   formData.append('coc_pdf', manualCocForm.cocPdf);
@@ -7875,18 +7966,18 @@ function DailyReport() {
                 if (manualCocForm.iqcPdf) {
                   formData.append('iqc_pdf', manualCocForm.iqcPdf);
                 }
-                
+
                 // Submit to backend
                 const response = await axios.post(`${API_BASE_URL}/api/coc/manual-entry`, formData, {
                   headers: {
                     'Content-Type': 'multipart/form-data'
                   }
                 });
-                
+
                 if (response.data.success) {
                   alert('✅ COC added successfully!');
                   setShowManualCocModal(false);
-                  
+
                   // Auto-assign to current material if applicable
                   if (selectedMaterial && selectedPdiForDetails) {
                     await handleSelectCoc(response.data.coc_data);
@@ -7899,16 +7990,16 @@ function DailyReport() {
                 setLoading(false);
               }
             }}>
-              <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px'}}>
-                <div style={{gridColumn: 'span 2'}}>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
-                    Material Name <span style={{color: 'red'}}>*</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
+                    Material Name <span style={{ color: 'red' }}>*</span>
                   </label>
                   <select
                     value={manualCocForm.materialName}
-                    onChange={(e) => setManualCocForm({...manualCocForm, materialName: e.target.value})}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, materialName: e.target.value })}
                     required
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   >
                     <option value="">Select Material</option>
                     {/* Get unique material names from both wattages */}
@@ -7922,121 +8013,121 @@ function DailyReport() {
                 </div>
 
                 <div>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
-                    Invoice Number <span style={{color: 'red'}}>*</span>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
+                    Invoice Number <span style={{ color: 'red' }}>*</span>
                   </label>
                   <input
                     type="text"
                     value={manualCocForm.invoiceNo}
-                    onChange={(e) => setManualCocForm({...manualCocForm, invoiceNo: e.target.value})}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, invoiceNo: e.target.value })}
                     required
                     placeholder="e.g., INV2025110613-2"
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
                     Brand
                   </label>
                   <input
                     type="text"
                     value={manualCocForm.brand}
-                    onChange={(e) => setManualCocForm({...manualCocForm, brand: e.target.value})}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, brand: e.target.value })}
                     placeholder="e.g., ABC Corp"
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
                     Lot/Batch Number
                   </label>
                   <input
                     type="text"
                     value={manualCocForm.lotBatchNo}
-                    onChange={(e) => setManualCocForm({...manualCocForm, lotBatchNo: e.target.value})}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, lotBatchNo: e.target.value })}
                     placeholder="e.g., LOT123"
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
-                    COC Quantity <span style={{color: 'red'}}>*</span>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
+                    COC Quantity <span style={{ color: 'red' }}>*</span>
                   </label>
                   <input
                     type="number"
                     value={manualCocForm.cocQty}
-                    onChange={(e) => setManualCocForm({...manualCocForm, cocQty: e.target.value})}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, cocQty: e.target.value })}
                     required
                     placeholder="e.g., 200000"
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
                     Invoice Quantity
                   </label>
                   <input
                     type="number"
                     value={manualCocForm.invoiceQty}
-                    onChange={(e) => setManualCocForm({...manualCocForm, invoiceQty: e.target.value})}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, invoiceQty: e.target.value })}
                     placeholder="e.g., 200000"
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   />
                 </div>
 
                 <div>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
-                    Invoice Date <span style={{color: 'red'}}>*</span>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
+                    Invoice Date <span style={{ color: 'red' }}>*</span>
                   </label>
                   <input
                     type="date"
                     value={manualCocForm.invoiceDate}
-                    onChange={(e) => setManualCocForm({...manualCocForm, invoiceDate: e.target.value})}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, invoiceDate: e.target.value })}
                     required
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   />
                 </div>
 
-                <div style={{gridColumn: 'span 2'}}>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
                     📄 COC PDF Document
                   </label>
                   <input
                     type="file"
                     accept=".pdf"
-                    onChange={(e) => setManualCocForm({...manualCocForm, cocPdf: e.target.files[0]})}
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, cocPdf: e.target.files[0] })}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   />
                   {manualCocForm.cocPdf && (
-                    <p style={{fontSize: '11px', color: '#28a745', marginTop: '5px'}}>
+                    <p style={{ fontSize: '11px', color: '#28a745', marginTop: '5px' }}>
                       ✅ {manualCocForm.cocPdf.name}
                     </p>
                   )}
                 </div>
 
-                <div style={{gridColumn: 'span 2'}}>
-                  <label style={{display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px'}}>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontWeight: '500', marginBottom: '5px', fontSize: '13px' }}>
                     📋 IQC PDF Document (Optional)
                   </label>
                   <input
                     type="file"
                     accept=".pdf"
-                    onChange={(e) => setManualCocForm({...manualCocForm, iqcPdf: e.target.files[0]})}
-                    style={{width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px'}}
+                    onChange={(e) => setManualCocForm({ ...manualCocForm, iqcPdf: e.target.files[0] })}
+                    style={{ width: '100%', padding: '8px', border: '1px solid #ced4da', borderRadius: '4px', fontSize: '13px' }}
                   />
                   {manualCocForm.iqcPdf && (
-                    <p style={{fontSize: '11px', color: '#28a745', marginTop: '5px'}}>
+                    <p style={{ fontSize: '11px', color: '#28a745', marginTop: '5px' }}>
                       ✅ {manualCocForm.iqcPdf.name}
                     </p>
                   )}
                 </div>
               </div>
 
-              <div style={{marginTop: '25px', display: 'flex', gap: '10px', justifyContent: 'flex-end'}}>
+              <div style={{ marginTop: '25px', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
                 <button
                   type="button"
                   onClick={() => setShowManualCocModal(false)}
@@ -8075,7 +8166,7 @@ function DailyReport() {
       )}
 
       {/* Password Modal */}
-      <PasswordModal 
+      <PasswordModal
         isOpen={showPasswordModal}
         onClose={() => {
           setShowPasswordModal(false);
