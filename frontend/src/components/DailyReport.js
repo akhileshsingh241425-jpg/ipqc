@@ -4322,7 +4322,81 @@ function DailyReport() {
                           ws2['!cols'] = [{ wch: 14 }, { wch: 25 }, { wch: 16 }, { wch: 14 }, { wch: 12 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws2, 'Supplier Inventory');
 
-                          // ======== SHEET 3: DAILY CELL USAGE (DETAILED) ========
+                          // ======== SHEET 3: BRAND WISE SUMMARY ========
+                          const brandData = [];
+                          brandData.push(['🏭 BRAND / SUPPLIER WISE CELL INVENTORY']);
+                          brandData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
+                          brandData.push([]);
+                          
+                          // Calculate brand totals
+                          const brandTotalsExcel = {};
+                          effGrades.forEach(eff => {
+                            const effData = cellEffReceived[eff] || {};
+                            if (typeof effData === 'object') {
+                              Object.entries(effData).forEach(([brand, qty]) => {
+                                if (!brandTotalsExcel[brand]) {
+                                  brandTotalsExcel[brand] = { received: 0, efficiencies: {} };
+                                }
+                                brandTotalsExcel[brand].received += (qty || 0);
+                                brandTotalsExcel[brand].efficiencies[eff] = (qty || 0);
+                              });
+                            }
+                          });
+
+                          brandData.push(['BRAND/SUPPLIER', 'TOTAL RECEIVED', '% OF TOTAL', 'EST. MODULES', '25.4%', '25.5%', '25.6%', '25.7%', '25.8%']);
+                          
+                          Object.entries(brandTotalsExcel).forEach(([brand, data]) => {
+                            const brandPercent = grandTotalReceived > 0 ? ((data.received / grandTotalReceived) * 100).toFixed(1) + '%' : '0%';
+                            const estMods = Math.floor(data.received / 66);
+                            brandData.push([
+                              brand,
+                              data.received,
+                              brandPercent,
+                              estMods,
+                              data.efficiencies['25.4'] || 0,
+                              data.efficiencies['25.5'] || 0,
+                              data.efficiencies['25.6'] || 0,
+                              data.efficiencies['25.7'] || 0,
+                              data.efficiencies['25.8'] || 0
+                            ]);
+                          });
+
+                          // Add total row
+                          brandData.push([]);
+                          brandData.push([
+                            'TOTAL',
+                            grandTotalReceived,
+                            '100%',
+                            Math.floor(grandTotalReceived / 66),
+                            Object.values(brandTotalsExcel).reduce((s, d) => s + (d.efficiencies['25.4'] || 0), 0),
+                            Object.values(brandTotalsExcel).reduce((s, d) => s + (d.efficiencies['25.5'] || 0), 0),
+                            Object.values(brandTotalsExcel).reduce((s, d) => s + (d.efficiencies['25.6'] || 0), 0),
+                            Object.values(brandTotalsExcel).reduce((s, d) => s + (d.efficiencies['25.7'] || 0), 0),
+                            Object.values(brandTotalsExcel).reduce((s, d) => s + (d.efficiencies['25.8'] || 0), 0)
+                          ]);
+
+                          const wsBrand = XLSXStyle.utils.aoa_to_sheet(brandData);
+                          if (wsBrand['A1']) wsBrand['A1'].s = purpleStyle;
+                          wsBrand['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
+                          ['A4', 'B4', 'C4', 'D4', 'E4', 'F4', 'G4', 'H4', 'I4'].forEach(cell => { if (wsBrand[cell]) wsBrand[cell].s = headerStyle; });
+                          // Style brand rows
+                          Object.keys(brandTotalsExcel).forEach((_, idx) => {
+                            const row = 5 + idx;
+                            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].forEach(col => {
+                              const cell = `${col}${row}`;
+                              if (wsBrand[cell]) wsBrand[cell].s = idx % 2 === 0 ? altRowStyle1 : altRowStyle2;
+                            });
+                          });
+                          // Style total row
+                          const brandTotalRow = 5 + Object.keys(brandTotalsExcel).length + 1;
+                          ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].forEach(col => {
+                            const cell = `${col}${brandTotalRow}`;
+                            if (wsBrand[cell]) wsBrand[cell].s = totalRowStyle;
+                          });
+                          wsBrand['!cols'] = [{ wch: 25 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+                          XLSXStyle.utils.book_append_sheet(wb, wsBrand, 'Brand Summary');
+
+                          // ======== SHEET 4: DAILY CELL USAGE (DETAILED) ========
                           const usageData = [];
                           usageData.push(['📅 DAILY CELL USAGE - DETAILED REPORT']);
                           usageData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
@@ -4373,7 +4447,7 @@ function DailyReport() {
                           ws3['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 25 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws3, 'Daily Usage');
 
-                          // ======== SHEET 4: EFFICIENCY WISE USAGE BREAKDOWN ========
+                          // ======== SHEET 5: EFFICIENCY WISE USAGE BREAKDOWN ========
                           const effUsageData = [];
                           effUsageData.push(['⚡ EFFICIENCY WISE DAILY USAGE BREAKDOWN']);
                           effUsageData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
@@ -4433,7 +4507,7 @@ function DailyReport() {
                           ws4['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws4, 'Efficiency Usage');
 
-                          // ======== SHEET 5: BALANCE ANALYSIS ========
+                          // ======== SHEET 6: BALANCE ANALYSIS ========
                           const balanceData = [];
                           balanceData.push(['📊 BALANCE ANALYSIS & FORECAST']);
                           balanceData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
@@ -4479,7 +4553,7 @@ function DailyReport() {
                           // Download file
                           const fileName = `Cell_Inventory_DETAILED_${selectedCompany?.companyName || 'Company'}_${new Date().toISOString().split('T')[0]}.xlsx`;
                           XLSXStyle.writeFile(wb, fileName);
-                          alert('✅ Detailed Excel Report Downloaded Successfully!\n\n📊 Sheets Included:\n1. Grand Summary\n2. Supplier Inventory\n3. Daily Usage\n4. Efficiency Usage\n5. Balance Analysis');
+                          alert('✅ Detailed Excel Report Downloaded Successfully!\n\n📊 Sheets Included:\n1. Grand Summary\n2. Supplier Inventory\n3. Brand Summary\n4. Daily Usage\n5. Efficiency Usage\n6. Balance Analysis');
                         }}
                         style={{
                           padding: '14px 28px',
@@ -4606,6 +4680,155 @@ function DailyReport() {
                       <div style={{ fontSize: '12px', color: '#81c784' }}>Can Produce</div>
                     </div>
                   </div>
+
+                  {/* BRAND/SUPPLIER WISE BREAKDOWN */}
+                  {(() => {
+                    // Calculate brand-wise totals across all efficiencies
+                    const brandTotals = {};
+                    efficiencyGrades.forEach(eff => {
+                      const effData = cellEfficiencyReceived[eff] || {};
+                      if (typeof effData === 'object') {
+                        Object.entries(effData).forEach(([brand, qty]) => {
+                          if (!brandTotals[brand]) {
+                            brandTotals[brand] = { received: 0, efficiencies: {} };
+                          }
+                          brandTotals[brand].received += (qty || 0);
+                          brandTotals[brand].efficiencies[eff] = (qty || 0);
+                        });
+                      }
+                    });
+
+                    const brands = Object.keys(brandTotals);
+                    if (brands.length === 0) return null;
+
+                    return (
+                      <div style={{
+                        marginBottom: '30px',
+                        background: 'white',
+                        borderRadius: '16px',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                        overflow: 'hidden',
+                        border: '1px solid #e0e0e0'
+                      }}>
+                        <div style={{
+                          padding: '15px 20px',
+                          background: 'linear-gradient(135deg, #7b1fa2 0%, #4a148c 100%)',
+                          color: 'white',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <h3 style={{ margin: 0, fontSize: '16px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>🏭</span> Brand / Supplier Wise Breakdown
+                          </h3>
+                          <div style={{ fontSize: '12px', opacity: 0.9 }}>
+                            {brands.length} Suppliers
+                          </div>
+                        </div>
+
+                        <div style={{ padding: '20px' }}>
+                          <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: `repeat(${Math.min(brands.length, 4)}, 1fr)`,
+                            gap: '20px'
+                          }}>
+                            {brands.map(brand => {
+                              const data = brandTotals[brand];
+                              const brandPercent = grandTotalReceived > 0 ? ((data.received / grandTotalReceived) * 100).toFixed(1) : 0;
+                              const estModulesForBrand = Math.floor(data.received / cellsPerModule);
+
+                              return (
+                                <div key={brand} style={{
+                                  padding: '20px',
+                                  borderRadius: '12px',
+                                  border: '2px solid #9c27b0',
+                                  backgroundColor: '#faf5ff'
+                                }}>
+                                  {/* Brand Name */}
+                                  <div style={{
+                                    fontSize: '18px',
+                                    fontWeight: 'bold',
+                                    color: '#7b1fa2',
+                                    marginBottom: '15px',
+                                    textAlign: 'center',
+                                    padding: '10px',
+                                    background: 'linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%)',
+                                    borderRadius: '8px'
+                                  }}>
+                                    🏭 {brand}
+                                  </div>
+
+                                  {/* Total Received */}
+                                  <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    padding: '10px',
+                                    backgroundColor: '#e3f2fd',
+                                    borderRadius: '8px',
+                                    marginBottom: '10px'
+                                  }}>
+                                    <span style={{ color: '#1565c0', fontWeight: '600' }}>Total Received:</span>
+                                    <strong style={{ color: '#1976d2', fontSize: '16px' }}>{data.received.toLocaleString()}</strong>
+                                  </div>
+
+                                  {/* Percentage */}
+                                  <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    padding: '10px',
+                                    backgroundColor: '#fff3e0',
+                                    borderRadius: '8px',
+                                    marginBottom: '10px'
+                                  }}>
+                                    <span style={{ color: '#e65100', fontWeight: '600' }}>% of Total:</span>
+                                    <strong style={{ color: '#f57c00', fontSize: '16px' }}>{brandPercent}%</strong>
+                                  </div>
+
+                                  {/* Est Modules */}
+                                  <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    padding: '10px',
+                                    backgroundColor: '#e8f5e9',
+                                    borderRadius: '8px',
+                                    marginBottom: '15px'
+                                  }}>
+                                    <span style={{ color: '#2e7d32', fontWeight: '600' }}>Est. Modules:</span>
+                                    <strong style={{ color: '#43a047', fontSize: '16px' }}>{estModulesForBrand.toLocaleString()}</strong>
+                                  </div>
+
+                                  {/* Efficiency Breakdown */}
+                                  <div style={{
+                                    padding: '10px',
+                                    backgroundColor: '#f5f5f5',
+                                    borderRadius: '8px'
+                                  }}>
+                                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px', fontWeight: '600' }}>EFFICIENCY WISE:</div>
+                                    {efficiencyGrades.map(eff => {
+                                      const effQty = data.efficiencies[eff] || 0;
+                                      if (effQty === 0) return null;
+                                      return (
+                                        <div key={eff} style={{
+                                          display: 'flex',
+                                          justifyContent: 'space-between',
+                                          padding: '4px 0',
+                                          borderBottom: '1px dashed #e0e0e0',
+                                          fontSize: '13px'
+                                        }}>
+                                          <span style={{ color: '#1565c0' }}>⚡ {eff}%</span>
+                                          <strong style={{ color: '#333' }}>{effQty.toLocaleString()}</strong>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* GRAND SUMMARY STATS */}
                   {/* DETAILED INVENTORY BREAKDOWN UI */}
