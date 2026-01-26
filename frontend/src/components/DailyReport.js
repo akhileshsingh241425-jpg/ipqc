@@ -3936,76 +3936,83 @@ function DailyReport() {
             {(() => {
               const efficiencyGrades = ['25.4', '25.5', '25.6', '25.7', '25.8'];
               const cellEfficiencyReceived = selectedCompany?.cellEfficiencyReceived || {};
-              const usedByEfficiency = {};
-              efficiencyGrades.forEach(eff => { usedByEfficiency[eff] = 0; });
+              const records = selectedCompany?.productionRecords || [];
+              const cellsPerModule = 66;
 
-              let totalRejectionPercent = 0;
-              let recordsWithRejection = 0;
-
-              // Helper function to normalize efficiency value to match keys like "25.4", "25.5", etc.
+              // Helper to normalize efficiency
               const normalizeEfficiency = (eff) => {
                 if (!eff) return null;
                 const num = parseFloat(eff);
-                if (isNaN(num)) return null;
-                // Round to 1 decimal and convert to string
-                return num.toFixed(1);
+                return isNaN(num) ? null : num.toFixed(1);
               };
 
-              // SMART LOGIC: If only one efficiency is set, count TOTAL production for that efficiency
-              (selectedCompany?.productionRecords || []).forEach(record => {
-                const dayEff = normalizeEfficiency(record.dayCellEfficiency);
-                const nightEff = normalizeEfficiency(record.nightCellEfficiency);
-                const dayProd = record.dayProduction || 0;
-                const nightProd = record.nightProduction || 0;
-                const totalProd = dayProd + nightProd;
+              // 1. Calculate weighted averages and OK Modules
+              let okModules = 0;
+              let weightedModRejSum = 0;
+              let weightedCellRejSum = 0;
+              let totalProdForWeight = 0;
 
-                // Case 1: Both Day and Night efficiency set - count separately
-                if (dayEff && nightEff) {
-                  if (usedByEfficiency.hasOwnProperty(dayEff)) {
-                    usedByEfficiency[dayEff] += dayProd * 66;
-                  }
-                  if (usedByEfficiency.hasOwnProperty(nightEff)) {
-                    usedByEfficiency[nightEff] += nightProd * 66;
-                  }
-                }
-                // Case 2: Only Day efficiency set - count TOTAL production
-                else if (dayEff && !nightEff) {
-                  if (usedByEfficiency.hasOwnProperty(dayEff)) {
-                    usedByEfficiency[dayEff] += totalProd * 66;
-                  }
-                }
-                // Case 3: Only Night efficiency set - count TOTAL production
-                else if (!dayEff && nightEff) {
-                  if (usedByEfficiency.hasOwnProperty(nightEff)) {
-                    usedByEfficiency[nightEff] += totalProd * 66;
-                  }
-                }
-
-                if (record.cellRejectionPercent > 0) {
-                  totalRejectionPercent += record.cellRejectionPercent;
-                  recordsWithRejection++;
+              records.forEach(r => {
+                const prod = (r.dayProduction || 0) + (r.nightProduction || 0);
+                okModules += prod;
+                if (prod > 0) {
+                  weightedModRejSum += prod * (r.moduleRejectionPercent || 0);
+                  weightedCellRejSum += prod * (r.cellRejectionPercent || 0);
+                  totalProdForWeight += prod;
                 }
               });
 
-              const avgRejectionPercent = recordsWithRejection > 0
-                ? (totalRejectionPercent / recordsWithRejection).toFixed(2)
-                : 0;
+              const avgModRejPct = totalProdForWeight > 0 ? (weightedModRejSum / totalProdForWeight) : 0;
+              const avgCellRejPct = totalProdForWeight > 0 ? (weightedCellRejSum / totalProdForWeight) : 0;
+              const rGradePct = 0.7; // Fixed scrap rate as requested
+
+              const okCellsUsed = okModules * cellsPerModule;
+              const bGradeModules = Math.round(okModules * (avgModRejPct / 100));
+              const bGradeCellsUsed = bGradeModules * cellsPerModule;
+              const rGradeModules = Math.round(okModules * (rGradePct / 100));
+              const rGradeCellsUsed = rGradeModules * cellsPerModule;
+
+              const totalProcessedCells = okCellsUsed + bGradeCellsUsed + rGradeCellsUsed;
+              const cellRejectionQty = Math.round(totalProcessedCells * (avgCellRejPct / 100));
+              const grandTotalUsed = totalProcessedCells + cellRejectionQty;
+
+              // 2. Efficiency Wise Used Calculation
+              // Simple logic: OK modules × 66 cells per efficiency grade
+              const usedByEfficiency = {};
+              efficiencyGrades.forEach(eff => { usedByEfficiency[eff] = 0; });
+
+              records.forEach(r => {
+                const dayEff = normalizeEfficiency(r.dayCellEfficiency);
+                const nightEff = normalizeEfficiency(r.nightCellEfficiency);
+                const dayProd = r.dayProduction || 0;
+                const nightProd = r.nightProduction || 0;
+                const totalProd = dayProd + nightProd;
+
+                // Simple calculation: modules × 66 cells
+                if (dayEff && nightEff) {
+                  // Both shifts have different efficiency - split by production
+                  if (usedByEfficiency.hasOwnProperty(dayEff)) usedByEfficiency[dayEff] += dayProd * cellsPerModule;
+                  if (usedByEfficiency.hasOwnProperty(nightEff)) usedByEfficiency[nightEff] += nightProd * cellsPerModule;
+                } else if (dayEff) {
+                  // Only day efficiency set - count total production
+                  if (usedByEfficiency.hasOwnProperty(dayEff)) usedByEfficiency[dayEff] += totalProd * cellsPerModule;
+                } else if (nightEff) {
+                  // Only night efficiency set - count total production
+                  if (usedByEfficiency.hasOwnProperty(nightEff)) usedByEfficiency[nightEff] += totalProd * cellsPerModule;
+                }
+              });
 
               let grandTotalReceived = 0;
-              let grandTotalUsed = 0;
-
               efficiencyGrades.forEach(eff => {
                 const effData = cellEfficiencyReceived[eff] || {};
                 const totalForEff = typeof effData === 'object'
                   ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0)
                   : (effData || 0);
                 grandTotalReceived += totalForEff;
-                grandTotalUsed += usedByEfficiency[eff] || 0;
               });
 
               const grandRemaining = grandTotalReceived - grandTotalUsed;
-              const afterRejection = Math.floor(grandRemaining * (1 - avgRejectionPercent / 100));
-              const estimatedModules = Math.floor(afterRejection / 66);
+              const estimatedModules = Math.floor((grandRemaining / cellsPerModule) * (1 - (avgModRejPct + rGradePct) / 100));
 
               return (
                 <div>
@@ -4214,29 +4221,46 @@ function DailyReport() {
                           summaryData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
                           summaryData.push([`Report Generated: ${new Date().toLocaleString()}`]);
                           summaryData.push([]);
-                          summaryData.push(['════════════════════════════════════════════════════════════════════']);
-                          summaryData.push(['⚡ DETAILED INVENTORY BREAKDOWN']);
-                          summaryData.push(['════════════════════════════════════════════════════════════════════']);
+
+                          // ===== QUICK SUMMARY BOX =====
+                          summaryData.push(['═══════════════════ QUICK SUMMARY ═══════════════════']);
+                          summaryData.push(['TOTAL RECEIVED', grandTotalReceived, 'TOTAL USED', grandTotalUsed, 'REMAINING', grandRemaining]);
+                          summaryData.push(['AVG REJECTION %', `${avgCellRejPct.toFixed(2)}%`, 'AFTER REJECTION', Math.floor(grandRemaining * (1 - avgCellRejPct / 100)), 'EST. MODULES', estimatedModules]);
                           summaryData.push([]);
 
-                          // Detailed Calculation Table
-                          summaryData.push(['ITEM', 'VALUE', 'UNIT/NOTES', 'MODULES (IF APPLICABLE)']);
-                          summaryData.push(['Total Cells Received', grandTotalReceived, 'cells', '']);
-                          summaryData.push(['Cells per Module', '66', 'cells/module', '']);
-                          summaryData.push(['OK (A-grade) Modules', okModules, 'modules', '']);
-                          summaryData.push(['OK (A-grade) Cells Used', okCellsUsed, 'cells', okModules]);
-                          summaryData.push(['B-grade % (of OK)', `${avgModRejPct.toFixed(2)} %`, '', '']);
-                          summaryData.push(['B-grade Modules (rounded)', bGradeModules, 'modules', '']);
-                          summaryData.push(['B-grade Cells Used', bGradeCellsUsed, 'cells', bGradeModules]);
-                          summaryData.push(['R-grade % (of OK)', `${rGradePct} %`, 'Scrap Rate', '']);
-                          summaryData.push(['R-grade Modules (rounded)', rGradeModules, 'modules', '']);
-                          summaryData.push(['R-grade Cells Used', rGradeCellsUsed, 'cells', rGradeModules]);
-                          summaryData.push(['Total Processed Cells (OK+B+R)', totalProcessedCells, 'cells', '']);
-                          summaryData.push(['Cell Rejection %', `${avgCellRejPct.toFixed(2)} %`, '% of processed cells', '']);
-                          summaryData.push(['Cell Rejection (rounded)', cellRejectionQty, 'cells', '']);
-                          summaryData.push(['TOTAL Cells Used', grandTotalUsed, 'cells', '']);
-                          summaryData.push(['Cells Remaining', grandRemaining, 'cells', '']);
-                          summaryData.push(['Yield (Est. Modules)', estimatedModules, 'Net A-grade modules', '']);
+                          // ===== DETAILED BREAKDOWN =====
+                          summaryData.push(['═══════════════════ DETAILED INVENTORY BREAKDOWN ═══════════════════']);
+                          summaryData.push([]);
+                          summaryData.push(['ITEM', 'VALUE', 'UNIT/NOTES', 'MODULES']);
+                          summaryData.push(['1. Total Cells Received', grandTotalReceived, 'cells', '-']);
+                          summaryData.push(['2. Cells per Module', 66, 'cells/module', '-']);
+                          summaryData.push([]);
+                          summaryData.push(['--- OK (A-GRADE) PRODUCTION ---', '', '', '']);
+                          summaryData.push(['3. OK (A-grade) Modules', okModules, 'modules', okModules]);
+                          summaryData.push(['4. OK (A-grade) Cells Used', okCellsUsed, 'cells', okModules]);
+                          summaryData.push([]);
+                          summaryData.push(['--- B-GRADE (MODULE REJECTION) ---', '', '', '']);
+                          summaryData.push(['5. B-grade % (of OK)', `${avgModRejPct.toFixed(2)}%`, 'module rejection rate', '-']);
+                          summaryData.push(['6. B-grade Modules', bGradeModules, 'modules', bGradeModules]);
+                          summaryData.push(['7. B-grade Cells Used', bGradeCellsUsed, 'cells', bGradeModules]);
+                          summaryData.push([]);
+                          summaryData.push(['--- R-GRADE (SCRAP) ---', '', '', '']);
+                          summaryData.push(['8. R-grade % (of OK)', `${rGradePct}%`, 'fixed scrap rate', '-']);
+                          summaryData.push(['9. R-grade Modules', rGradeModules, 'modules', rGradeModules]);
+                          summaryData.push(['10. R-grade Cells Used', rGradeCellsUsed, 'cells', rGradeModules]);
+                          summaryData.push([]);
+                          summaryData.push(['--- TOTAL PROCESSED ---', '', '', '']);
+                          summaryData.push(['11. Total Processed Cells (OK+B+R)', totalProcessedCells, 'cells', okModules + bGradeModules + rGradeModules]);
+                          summaryData.push([]);
+                          summaryData.push(['--- CELL REJECTION ---', '', '', '']);
+                          summaryData.push(['12. Cell Rejection %', `${avgCellRejPct.toFixed(2)}%`, '% of processed cells', '-']);
+                          summaryData.push(['13. Cell Rejection Qty', cellRejectionQty, 'cells', '-']);
+                          summaryData.push([]);
+                          summaryData.push(['═══════════════════ FINAL SUMMARY ═══════════════════']);
+                          summaryData.push(['14. TOTAL CELLS USED', grandTotalUsed, 'cells (processed + rejected)', '-']);
+                          summaryData.push(['15. CELLS REMAINING', grandRemaining, 'cells', '-']);
+                          summaryData.push(['16. AFTER REJECTION (Usable)', Math.floor(grandRemaining * (1 - avgCellRejPct / 100)), 'usable cells', '-']);
+                          summaryData.push(['17. EST. MODULES (Yield)', estimatedModules, 'net A-grade modules', estimatedModules]);
 
                           // Keep existing efficiency wise summary below if needed, or remove it. 
                           // For now, I will keep key metrics simplified as the table above is comprehensive.
@@ -4246,24 +4270,25 @@ function DailyReport() {
 
                           // Apply styles to Sheet 1
                           if (ws1['A1']) ws1['A1'].s = titleStyle;
-                          ws1['!merges'] = [
-                            { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
-                            { s: { r: 5, c: 0 }, e: { r: 5, c: 7 } },
-                            { s: { r: 7, c: 0 }, e: { r: 7, c: 7 } },
-                            { s: { r: 14, c: 0 }, e: { r: 14, c: 7 } },
-                            { s: { r: 16, c: 0 }, e: { r: 16, c: 7 } }
-                          ];
-                          ['A10', 'B10', 'C10', 'D10', 'E10', 'F10', 'G10', 'H10'].forEach(cell => { if (ws1[cell]) ws1[cell].s = headerStyle; });
-                          effGrades.forEach((_, idx) => {
-                            const row = 11 + idx;
-                            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
-                              const cell = `${col}${row}`;
-                              if (ws1[cell]) ws1[cell].s = idx % 2 === 0 ? altRowStyle1 : altRowStyle2;
-                            });
-                          });
-                          ['A17', 'B17', 'C17', 'D17', 'E17', 'F17', 'G17', 'H17'].forEach(cell => { if (ws1[cell]) ws1[cell].s = totalRowStyle; });
-                          ['A21', 'B21', 'C21'].forEach(cell => { if (ws1[cell]) ws1[cell].s = subHeaderStyle; });
-                          ws1['!cols'] = [{ wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }];
+                          // Style Quick Summary header
+                          if (ws1['A5']) ws1['A5'].s = headerStyle;
+                          // Style Quick Summary values
+                          ['A6', 'B6', 'C6', 'D6', 'E6', 'F6'].forEach(cell => { if (ws1[cell]) ws1[cell].s = blueStyle; });
+                          ['A7', 'B7', 'C7', 'D7', 'E7', 'F7'].forEach(cell => { if (ws1[cell]) ws1[cell].s = greenStyle; });
+                          // Style Detailed Breakdown header
+                          if (ws1['A9']) ws1['A9'].s = headerStyle;
+                          // Style column headers
+                          ['A11', 'B11', 'C11', 'D11'].forEach(cell => { if (ws1[cell]) ws1[cell].s = subHeaderStyle; });
+                          // Style section headers
+                          ['A15', 'A20', 'A25', 'A30', 'A33', 'A37'].forEach(cell => { if (ws1[cell]) ws1[cell].s = orangeStyle; });
+                          // Style Final Summary header and values
+                          if (ws1['A37']) ws1['A37'].s = headerStyle;
+                          ['A38', 'B38', 'C38', 'D38'].forEach(cell => { if (ws1[cell]) ws1[cell].s = redStyle; });
+                          ['A39', 'B39', 'C39', 'D39'].forEach(cell => { if (ws1[cell]) ws1[cell].s = grandRemaining >= 0 ? greenStyle : redStyle; });
+                          ['A40', 'B40', 'C40', 'D40'].forEach(cell => { if (ws1[cell]) ws1[cell].s = purpleStyle; });
+                          ['A41', 'B41', 'C41', 'D41'].forEach(cell => { if (ws1[cell]) ws1[cell].s = totalRowStyle; });
+                          
+                          ws1['!cols'] = [{ wch: 35 }, { wch: 18 }, { wch: 25 }, { wch: 14 }];
                           ws1['!rows'] = [{ hpt: 35 }];
                           XLSXStyle.utils.book_append_sheet(wb, ws1, 'Grand Summary');
 
@@ -4422,7 +4447,7 @@ function DailyReport() {
                               ? Object.values(effData).reduce((sum, qty) => sum + (qty || 0), 0) : (effData || 0);
                             const used = usedByEff[eff] || 0;
                             const remaining = totalReceived - used;
-                            const afterRej = Math.floor(remaining * (1 - avgRejPct / 100));
+                            const afterRej = Math.floor(remaining * (1 - avgCellRejPct / 100));
                             const estModules = Math.floor(afterRej / 66);
                             const avgEffUsage = used / (records.length || 1);
                             const daysLeft = avgEffUsage > 0 ? Math.floor(remaining / avgEffUsage) : remaining > 0 ? '∞' : 0;
@@ -4493,6 +4518,92 @@ function DailyReport() {
                       >
                         ➕ ADD CELL RECEIVED ENTRY
                       </button>
+                    </div>
+                  </div>
+
+                  {/* TOP SUMMARY STAT CARDS */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(6, 1fr)',
+                    gap: '15px',
+                    marginBottom: '30px'
+                  }}>
+                    {/* TOTAL RECEIVED - Blue */}
+                    <div style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      backgroundColor: '#e3f2fd',
+                      border: '3px solid #2196f3',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#1565c0', fontWeight: '600', marginBottom: '8px' }}>📦 TOTAL RECEIVED</div>
+                      <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#1976d2' }}>{grandTotalReceived.toLocaleString()}</div>
+                      <div style={{ fontSize: '12px', color: '#64b5f6' }}>Cells</div>
+                    </div>
+
+                    {/* TOTAL USED - Pink/Red */}
+                    <div style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      backgroundColor: '#fce4ec',
+                      border: '3px solid #e91e63',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#c2185b', fontWeight: '600', marginBottom: '8px' }}>🔧 TOTAL USED</div>
+                      <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#d81b60' }}>{grandTotalUsed.toLocaleString()}</div>
+                      <div style={{ fontSize: '12px', color: '#f48fb1' }}>Cells</div>
+                    </div>
+
+                    {/* REMAINING - Green */}
+                    <div style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      backgroundColor: grandRemaining >= 0 ? '#e8f5e9' : '#ffebee',
+                      border: `3px solid ${grandRemaining >= 0 ? '#4caf50' : '#f44336'}`,
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: grandRemaining >= 0 ? '#2e7d32' : '#c62828', fontWeight: '600', marginBottom: '8px' }}>📊 REMAINING</div>
+                      <div style={{ fontSize: '28px', fontWeight: 'bold', color: grandRemaining >= 0 ? '#43a047' : '#e53935' }}>{grandRemaining.toLocaleString()}</div>
+                      <div style={{ fontSize: '12px', color: grandRemaining >= 0 ? '#81c784' : '#ef9a9a' }}>Cells</div>
+                    </div>
+
+                    {/* AVG REJECTION - Yellow/Orange */}
+                    <div style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      backgroundColor: '#fff3e0',
+                      border: '3px solid #ff9800',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#e65100', fontWeight: '600', marginBottom: '8px' }}>⚠️ AVG REJECTION</div>
+                      <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#f57c00' }}>{avgCellRejPct.toFixed(2)}%</div>
+                      <div style={{ fontSize: '12px', color: '#ffb74d' }}>Rate</div>
+                    </div>
+
+                    {/* AFTER REJECTION - Purple */}
+                    <div style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      backgroundColor: '#f3e5f5',
+                      border: '3px solid #9c27b0',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#7b1fa2', fontWeight: '600', marginBottom: '8px' }}>✅ AFTER REJECTION</div>
+                      <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#8e24aa' }}>{Math.floor(grandRemaining * (1 - avgCellRejPct / 100)).toLocaleString()}</div>
+                      <div style={{ fontSize: '12px', color: '#ba68c8' }}>Usable Cells</div>
+                    </div>
+
+                    {/* EST. MODULES - Dark Green */}
+                    <div style={{
+                      padding: '20px',
+                      borderRadius: '12px',
+                      backgroundColor: '#1b5e20',
+                      border: '3px solid #2e7d32',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ fontSize: '12px', color: '#a5d6a7', fontWeight: '600', marginBottom: '8px' }}>🏭 EST. MODULES</div>
+                      <div style={{ fontSize: '28px', fontWeight: 'bold', color: 'white' }}>{estimatedModules.toLocaleString()}</div>
+                      <div style={{ fontSize: '12px', color: '#81c784' }}>Can Produce</div>
                     </div>
                   </div>
 
@@ -4636,8 +4747,8 @@ function DailyReport() {
                         : (effData || 0);
                       const used = usedByEfficiency[eff] || 0;
                       const remaining = totalReceived - used;
-                      const afterRej = Math.floor(remaining * (1 - avgRejectionPercent / 100));
-                      const estModules = Math.floor(afterRej / 66);
+                      // Use avgCellRejPct which is defined in the parent scope
+                      const estModules = Math.floor(remaining / cellsPerModule);
                       const hasData = totalReceived > 0 || used > 0;
 
                       return (
