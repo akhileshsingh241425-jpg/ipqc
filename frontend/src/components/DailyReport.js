@@ -4328,14 +4328,14 @@ function DailyReport() {
                           brandData.push([`Company: ${selectedCompany?.companyName || 'N/A'}`]);
                           brandData.push([]);
                           
-                          // Calculate brand totals
+                          // Calculate brand totals with USED
                           const brandTotalsExcel = {};
                           effGrades.forEach(eff => {
                             const effData = cellEffReceived[eff] || {};
                             if (typeof effData === 'object') {
                               Object.entries(effData).forEach(([brand, qty]) => {
                                 if (!brandTotalsExcel[brand]) {
-                                  brandTotalsExcel[brand] = { received: 0, efficiencies: {} };
+                                  brandTotalsExcel[brand] = { received: 0, efficiencies: {}, used: 0 };
                                 }
                                 brandTotalsExcel[brand].received += (qty || 0);
                                 brandTotalsExcel[brand].efficiencies[eff] = (qty || 0);
@@ -4343,16 +4343,42 @@ function DailyReport() {
                             }
                           });
 
-                          brandData.push(['BRAND/SUPPLIER', 'TOTAL RECEIVED', '% OF TOTAL', 'EST. MODULES', '25.4%', '25.5%', '25.6%', '25.7%', '25.8%']);
+                          // Calculate brand-wise USED cells proportionally
+                          effGrades.forEach(eff => {
+                            const totalReceivedForEff = Object.values(brandTotalsExcel).reduce((sum, b) => sum + (b.efficiencies[eff] || 0), 0);
+                            const usedForEff = usedByEff[eff] || 0;
+                            
+                            if (totalReceivedForEff > 0) {
+                              Object.keys(brandTotalsExcel).forEach(brand => {
+                                const brandReceivedForEff = brandTotalsExcel[brand].efficiencies[eff] || 0;
+                                const brandRatio = brandReceivedForEff / totalReceivedForEff;
+                                brandTotalsExcel[brand].used += Math.round(usedForEff * brandRatio);
+                              });
+                            }
+                          });
+
+                          brandData.push(['BRAND/SUPPLIER', 'RECEIVED', 'USED', 'REMAINING', 'CAN PRODUCE', '% OF TOTAL', '25.4%', '25.5%', '25.6%', '25.7%', '25.8%']);
                           
+                          let totalBrandUsed = 0;
+                          let totalBrandRemaining = 0;
+                          let totalCanProduce = 0;
+
                           Object.entries(brandTotalsExcel).forEach(([brand, data]) => {
                             const brandPercent = grandTotalReceived > 0 ? ((data.received / grandTotalReceived) * 100).toFixed(1) + '%' : '0%';
-                            const estMods = Math.floor(data.received / 66);
+                            const brandRemaining = data.received - data.used;
+                            const canProduce = Math.floor(brandRemaining / 66);
+                            
+                            totalBrandUsed += data.used;
+                            totalBrandRemaining += brandRemaining;
+                            totalCanProduce += canProduce;
+
                             brandData.push([
                               brand,
                               data.received,
+                              data.used,
+                              brandRemaining,
+                              canProduce,
                               brandPercent,
-                              estMods,
                               data.efficiencies['25.4'] || 0,
                               data.efficiencies['25.5'] || 0,
                               data.efficiencies['25.6'] || 0,
@@ -4366,8 +4392,10 @@ function DailyReport() {
                           brandData.push([
                             'TOTAL',
                             grandTotalReceived,
+                            totalBrandUsed,
+                            totalBrandRemaining,
+                            totalCanProduce,
                             '100%',
-                            Math.floor(grandTotalReceived / 66),
                             Object.values(brandTotalsExcel).reduce((s, d) => s + (d.efficiencies['25.4'] || 0), 0),
                             Object.values(brandTotalsExcel).reduce((s, d) => s + (d.efficiencies['25.5'] || 0), 0),
                             Object.values(brandTotalsExcel).reduce((s, d) => s + (d.efficiencies['25.6'] || 0), 0),
@@ -4377,23 +4405,23 @@ function DailyReport() {
 
                           const wsBrand = XLSXStyle.utils.aoa_to_sheet(brandData);
                           if (wsBrand['A1']) wsBrand['A1'].s = purpleStyle;
-                          wsBrand['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }];
-                          ['A4', 'B4', 'C4', 'D4', 'E4', 'F4', 'G4', 'H4', 'I4'].forEach(cell => { if (wsBrand[cell]) wsBrand[cell].s = headerStyle; });
+                          wsBrand['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 10 } }];
+                          ['A4', 'B4', 'C4', 'D4', 'E4', 'F4', 'G4', 'H4', 'I4', 'J4', 'K4'].forEach(cell => { if (wsBrand[cell]) wsBrand[cell].s = headerStyle; });
                           // Style brand rows
                           Object.keys(brandTotalsExcel).forEach((_, idx) => {
                             const row = 5 + idx;
-                            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].forEach(col => {
+                            ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'].forEach(col => {
                               const cell = `${col}${row}`;
                               if (wsBrand[cell]) wsBrand[cell].s = idx % 2 === 0 ? altRowStyle1 : altRowStyle2;
                             });
                           });
                           // Style total row
                           const brandTotalRow = 5 + Object.keys(brandTotalsExcel).length + 1;
-                          ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'].forEach(col => {
+                          ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K'].forEach(col => {
                             const cell = `${col}${brandTotalRow}`;
                             if (wsBrand[cell]) wsBrand[cell].s = totalRowStyle;
                           });
-                          wsBrand['!cols'] = [{ wch: 25 }, { wch: 16 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
+                          wsBrand['!cols'] = [{ wch: 22 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 }];
                           XLSXStyle.utils.book_append_sheet(wb, wsBrand, 'Brand Summary');
 
                           // ======== SHEET 4: DAILY CELL USAGE (DETAILED) ========
@@ -4690,10 +4718,25 @@ function DailyReport() {
                       if (typeof effData === 'object') {
                         Object.entries(effData).forEach(([brand, qty]) => {
                           if (!brandTotals[brand]) {
-                            brandTotals[brand] = { received: 0, efficiencies: {} };
+                            brandTotals[brand] = { received: 0, efficiencies: {}, used: 0 };
                           }
                           brandTotals[brand].received += (qty || 0);
                           brandTotals[brand].efficiencies[eff] = (qty || 0);
+                        });
+                      }
+                    });
+
+                    // Calculate brand-wise USED cells proportionally
+                    // For each efficiency, distribute used cells based on received ratio
+                    efficiencyGrades.forEach(eff => {
+                      const totalReceivedForEff = Object.values(brandTotals).reduce((sum, b) => sum + (b.efficiencies[eff] || 0), 0);
+                      const usedForEff = usedByEfficiency[eff] || 0;
+                      
+                      if (totalReceivedForEff > 0) {
+                        Object.keys(brandTotals).forEach(brand => {
+                          const brandReceivedForEff = brandTotals[brand].efficiencies[eff] || 0;
+                          const brandRatio = brandReceivedForEff / totalReceivedForEff;
+                          brandTotals[brand].used += Math.round(usedForEff * brandRatio);
                         });
                       }
                     });
@@ -4735,14 +4778,15 @@ function DailyReport() {
                             {brands.map(brand => {
                               const data = brandTotals[brand];
                               const brandPercent = grandTotalReceived > 0 ? ((data.received / grandTotalReceived) * 100).toFixed(1) : 0;
-                              const estModulesForBrand = Math.floor(data.received / cellsPerModule);
+                              const brandRemaining = data.received - data.used;
+                              const estModulesFromRemaining = Math.floor(brandRemaining / cellsPerModule);
 
                               return (
                                 <div key={brand} style={{
                                   padding: '20px',
                                   borderRadius: '12px',
-                                  border: '2px solid #9c27b0',
-                                  backgroundColor: '#faf5ff'
+                                  border: `2px solid ${brandRemaining < 0 ? '#f44336' : '#9c27b0'}`,
+                                  backgroundColor: brandRemaining < 0 ? '#fff5f5' : '#faf5ff'
                                 }}>
                                   {/* Brand Name */}
                                   <div style={{
@@ -4765,36 +4809,63 @@ function DailyReport() {
                                     padding: '10px',
                                     backgroundColor: '#e3f2fd',
                                     borderRadius: '8px',
-                                    marginBottom: '10px'
+                                    marginBottom: '8px'
                                   }}>
-                                    <span style={{ color: '#1565c0', fontWeight: '600' }}>Total Received:</span>
-                                    <strong style={{ color: '#1976d2', fontSize: '16px' }}>{data.received.toLocaleString()}</strong>
+                                    <span style={{ color: '#1565c0', fontWeight: '600' }}>Received:</span>
+                                    <strong style={{ color: '#1976d2', fontSize: '15px' }}>{data.received.toLocaleString()}</strong>
                                   </div>
 
-                                  {/* Percentage */}
+                                  {/* Used */}
                                   <div style={{
                                     display: 'flex',
                                     justifyContent: 'space-between',
                                     padding: '10px',
+                                    backgroundColor: '#fce4ec',
+                                    borderRadius: '8px',
+                                    marginBottom: '8px'
+                                  }}>
+                                    <span style={{ color: '#c2185b', fontWeight: '600' }}>Used:</span>
+                                    <strong style={{ color: '#d81b60', fontSize: '15px' }}>{data.used.toLocaleString()}</strong>
+                                  </div>
+
+                                  {/* Remaining */}
+                                  <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    padding: '12px',
+                                    backgroundColor: brandRemaining >= 0 ? '#e8f5e9' : '#ffebee',
+                                    borderRadius: '8px',
+                                    marginBottom: '8px',
+                                    border: `1px solid ${brandRemaining >= 0 ? '#4caf50' : '#f44336'}`
+                                  }}>
+                                    <span style={{ color: brandRemaining >= 0 ? '#2e7d32' : '#c62828', fontWeight: '700' }}>REMAINING:</span>
+                                    <strong style={{ color: brandRemaining >= 0 ? '#43a047' : '#e53935', fontSize: '18px' }}>{brandRemaining.toLocaleString()}</strong>
+                                  </div>
+
+                                  {/* Est Modules from Remaining */}
+                                  <div style={{
+                                    padding: '12px',
+                                    background: estModulesFromRemaining > 0 ? 'linear-gradient(135deg, #4caf50 0%, #2e7d32 100%)' : 'linear-gradient(135deg, #f44336 0%, #c62828 100%)',
+                                    borderRadius: '8px',
+                                    marginBottom: '12px',
+                                    textAlign: 'center'
+                                  }}>
+                                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)', fontWeight: '600' }}>CAN PRODUCE</div>
+                                    <div style={{ fontSize: '22px', fontWeight: 'bold', color: 'white' }}>🔧 {estModulesFromRemaining.toLocaleString()}</div>
+                                    <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.8)' }}>modules</div>
+                                  </div>
+
+                                  {/* Percentage of Total */}
+                                  <div style={{
+                                    display: 'flex',
+                                    justifyContent: 'space-between',
+                                    padding: '8px 10px',
                                     backgroundColor: '#fff3e0',
                                     borderRadius: '8px',
                                     marginBottom: '10px'
                                   }}>
-                                    <span style={{ color: '#e65100', fontWeight: '600' }}>% of Total:</span>
-                                    <strong style={{ color: '#f57c00', fontSize: '16px' }}>{brandPercent}%</strong>
-                                  </div>
-
-                                  {/* Est Modules */}
-                                  <div style={{
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    padding: '10px',
-                                    backgroundColor: '#e8f5e9',
-                                    borderRadius: '8px',
-                                    marginBottom: '15px'
-                                  }}>
-                                    <span style={{ color: '#2e7d32', fontWeight: '600' }}>Est. Modules:</span>
-                                    <strong style={{ color: '#43a047', fontSize: '16px' }}>{estModulesForBrand.toLocaleString()}</strong>
+                                    <span style={{ color: '#e65100', fontWeight: '600', fontSize: '13px' }}>% of Total:</span>
+                                    <strong style={{ color: '#f57c00', fontSize: '14px' }}>{brandPercent}%</strong>
                                   </div>
 
                                   {/* Efficiency Breakdown */}
@@ -4803,7 +4874,7 @@ function DailyReport() {
                                     backgroundColor: '#f5f5f5',
                                     borderRadius: '8px'
                                   }}>
-                                    <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px', fontWeight: '600' }}>EFFICIENCY WISE:</div>
+                                    <div style={{ fontSize: '11px', color: '#666', marginBottom: '6px', fontWeight: '600' }}>EFFICIENCY WISE:</div>
                                     {efficiencyGrades.map(eff => {
                                       const effQty = data.efficiencies[eff] || 0;
                                       if (effQty === 0) return null;
@@ -4811,9 +4882,9 @@ function DailyReport() {
                                         <div key={eff} style={{
                                           display: 'flex',
                                           justifyContent: 'space-between',
-                                          padding: '4px 0',
+                                          padding: '3px 0',
                                           borderBottom: '1px dashed #e0e0e0',
-                                          fontSize: '13px'
+                                          fontSize: '12px'
                                         }}>
                                           <span style={{ color: '#1565c0' }}>⚡ {eff}%</span>
                                           <strong style={{ color: '#333' }}>{effQty.toLocaleString()}</strong>
