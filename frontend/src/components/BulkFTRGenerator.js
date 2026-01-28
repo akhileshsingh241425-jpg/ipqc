@@ -6,37 +6,6 @@ import FTRTemplate from './FTRTemplate';
 import { getStoredGraphs, getRandomGraphForPower } from './GraphManager';
 import '../styles/BulkFTR.css';
 
-// Helper function to convert image URL to base64 data URL
-const imageUrlToBase64 = async (url) => {
-  if (!url) return null;
-  
-  // If already a data URL, return as is
-  if (url.startsWith('data:')) {
-    return url;
-  }
-  
-  try {
-    const response = await fetch(url, { mode: 'cors' });
-    if (!response.ok) {
-      console.error('Failed to fetch image:', response.status, url);
-      return null;
-    }
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = () => {
-        console.error('Failed to convert image to base64');
-        resolve(null);
-      };
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error('Error converting image to base64:', error);
-    return null;
-  }
-};
-
 const BulkFTRGenerator = () => {
   const [excelData, setExcelData] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -285,9 +254,8 @@ const BulkFTRGenerator = () => {
         }
       };
 
-      // Get random graph for selected wattage and convert to base64 for reliable PDF embedding
-      const graphUrl = await getRandomGraphForPower(selectedWattage);
-      const graphImage = await imageUrlToBase64(graphUrl);
+      // Get random graph for selected wattage (already returns base64)
+      const graphImage = await getRandomGraphForPower(selectedWattage);
       
       if (!graphImage) {
         console.warn(`Warning: Could not load graph image for ${testData.serialNumber}`);

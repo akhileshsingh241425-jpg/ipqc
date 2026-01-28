@@ -291,37 +291,57 @@ export const getStoredGraphs = async () => {
   }
 };
 
-// Helper to convert relative graph URL to absolute URL
-const getAbsoluteGraphUrl = (relativeUrl) => {
-  if (!relativeUrl) return null;
-  
-  // If already absolute, return as is
-  if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://') || relativeUrl.startsWith('data:')) {
-    return relativeUrl;
+// Helper to fetch image and convert to base64 data URL
+const fetchImageAsBase64 = async (imageUrl) => {
+  try {
+    // Build full URL
+    const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
+    let fullUrl;
+    
+    if (imageUrl.startsWith('data:')) {
+      return imageUrl; // Already base64
+    } else if (imageUrl.startsWith('http')) {
+      fullUrl = imageUrl;
+    } else if (API_BASE_URL.startsWith('/')) {
+      fullUrl = window.location.origin + imageUrl;
+    } else {
+      const baseUrl = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
+      fullUrl = baseUrl + imageUrl;
+    }
+    
+    console.log('Fetching graph from:', fullUrl);
+    
+    const response = await fetch(fullUrl);
+    if (!response.ok) {
+      console.error('Failed to fetch image:', response.status);
+      return null;
+    }
+    
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        console.log('Graph converted to base64 successfully');
+        resolve(reader.result);
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error fetching image as base64:', error);
+    return null;
   }
-  
-  // For production (relative API URL like /api), use window.location.origin
-  // For development (full URL like http://localhost:5003), extract the base
-  const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
-  
-  let baseUrl;
-  if (API_BASE_URL.startsWith('/')) {
-    // Relative URL - use current origin (e.g., https://pdi.gspl.cloud)
-    baseUrl = window.location.origin;
-  } else {
-    // Full URL - remove /api suffix if present
-    baseUrl = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
-  }
-  
-  return `${baseUrl}${relativeUrl}`;
 };
 
-// Export utility function to get random graph for a specific power
+// Export utility function to get random graph for a specific power (returns base64)
 export const getRandomGraphForPower = async (power) => {
   const graphs = await getStoredGraphs();
   const powerGraphs = graphs[power];
   
-  if (!powerGraphs) return null;
+  if (!powerGraphs) {
+    console.log('No graphs found for power:', power);
+    return null;
+  }
   
   let graphUrl = null;
   
@@ -332,10 +352,14 @@ export const getRandomGraphForPower = async (power) => {
     // Return random graph from array
     const randomIndex = Math.floor(Math.random() * powerGraphs.length);
     graphUrl = powerGraphs[randomIndex];
+    console.log(`Selected graph ${randomIndex + 1} of ${powerGraphs.length} for ${power}W`);
   }
   
-  // Convert to absolute URL for html2canvas/html2pdf to work correctly
-  return getAbsoluteGraphUrl(graphUrl);
+  if (!graphUrl) return null;
+  
+  // Convert to base64 for reliable PDF embedding
+  const base64Image = await fetchImageAsBase64(graphUrl);
+  return base64Image;
 };
 
 export default GraphManager;

@@ -6,37 +6,6 @@ import FTRTemplate from './FTRTemplate';
 import { getStoredGraphs, getRandomGraphForPower } from './GraphManager';
 import '../styles/PDIFTRGenerator.css';
 
-// Helper function to convert image URL to base64 data URL
-const imageUrlToBase64 = async (url) => {
-  if (!url) return null;
-  
-  // If already a data URL, return as is
-  if (url.startsWith('data:')) {
-    return url;
-  }
-  
-  try {
-    const response = await fetch(url, { mode: 'cors' });
-    if (!response.ok) {
-      console.error('Failed to fetch image:', response.status, url);
-      return null;
-    }
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = () => {
-        console.error('Failed to convert image to base64');
-        resolve(null);
-      };
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error('Error converting image to base64:', error);
-    return null;
-  }
-};
-
 const PDIFTRGenerator = () => {
   const [mode, setMode] = useState('simple'); // 'simple' or 'full'
   const [excelData, setExcelData] = useState([]);
@@ -299,11 +268,10 @@ const PDIFTRGenerator = () => {
         };
       }
 
-      // Get graph image from stored graphs - USE RANDOM SELECTION
+      // Get graph image from stored graphs - USE RANDOM SELECTION (already returns base64)
       const powerMatch = testData.moduleType.match(/(\d+)/);
       const power = powerMatch ? powerMatch[1] : null;
-      const graphUrl = power ? await getRandomGraphForPower(power) : null;
-      const graphImage = await imageUrlToBase64(graphUrl);
+      const graphImage = power ? await getRandomGraphForPower(power) : null;
       
       if (!graphImage && power) {
         console.warn(`Warning: Could not load graph image for ${testData.serialNumber}`);
