@@ -291,6 +291,22 @@ export const getStoredGraphs = async () => {
   }
 };
 
+// Helper to convert relative graph URL to absolute URL
+const getAbsoluteGraphUrl = (relativeUrl) => {
+  if (!relativeUrl) return null;
+  
+  // If already absolute, return as is
+  if (relativeUrl.startsWith('http://') || relativeUrl.startsWith('https://') || relativeUrl.startsWith('data:')) {
+    return relativeUrl;
+  }
+  
+  // Convert relative URL to absolute
+  const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
+  // Remove /api suffix if present since the relativeUrl already includes /api
+  const baseUrl = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
+  return `${baseUrl}${relativeUrl}`;
+};
+
 // Export utility function to get random graph for a specific power
 export const getRandomGraphForPower = async (power) => {
   const graphs = await getStoredGraphs();
@@ -298,18 +314,19 @@ export const getRandomGraphForPower = async (power) => {
   
   if (!powerGraphs) return null;
   
+  let graphUrl = null;
+  
   // Handle both old format (single string) and new format (array)
   if (typeof powerGraphs === 'string') {
-    return powerGraphs;
-  }
-  
-  if (Array.isArray(powerGraphs) && powerGraphs.length > 0) {
+    graphUrl = powerGraphs;
+  } else if (Array.isArray(powerGraphs) && powerGraphs.length > 0) {
     // Return random graph from array
     const randomIndex = Math.floor(Math.random() * powerGraphs.length);
-    return powerGraphs[randomIndex];
+    graphUrl = powerGraphs[randomIndex];
   }
   
-  return null;
+  // Convert to absolute URL for html2canvas/html2pdf to work correctly
+  return getAbsoluteGraphUrl(graphUrl);
 };
 
 export default GraphManager;

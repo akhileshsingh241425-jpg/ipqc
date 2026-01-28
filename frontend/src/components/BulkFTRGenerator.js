@@ -6,6 +6,37 @@ import FTRTemplate from './FTRTemplate';
 import { getStoredGraphs, getRandomGraphForPower } from './GraphManager';
 import '../styles/BulkFTR.css';
 
+// Helper function to convert image URL to base64 data URL
+const imageUrlToBase64 = async (url) => {
+  if (!url) return null;
+  
+  // If already a data URL, return as is
+  if (url.startsWith('data:')) {
+    return url;
+  }
+  
+  try {
+    const response = await fetch(url, { mode: 'cors' });
+    if (!response.ok) {
+      console.error('Failed to fetch image:', response.status, url);
+      return null;
+    }
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = () => {
+        console.error('Failed to convert image to base64');
+        resolve(null);
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error('Error converting image to base64:', error);
+    return null;
+  }
+};
+
 const BulkFTRGenerator = () => {
   const [excelData, setExcelData] = useState([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -92,13 +123,50 @@ const BulkFTRGenerator = () => {
         const root = createRoot(tempDiv);
         root.render(<FTRTemplate testData={testData} graphImage={graphImage} />);
         
-        setTimeout(() => {
+        // Wait for image to load before generating PDF
+        const waitForImages = () => {
+          return new Promise((resolve) => {
+            const images = tempDiv.getElementsByTagName('img');
+            if (images.length === 0) {
+              resolve();
+              return;
+            }
+            
+            let loadedCount = 0;
+            const totalImages = images.length;
+            
+            const checkComplete = () => {
+              loadedCount++;
+              if (loadedCount >= totalImages) {
+                resolve();
+              }
+            };
+            
+            Array.from(images).forEach(img => {
+              if (img.complete) {
+                checkComplete();
+              } else {
+                img.onload = checkComplete;
+                img.onerror = checkComplete; // Continue even if image fails
+              }
+            });
+            
+            // Timeout fallback after 3 seconds
+            setTimeout(resolve, 3000);
+          });
+        };
+        
+        // Wait for component render + images
+        setTimeout(async () => {
+          await waitForImages();
+          
           const opt = {
             margin: 0,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { 
               scale: 2,
               useCORS: true,
+              allowTaint: true,
               backgroundColor: '#ffffff',
               logging: false
             },
@@ -217,8 +285,13 @@ const BulkFTRGenerator = () => {
         }
       };
 
-      // Get random graph for selected wattage
-      const graphImage = await getRandomGraphForPower(selectedWattage);
+      // Get random graph for selected wattage and convert to base64 for reliable PDF embedding
+      const graphUrl = await getRandomGraphForPower(selectedWattage);
+      const graphImage = await imageUrlToBase64(graphUrl);
+      
+      if (!graphImage) {
+        console.warn(`Warning: Could not load graph image for ${testData.serialNumber}`);
+      }
 
       try {
         // Generate PDF blob
