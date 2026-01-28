@@ -291,49 +291,7 @@ export const getStoredGraphs = async () => {
   }
 };
 
-// Helper to fetch image and convert to base64 data URL
-const fetchImageAsBase64 = async (imageUrl) => {
-  try {
-    // Build full URL
-    const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
-    let fullUrl;
-    
-    if (imageUrl.startsWith('data:')) {
-      return imageUrl; // Already base64
-    } else if (imageUrl.startsWith('http')) {
-      fullUrl = imageUrl;
-    } else if (API_BASE_URL.startsWith('/')) {
-      fullUrl = window.location.origin + imageUrl;
-    } else {
-      const baseUrl = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
-      fullUrl = baseUrl + imageUrl;
-    }
-    
-    console.log('Fetching graph from:', fullUrl);
-    
-    const response = await fetch(fullUrl);
-    if (!response.ok) {
-      console.error('Failed to fetch image:', response.status);
-      return null;
-    }
-    
-    const blob = await response.blob();
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        console.log('Graph converted to base64 successfully');
-        resolve(reader.result);
-      };
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
-    });
-  } catch (error) {
-    console.error('Error fetching image as base64:', error);
-    return null;
-  }
-};
-
-// Export utility function to get random graph for a specific power (returns base64)
+// Export utility function to get random graph for a specific power (returns base64 directly from server)
 export const getRandomGraphForPower = async (power) => {
   const graphs = await getStoredGraphs();
   const powerGraphs = graphs[power];
@@ -343,23 +301,18 @@ export const getRandomGraphForPower = async (power) => {
     return null;
   }
   
-  let graphUrl = null;
-  
   // Handle both old format (single string) and new format (array)
+  // Server now returns base64 data URLs directly
   if (typeof powerGraphs === 'string') {
-    graphUrl = powerGraphs;
+    return powerGraphs;
   } else if (Array.isArray(powerGraphs) && powerGraphs.length > 0) {
     // Return random graph from array
     const randomIndex = Math.floor(Math.random() * powerGraphs.length);
-    graphUrl = powerGraphs[randomIndex];
     console.log(`Selected graph ${randomIndex + 1} of ${powerGraphs.length} for ${power}W`);
+    return powerGraphs[randomIndex];
   }
   
-  if (!graphUrl) return null;
-  
-  // Convert to base64 for reliable PDF embedding
-  const base64Image = await fetchImageAsBase64(graphUrl);
-  return base64Image;
+  return null;
 };
 
 export default GraphManager;

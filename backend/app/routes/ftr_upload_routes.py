@@ -25,7 +25,7 @@ def allowed_image(filename):
 
 @ftr_upload_bp.route('/api/ftr/graphs', methods=['GET'])
 def get_graphs():
-    """Get all uploaded IV curve graphs organized by wattage"""
+    """Get all uploaded IV curve graphs organized by wattage - returns base64 encoded images"""
     try:
         graphs = {}
         if os.path.exists(GRAPHS_FOLDER):
@@ -37,8 +37,21 @@ def get_graphs():
                         wattage = parts[0]
                         if wattage not in graphs:
                             graphs[wattage] = []
-                        # Use API route for serving images
-                        graphs[wattage].append(f"/api/ftr/graph-image/{filename}")
+                        
+                        # Read file and convert to base64
+                        filepath = os.path.join(GRAPHS_FOLDER, filename)
+                        try:
+                            with open(filepath, 'rb') as f:
+                                img_data = f.read()
+                                # Determine mime type
+                                ext = filename.rsplit('.', 1)[1].lower()
+                                mime = 'image/jpeg' if ext in ['jpg', 'jpeg'] else 'image/png'
+                                # Create base64 data URL
+                                b64 = base64.b64encode(img_data).decode('utf-8')
+                                graphs[wattage].append(f"data:{mime};base64,{b64}")
+                        except Exception as e:
+                            print(f"Error reading {filename}: {e}")
+                            continue
         
         return jsonify({'success': True, 'graphs': graphs}), 200
     except Exception as e:
