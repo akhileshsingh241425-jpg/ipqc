@@ -300,10 +300,19 @@ const getAbsoluteGraphUrl = (relativeUrl) => {
     return relativeUrl;
   }
   
-  // Convert relative URL to absolute
+  // For production (relative API URL like /api), use window.location.origin
+  // For development (full URL like http://localhost:5003), extract the base
   const API_BASE_URL = process.env.REACT_APP_API_URL || process.env.REACT_APP_API_BASE_URL || 'http://localhost:5003';
-  // Remove /api suffix if present since the relativeUrl already includes /api
-  const baseUrl = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
+  
+  let baseUrl;
+  if (API_BASE_URL.startsWith('/')) {
+    // Relative URL - use current origin (e.g., https://pdi.gspl.cloud)
+    baseUrl = window.location.origin;
+  } else {
+    // Full URL - remove /api suffix if present
+    baseUrl = API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL;
+  }
+  
   return `${baseUrl}${relativeUrl}`;
 };
 
