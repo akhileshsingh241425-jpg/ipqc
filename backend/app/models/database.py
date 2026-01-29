@@ -76,6 +76,7 @@ class ProductionRecord(db.Model):
     ftr_document = db.Column(db.String(500), nullable=True)
     ftr_uploaded = db.Column(db.Boolean, default=False)  # Track if FTR has been uploaded
     is_closed = db.Column(db.Boolean, default=False)
+    cell_supplier = db.Column(db.String(100), nullable=True)  # Cell supplier name for inventory tracking
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationship to BOM materials
@@ -118,6 +119,7 @@ class ProductionRecord(db.Model):
             'ftrDocument': self.ftr_document,
             'ftrUploaded': self.ftr_uploaded,
             'isClosed': self.is_closed,
+            'cellSupplier': self.cell_supplier,  # Cell supplier for inventory tracking
             'bomMaterials': [bm.to_dict() for bm in self.bom_materials]  # BOM data (separate from COC)
         }
 

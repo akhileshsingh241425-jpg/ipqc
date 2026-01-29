@@ -339,6 +339,7 @@ def add_production_record(company_id):
             night_cell_efficiency=float(data.get('nightCellEfficiency')) if data.get('nightCellEfficiency') else None,
             cell_rejection_percent=float(data.get('cellRejectionPercent', 0.0)),
             module_rejection_percent=float(data.get('moduleRejectionPercent', 0.0)),
+            cell_supplier=data.get('cellSupplier'),  # Cell supplier for inventory tracking
             is_closed=False
         )
         
@@ -420,6 +421,8 @@ def update_production_record(company_id, record_id):
             record.lot_number = data.get('lotNumber')
         if 'bomImage' in data:
             record.bom_image = data.get('bomImage')
+        if 'cellSupplier' in data:
+            record.cell_supplier = data.get('cellSupplier')  # Cell supplier for inventory tracking
         
         # Update COC materials (separate from BOM materials - for customer documentation)
         if 'cocMaterials' in data:
