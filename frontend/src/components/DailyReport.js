@@ -3425,7 +3425,7 @@ function DailyReport() {
                 </div>
 
                 <div className="production-table-wrapper" style={{ overflowX: 'auto', maxWidth: '100%' }}>
-                  <table className="production-table" style={{ fontSize: '12px', minWidth: '1550px' }}>
+                  <table className="production-table" style={{ fontSize: '12px', minWidth: '1650px' }}>
                     <thead>
                       <tr>
                         <th style={{ width: '80px' }}>DATE</th>
@@ -3439,6 +3439,7 @@ function DailyReport() {
                         <th style={{ width: '60px' }}>TOTAL</th>
                         <th style={{ width: '75px', backgroundColor: '#e3f2fd' }}>DAY EFF %</th>
                         <th style={{ width: '75px', backgroundColor: '#bbdefb' }}>NIGHT EFF %</th>
+                        <th style={{ width: '100px', backgroundColor: '#e8f5e9' }}>CELL SUPPLIER</th>
                         <th style={{ width: '70px', backgroundColor: '#fff3cd' }}>CELL REJ %</th>
                         <th style={{ width: '80px', backgroundColor: '#f8d7da' }}>MODULE REJ %</th>
                         <th style={{ width: '80px', backgroundColor: '#d1ecf1' }}>IPQC Sheet</th>
@@ -3452,6 +3453,10 @@ function DailyReport() {
                       {dateRecords.map(record => {
                         const total = (record.dayProduction || 0) + (record.nightProduction || 0);
                         const isClosed = record.isClosed || false;
+                        // Get available cell suppliers from cellEfficiencyReceived
+                        const cellSuppliers = selectedCompany?.cellEfficiencyReceived 
+                          ? [...new Set(Object.values(selectedCompany.cellEfficiencyReceived).flatMap(eff => Object.keys(eff)))]
+                          : [];
                         return (
                           <tr key={record.id} style={{ backgroundColor: isClosed ? '#f5f5f5' : 'transparent' }}>
                             <td style={{ fontSize: '11px' }}>{record.date}</td>
@@ -3582,6 +3587,28 @@ function DailyReport() {
                                 <option value="25.6">25.6%</option>
                                 <option value="25.7">25.7%</option>
                                 <option value="25.8">25.8%</option>
+                              </select>
+                            </td>
+                            <td style={{ backgroundColor: '#e8f5e922' }}>
+                              <select
+                                value={record.cellSupplier || ''}
+                                onChange={(e) => handleProductionChange(record.id, 'cellSupplier', e.target.value)}
+                                disabled={isClosed}
+                                style={{
+                                  width: '95px',
+                                  padding: '4px 2px',
+                                  fontSize: '10px',
+                                  border: '2px solid #388e3c',
+                                  borderRadius: '3px',
+                                  backgroundColor: record.cellSupplier ? '#e8f5e9' : 'white',
+                                  fontWeight: record.cellSupplier ? 'bold' : 'normal',
+                                  color: '#2e7d32'
+                                }}
+                              >
+                                <option value="">Select...</option>
+                                {cellSuppliers.map(supplier => (
+                                  <option key={supplier} value={supplier}>{supplier}</option>
+                                ))}
                               </select>
                             </td>
                             <td style={{ backgroundColor: '#fff3cd22' }}>
@@ -3988,6 +4015,27 @@ function DailyReport() {
               const cellRejectionQty = Math.round(totalProcessedCells * (avgCellRejPct / 100));
               const grandTotalUsed = totalProcessedCells + cellRejectionQty;
 
+              // Calculate SUPPLIER-WISE cell usage from production records
+              const supplierWiseUsage = {};
+              records.forEach(r => {
+                const supplier = r.cellSupplier || '';
+                if (supplier) {
+                  const totalProd = (r.dayProduction || 0) + (r.nightProduction || 0);
+                  const cellsUsed = totalProd * cellsPerModule;
+                  // Add rejection proportionally
+                  const cellRej = parseFloat(r.cellRejectionPercent) || avgCellRejPct;
+                  const cellsWithRejection = Math.round(cellsUsed * (1 + cellRej / 100));
+                  
+                  if (!supplierWiseUsage[supplier]) {
+                    supplierWiseUsage[supplier] = 0;
+                  }
+                  supplierWiseUsage[supplier] += cellsWithRejection;
+                }
+              });
+              
+              // For records without cellSupplier, distribute to default (first available supplier)
+              const unassignedCells = grandTotalUsed - Object.values(supplierWiseUsage).reduce((a, b) => a + b, 0);
+
               // 2. Efficiency Wise Used Calculation
               // Simple logic: OK modules × 66 cells per efficiency grade
               const usedByEfficiency = {};
@@ -4355,15 +4403,43 @@ function DailyReport() {
                             }
                           });
 
-                          // SOLAR SPACE gets ALL the used cells (PT BINTA was never used)
-                          const solarSpaceBrandExcel = 'SOLAR SPACE';
+                          // Use supplier-wise usage from production records (based on cellSupplier field)
+                          // Calculate supplierWiseUsage for Excel export
+                          const supplierWiseUsageExcel = {};
+                          const recordsForExcel = selectedCompany?.productionRecords || [];
+                          let totalUsedFromRecords = 0;
+                          recordsForExcel.forEach(r => {
+                            const supplier = r.cellSupplier || '';
+                            if (supplier) {
+                              const totalProd = (r.dayProduction || 0) + (r.nightProduction || 0);
+                              const cellsUsed = totalProd * 66;
+                              if (!supplierWiseUsageExcel[supplier]) {
+                                supplierWiseUsageExcel[supplier] = 0;
+                              }
+                              supplierWiseUsageExcel[supplier] += cellsUsed;
+                              totalUsedFromRecords += cellsUsed;
+                            }
+                          });
+                          const unassignedCellsExcel = grandTotalUsed - totalUsedFromRecords;
+                          
                           Object.keys(brandTotalsExcel).forEach(brand => {
-                            if (brand.toUpperCase() === solarSpaceBrandExcel) {
-                              brandTotalsExcel[brand].used = grandTotalUsed;
+                            const matchedSupplier = Object.keys(supplierWiseUsageExcel).find(
+                              s => s.toUpperCase() === brand.toUpperCase()
+                            );
+                            if (matchedSupplier) {
+                              brandTotalsExcel[brand].used = supplierWiseUsageExcel[matchedSupplier];
                             } else {
                               brandTotalsExcel[brand].used = 0;
                             }
                           });
+                          
+                          // Unassigned cells go to first brand
+                          if (unassignedCellsExcel > 0) {
+                            const defaultBrandExcel = Object.keys(brandTotalsExcel)[0];
+                            if (defaultBrandExcel) {
+                              brandTotalsExcel[defaultBrandExcel].used += unassignedCellsExcel;
+                            }
+                          }
 
                           brandData.push(['BRAND/SUPPLIER', 'RECEIVED', 'USED', 'REMAINING', 'CAN PRODUCE', '% OF TOTAL', '25.4%', '25.5%', '25.6%', '25.7%', '25.8%']);
                           
@@ -4734,18 +4810,26 @@ function DailyReport() {
                       }
                     });
 
-                    // SOLAR SPACE gets ALL the used cells (PT BINTA was never used)
-                    // Assign all usage to SOLAR SPACE brand
-                    const solarSpaceBrand = 'SOLAR SPACE';
+                    // Use supplier-wise usage from production records (based on cellSupplier field)
                     Object.keys(brandTotals).forEach(brand => {
-                      if (brand.toUpperCase() === solarSpaceBrand) {
-                        // SOLAR SPACE gets ALL the used cells
-                        brandTotals[brand].used = grandTotalUsed;
+                      // Match brand name (case-insensitive)
+                      const matchedSupplier = Object.keys(supplierWiseUsage).find(
+                        s => s.toUpperCase() === brand.toUpperCase()
+                      );
+                      if (matchedSupplier) {
+                        brandTotals[brand].used = supplierWiseUsage[matchedSupplier];
                       } else {
-                        // Other brands (like PT BINTA) have 0 usage
                         brandTotals[brand].used = 0;
                       }
                     });
+                    
+                    // If there are unassigned cells, add them to first available supplier
+                    if (unassignedCells > 0) {
+                      const defaultBrand = Object.keys(brandTotals)[0];
+                      if (defaultBrand) {
+                        brandTotals[defaultBrand].used += unassignedCells;
+                      }
+                    }
 
                     const brands = Object.keys(brandTotals);
                     if (brands.length === 0) return null;
