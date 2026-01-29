@@ -30,11 +30,37 @@ const BulkFTRGenerator = () => {
       const sheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(sheet);
       
+      // Helper function to get value by flexible column name matching
+      const getValue = (row, ...possibleNames) => {
+        for (const name of possibleNames) {
+          // Try exact match
+          if (row[name] !== undefined && row[name] !== null && row[name] !== '') {
+            return row[name];
+          }
+          // Try case-insensitive match
+          const lowerName = name.toLowerCase();
+          for (const key of Object.keys(row)) {
+            if (key.toLowerCase() === lowerName || key.toLowerCase().replace(/[_\s]/g, '') === lowerName.replace(/[_\s]/g, '')) {
+              if (row[key] !== undefined && row[key] !== null && row[key] !== '') {
+                return row[key];
+              }
+            }
+          }
+        }
+        return null;
+      };
+      
       // Normalize data - map various column names to standard names
       const normalizedData = data.map((row, idx) => {
+        // Debug: log first row column names
+        if (idx === 0) {
+          console.log('Excel columns found:', Object.keys(row));
+          console.log('First row data:', row);
+        }
+        
         // Handle date and time - can be combined or separate
-        let dateVal = row.Date || row.date || '';
-        let timeVal = row.Time || row.time || '';
+        let dateVal = getValue(row, 'Date', 'date') || '';
+        let timeVal = getValue(row, 'Time', 'time') || '';
         
         if (typeof dateVal === 'number' && dateVal > 40000) {
           // Excel Julian date (may include time as decimal)
@@ -76,31 +102,31 @@ const BulkFTRGenerator = () => {
         
         return {
           // Serial Number - try multiple column names
-          SerialNumber: row.ID || row.Id || row.id || row.SerialNumber || row['Serial Number'] || row.serial_number || row.Barcode || row.barcode || '',
+          SerialNumber: getValue(row, 'ID', 'Id', 'id', 'SerialNumber', 'Serial Number', 'serial_number', 'Barcode', 'barcode') || '',
           // Module Type
-          ModuleType: row.ModuleType || row['Module Type'] || row.module_type || row.Type || row.type || '',
+          ModuleType: getValue(row, 'ModuleType', 'Module Type', 'module_type', 'Type', 'type') || '',
           // Producer
-          Producer: row.Producer || row.producer || row.Manufacturer || 'Gautam Solar',
+          Producer: getValue(row, 'Producer', 'producer', 'Manufacturer') || 'Gautam Solar',
           // Test values
-          Pmax: parseFloat(row.Pmax || row.pmax || 0),
-          Voc: parseFloat(row.Voc || row.voc || 0),
-          Isc: parseFloat(row.Isc || row.isc || 0),
-          Vpm: parseFloat(row.Vpm || row.vpm || 0),
-          Ipm: parseFloat(row.Ipm || row.ipm || 0),
-          FF: parseFloat(row.FF || row.ff || row.FillFactor || 0),
-          Rs: parseFloat(row.Rs || row.rs || 0),
-          Rsh: parseFloat(row.Rsh || row.rsh || 0),
-          Eff: parseFloat(row.Eff || row.eff || row.Efficiency || 0),
+          Pmax: parseFloat(getValue(row, 'Pmax', 'pmax', 'PMAX') || 0),
+          Voc: parseFloat(getValue(row, 'Voc', 'voc', 'VOC') || 0),
+          Isc: parseFloat(getValue(row, 'Isc', 'isc', 'ISC') || 0),
+          Vpm: parseFloat(getValue(row, 'Vpm', 'vpm', 'VPM') || 0),
+          Ipm: parseFloat(getValue(row, 'Ipm', 'ipm', 'IPM') || 0),
+          FF: parseFloat(getValue(row, 'FF', 'ff', 'FillFactor', 'Fill_Factor') || 0),
+          Rs: parseFloat(getValue(row, 'Rs', 'rs', 'RS') || 0),
+          Rsh: parseFloat(getValue(row, 'Rsh', 'rsh', 'RSH') || 0),
+          Eff: parseFloat(getValue(row, 'Eff', 'eff', 'Efficiency', 'EFF') || 0),
           // Temperature
-          ModuleTemp: parseFloat(row.T_Object || row.t_object || row.ModuleTemp || row.Cel_T || 25),
-          AmbientTemp: parseFloat(row.Ambient || row.ambient || row.AmbientTemp || row.T_Ambient || row.T_Ambient || 25),
-          // Irradiance
-          Irradiance: parseFloat(row.Irr_Target || row.irr_target || row.Irradiance || 1000),
+          ModuleTemp: parseFloat(getValue(row, 'T_Object', 't_object', 'ModuleTemp', 'Cel_T', 'Module_Temp') || 25),
+          AmbientTemp: parseFloat(getValue(row, 'T_Ambient', 't_ambient', 'AmbientTemp', 'Ambient', 'Ambient_Temp') || 25),
+          // Irradiance - check all possible column names
+          Irradiance: parseFloat(getValue(row, 'Irr_Target', 'irr_target', 'Irradiance', 'IRR', 'Irr', 'IrrTarget') || 1000),
           // Date and Time
           Date: dateVal,
           Time: timeVal,
           // Class
-          Class: row.Class || row.class || row.Irr_Target_Class || ''
+          Class: getValue(row, 'Class', 'class', 'Irr_Target_Class') || ''
         };
       });
       
