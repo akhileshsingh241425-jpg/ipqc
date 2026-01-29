@@ -121,7 +121,7 @@ const BulkFTRGenerator = () => {
           ModuleTemp: parseFloat(getValue(row, 'T_Object', 't_object', 'ModuleTemp', 'Cel_T', 'Module_Temp') || 25),
           AmbientTemp: parseFloat(getValue(row, 'T_Ambient', 't_ambient', 'AmbientTemp', 'Ambient', 'Ambient_Temp') || 25),
           // Irradiance - check all possible column names
-          Irradiance: parseFloat(getValue(row, 'Irr_Target', 'irr_target', 'Irradiance', 'IRR', 'Irr', 'IrrTarget') || 1000),
+          Irradiance: parseFloat(getValue(row, 'Irradiance', 'irradiance', 'Irr_Target', 'irr_target', 'IRR', 'Irr', 'IrrTarget') || 1000),
           // Date and Time
           Date: dateVal,
           Time: timeVal,
