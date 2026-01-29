@@ -4016,21 +4016,38 @@ function DailyReport() {
               const grandTotalUsed = totalProcessedCells + cellRejectionQty;
 
               // Calculate SUPPLIER-WISE cell usage from production records
+              // Using logic: OK Cells + B-grade Cells + R-grade Cells + Cell Rejection
               const supplierWiseUsage = {};
               records.forEach(r => {
                 // Check both camelCase and snake_case (database returns snake_case)
                 const supplier = r.cellSupplier || r.cell_supplier || '';
                 if (supplier) {
                   const totalProd = (r.dayProduction || 0) + (r.nightProduction || 0);
-                  const cellsUsed = totalProd * cellsPerModule;
-                  // Add rejection proportionally
-                  const cellRej = parseFloat(r.cellRejectionPercent) || avgCellRejPct;
-                  const cellsWithRejection = Math.round(cellsUsed * (1 + cellRej / 100));
+                  const okCells = totalProd * cellsPerModule; // OK (A-grade) cells
+                  
+                  // B-grade = module rejection % of OK modules
+                  const modRejPct = parseFloat(r.moduleRejectionPercent) || avgModRejPct;
+                  const bGradeModules = Math.round(totalProd * (modRejPct / 100));
+                  const bGradeCells = bGradeModules * cellsPerModule;
+                  
+                  // R-grade = 0.7% fixed scrap rate
+                  const rGradeModules = Math.round(totalProd * (rGradePct / 100));
+                  const rGradeCells = rGradeModules * cellsPerModule;
+                  
+                  // Total processed cells (OK + B + R)
+                  const totalProcessed = okCells + bGradeCells + rGradeCells;
+                  
+                  // Cell rejection on total processed
+                  const cellRejPct = parseFloat(r.cellRejectionPercent) || avgCellRejPct;
+                  const cellRejection = Math.round(totalProcessed * (cellRejPct / 100));
+                  
+                  // TOTAL cells used = processed + rejection
+                  const totalCellsUsed = totalProcessed + cellRejection;
                   
                   if (!supplierWiseUsage[supplier]) {
                     supplierWiseUsage[supplier] = 0;
                   }
-                  supplierWiseUsage[supplier] += cellsWithRejection;
+                  supplierWiseUsage[supplier] += totalCellsUsed;
                 }
               });
               
@@ -4405,21 +4422,42 @@ function DailyReport() {
                           });
 
                           // Use supplier-wise usage from production records (based on cellSupplier field)
-                          // Calculate supplierWiseUsage for Excel export
+                          // Calculate supplierWiseUsage for Excel export using same logic as display
                           const supplierWiseUsageExcel = {};
                           const recordsForExcel = selectedCompany?.productionRecords || [];
+                          const rGradePctExcel = 0.7; // Fixed scrap rate
                           let totalUsedFromRecords = 0;
                           recordsForExcel.forEach(r => {
                             // Check both camelCase and snake_case
                             const supplier = r.cellSupplier || r.cell_supplier || '';
                             if (supplier) {
                               const totalProd = (r.dayProduction || 0) + (r.nightProduction || 0);
-                              const cellsUsed = totalProd * 66;
+                              const okCells = totalProd * 66;
+                              
+                              // B-grade cells
+                              const modRejPct = parseFloat(r.moduleRejectionPercent) || 0;
+                              const bGradeModules = Math.round(totalProd * (modRejPct / 100));
+                              const bGradeCells = bGradeModules * 66;
+                              
+                              // R-grade cells (0.7% fixed)
+                              const rGradeModules = Math.round(totalProd * (rGradePctExcel / 100));
+                              const rGradeCells = rGradeModules * 66;
+                              
+                              // Total processed
+                              const totalProcessed = okCells + bGradeCells + rGradeCells;
+                              
+                              // Cell rejection
+                              const cellRejPct = parseFloat(r.cellRejectionPercent) || 0;
+                              const cellRejection = Math.round(totalProcessed * (cellRejPct / 100));
+                              
+                              // Total used
+                              const totalCellsUsed = totalProcessed + cellRejection;
+                              
                               if (!supplierWiseUsageExcel[supplier]) {
                                 supplierWiseUsageExcel[supplier] = 0;
                               }
-                              supplierWiseUsageExcel[supplier] += cellsUsed;
-                              totalUsedFromRecords += cellsUsed;
+                              supplierWiseUsageExcel[supplier] += totalCellsUsed;
+                              totalUsedFromRecords += totalCellsUsed;
                             }
                           });
                           const unassignedCellsExcel = grandTotalUsed - totalUsedFromRecords;
