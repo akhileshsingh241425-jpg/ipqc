@@ -3591,7 +3591,7 @@ function DailyReport() {
                             </td>
                             <td style={{ backgroundColor: '#e8f5e922' }}>
                               <select
-                                value={record.cellSupplier || ''}
+                                value={record.cellSupplier || record.cell_supplier || ''}
                                 onChange={(e) => handleProductionChange(record.id, 'cellSupplier', e.target.value)}
                                 disabled={isClosed}
                                 style={{
@@ -3600,8 +3600,8 @@ function DailyReport() {
                                   fontSize: '10px',
                                   border: '2px solid #388e3c',
                                   borderRadius: '3px',
-                                  backgroundColor: record.cellSupplier ? '#e8f5e9' : 'white',
-                                  fontWeight: record.cellSupplier ? 'bold' : 'normal',
+                                  backgroundColor: (record.cellSupplier || record.cell_supplier) ? '#e8f5e9' : 'white',
+                                  fontWeight: (record.cellSupplier || record.cell_supplier) ? 'bold' : 'normal',
                                   color: '#2e7d32'
                                 }}
                               >
@@ -4018,7 +4018,8 @@ function DailyReport() {
               // Calculate SUPPLIER-WISE cell usage from production records
               const supplierWiseUsage = {};
               records.forEach(r => {
-                const supplier = r.cellSupplier || '';
+                // Check both camelCase and snake_case (database returns snake_case)
+                const supplier = r.cellSupplier || r.cell_supplier || '';
                 if (supplier) {
                   const totalProd = (r.dayProduction || 0) + (r.nightProduction || 0);
                   const cellsUsed = totalProd * cellsPerModule;
@@ -4409,7 +4410,8 @@ function DailyReport() {
                           const recordsForExcel = selectedCompany?.productionRecords || [];
                           let totalUsedFromRecords = 0;
                           recordsForExcel.forEach(r => {
-                            const supplier = r.cellSupplier || '';
+                            // Check both camelCase and snake_case
+                            const supplier = r.cellSupplier || r.cell_supplier || '';
                             if (supplier) {
                               const totalProd = (r.dayProduction || 0) + (r.nightProduction || 0);
                               const cellsUsed = totalProd * 66;
