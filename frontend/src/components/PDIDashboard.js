@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../constants/apiConfig';
+
+// Smart API URL helper
+const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
 
 const PDIDashboard = ({ companyId, companyName }) => {
   const [loading, setLoading] = useState(true);
