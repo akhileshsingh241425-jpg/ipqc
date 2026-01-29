@@ -4,6 +4,7 @@ import axios from 'axios';
 import { companyService } from '../services/apiService';
 import COCSelectionModal from './COCSelectionModal';
 import PasswordModal from './PasswordModal';
+import PDIDashboard from './PDIDashboard';
 import '../styles/DailyReport.css';
 
 // Smart API URL helper
@@ -2927,6 +2928,29 @@ function DailyReport() {
               })()}
             </span>
           </button>
+          
+          {/* PDI Dashboard Tab */}
+          <button
+            onClick={() => setProductionTab('pdiDashboard')}
+            style={{
+              flex: 1,
+              padding: '18px 30px',
+              fontSize: '16px',
+              fontWeight: '700',
+              border: 'none',
+              backgroundColor: productionTab === 'pdiDashboard' ? '#9c27b0' : 'transparent',
+              color: productionTab === 'pdiDashboard' ? 'white' : '#555',
+              cursor: 'pointer',
+              transition: 'all 0.3s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px'
+            }}
+          >
+            <span style={{ fontSize: '22px' }}>📦</span>
+            PDI Tracking
+          </button>
         </div>
 
         {/* ========== TAB CONTENT ========== */}
@@ -5394,6 +5418,22 @@ function DailyReport() {
                 </div>
               );
             })()}
+          </div>
+        )}
+
+        {/* ========== PDI DASHBOARD TAB ========== */}
+        {productionTab === 'pdiDashboard' && (
+          <div style={{
+            padding: '25px',
+            backgroundColor: '#fff',
+            borderRadius: '0 0 12px 12px',
+            border: '2px solid #9c27b0',
+            borderTop: 'none'
+          }}>
+            <PDIDashboard 
+              companyId={selectedCompany?.id} 
+              companyName={selectedCompany?.companyName}
+            />
           </div>
         )}
 

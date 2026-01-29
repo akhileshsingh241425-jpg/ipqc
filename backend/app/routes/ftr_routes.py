@@ -351,4 +351,211 @@ def assign_pdi_serials():
         }), 500
 
 
+@ftr_bp.route('/pdi-dashboard/<int:company_id>', methods=['GET'])
+def get_pdi_dashboard(company_id):
+    """
+    Get PDI Dashboard data - shows barcode tracking status
+    - Total assigned barcodes
+    - Packed (in stock)
+    - Dispatched
+    - Remaining
+    """
+    import requests
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get all PDI numbers and their serial counts for this company
+        cursor.execute("""
+            SELECT 
+                pdi_number,
+                COUNT(*) as serial_count,
+                MIN(created_at) as assigned_date
+            FROM pdi_serial_numbers 
+            WHERE company_id = %s
+            GROUP BY pdi_number
+            ORDER BY MIN(created_at) DESC
+        """, (company_id,))
+        
+        pdi_summary = cursor.fetchall()
+        
+        # Get all serial numbers for this company
+        cursor.execute("""
+            SELECT serial_number, pdi_number, created_at
+            FROM pdi_serial_numbers 
+            WHERE company_id = %s
+            ORDER BY created_at DESC
+        """, (company_id,))
+        
+        all_serials = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        # Now track each serial using external API
+        BARCODE_TRACKING_API = 'https://umanmrp.in/api/get_barcode_tracking.php'
+        
+        total_assigned = len(all_serials)
+        packed_count = 0
+        dispatched_count = 0
+        pending_count = 0
+        unknown_count = 0
+        
+        packed_serials = []
+        dispatched_serials = []
+        pending_serials = []
+        
+        # Track status for each serial (limit to avoid timeout)
+        serials_to_track = all_serials[:500]  # Limit to 500 for performance
+        
+        for serial_data in serials_to_track:
+            serial = serial_data['serial_number']
+            try:
+                response = requests.post(
+                    BARCODE_TRACKING_API,
+                    data={'barcode': serial},
+                    timeout=5
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    
+                    if data.get('success') and data.get('data'):
+                        tracking_data = data['data']
+                        
+                        # Check dispatch status
+                        dispatch_info = tracking_data.get('dispatch', {})
+                        packing_info = tracking_data.get('packing', {})
+                        
+                        if dispatch_info.get('dispatch_date'):
+                            dispatched_count += 1
+                            dispatched_serials.append({
+                                'serial': serial,
+                                'pdi': serial_data['pdi_number'],
+                                'dispatch_date': dispatch_info.get('dispatch_date'),
+                                'vehicle_no': dispatch_info.get('vehicle_no', ''),
+                                'party': dispatch_info.get('party_name', '')
+                            })
+                        elif packing_info.get('packing_date'):
+                            packed_count += 1
+                            packed_serials.append({
+                                'serial': serial,
+                                'pdi': serial_data['pdi_number'],
+                                'packing_date': packing_info.get('packing_date'),
+                                'box_no': packing_info.get('box_no', '')
+                            })
+                        else:
+                            pending_count += 1
+                            pending_serials.append({
+                                'serial': serial,
+                                'pdi': serial_data['pdi_number']
+                            })
+                    else:
+                        pending_count += 1
+                        pending_serials.append({
+                            'serial': serial,
+                            'pdi': serial_data['pdi_number']
+                        })
+                else:
+                    unknown_count += 1
+                    
+            except Exception as e:
+                unknown_count += 1
+                continue
+        
+        # Calculate percentages
+        tracked_total = packed_count + dispatched_count + pending_count
+        
+        return jsonify({
+            "success": True,
+            "summary": {
+                "total_assigned": total_assigned,
+                "total_tracked": len(serials_to_track),
+                "packed": packed_count,
+                "dispatched": dispatched_count,
+                "pending": pending_count,
+                "unknown": unknown_count,
+                "packed_percent": round((packed_count / tracked_total * 100), 1) if tracked_total > 0 else 0,
+                "dispatched_percent": round((dispatched_count / tracked_total * 100), 1) if tracked_total > 0 else 0,
+                "pending_percent": round((pending_count / tracked_total * 100), 1) if tracked_total > 0 else 0
+            },
+            "pdi_wise": pdi_summary,
+            "recent_dispatched": dispatched_serials[:20],
+            "recent_packed": packed_serials[:20],
+            "recent_pending": pending_serials[:20]
+        })
+        
+    except Exception as e:
+        print(f"Error getting PDI dashboard: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
+
+@ftr_bp.route('/pdi-dashboard-quick/<int:company_id>', methods=['GET'])
+def get_pdi_dashboard_quick(company_id):
+    """
+    Quick PDI Dashboard - just database counts without external API calls
+    For fast loading
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Get total assigned
+        cursor.execute("""
+            SELECT COUNT(*) as total
+            FROM pdi_serial_numbers 
+            WHERE company_id = %s
+        """, (company_id,))
+        total = cursor.fetchone()['total']
+        
+        # Get PDI wise summary
+        cursor.execute("""
+            SELECT 
+                pdi_number,
+                COUNT(*) as serial_count,
+                DATE(MIN(created_at)) as assigned_date
+            FROM pdi_serial_numbers 
+            WHERE company_id = %s
+            GROUP BY pdi_number
+            ORDER BY MIN(created_at) DESC
+            LIMIT 50
+        """, (company_id,))
+        
+        pdi_summary = cursor.fetchall()
+        
+        # Get recent serials
+        cursor.execute("""
+            SELECT serial_number, pdi_number, created_at
+            FROM pdi_serial_numbers 
+            WHERE company_id = %s
+            ORDER BY created_at DESC
+            LIMIT 100
+        """, (company_id,))
+        
+        recent_serials = cursor.fetchall()
+        
+        cursor.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "summary": {
+                "total_assigned": total,
+                "pdi_count": len(pdi_summary)
+            },
+            "pdi_wise": pdi_summary,
+            "recent_serials": recent_serials
+        })
+        
+    except Exception as e:
+        print(f"Error getting quick PDI dashboard: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
