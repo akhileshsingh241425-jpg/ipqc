@@ -4435,13 +4435,7 @@ function DailyReport() {
                             }
                           });
                           
-                          // Unassigned cells go to first brand
-                          if (unassignedCellsExcel > 0) {
-                            const defaultBrandExcel = Object.keys(brandTotalsExcel)[0];
-                            if (defaultBrandExcel) {
-                              brandTotalsExcel[defaultBrandExcel].used += unassignedCellsExcel;
-                            }
-                          }
+                          // Note: Unassigned cells (records without cellSupplier) are NOT distributed to any supplier
 
                           brandData.push(['BRAND/SUPPLIER', 'RECEIVED', 'USED', 'REMAINING', 'CAN PRODUCE', '% OF TOTAL', '25.4%', '25.5%', '25.6%', '25.7%', '25.8%']);
                           
@@ -4812,12 +4806,18 @@ function DailyReport() {
                       }
                     });
 
+                    // DEBUG: Check what cellSupplier values we have in records
+                    const debugRecords = selectedCompany?.productionRecords || [];
+                    console.log('DEBUG - All production records cellSupplier:', debugRecords.map(r => ({id: r.id, cellSupplier: r.cellSupplier, cell_supplier: r.cell_supplier})));
+                    console.log('DEBUG - supplierWiseUsage:', supplierWiseUsage);
+                    
                     // Use supplier-wise usage from production records (based on cellSupplier field)
                     Object.keys(brandTotals).forEach(brand => {
                       // Match brand name (case-insensitive)
                       const matchedSupplier = Object.keys(supplierWiseUsage).find(
                         s => s.toUpperCase() === brand.toUpperCase()
                       );
+                      console.log('DEBUG - brand:', brand, 'matchedSupplier:', matchedSupplier, 'value:', matchedSupplier ? supplierWiseUsage[matchedSupplier] : 0);
                       if (matchedSupplier) {
                         brandTotals[brand].used = supplierWiseUsage[matchedSupplier];
                       } else {
@@ -4825,13 +4825,8 @@ function DailyReport() {
                       }
                     });
                     
-                    // If there are unassigned cells, add them to first available supplier
-                    if (unassignedCells > 0) {
-                      const defaultBrand = Object.keys(brandTotals)[0];
-                      if (defaultBrand) {
-                        brandTotals[defaultBrand].used += unassignedCells;
-                      }
-                    }
+                    // Note: Unassigned cells (records without cellSupplier) are NOT distributed
+                    // They will show in the total but not in any specific supplier
 
                     const brands = Object.keys(brandTotals);
                     if (brands.length === 0) return null;
