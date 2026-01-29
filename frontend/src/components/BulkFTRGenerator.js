@@ -32,13 +32,46 @@ const BulkFTRGenerator = () => {
       
       // Normalize data - map various column names to standard names
       const normalizedData = data.map((row, idx) => {
-        // Handle date - convert Julian to readable format
+        // Handle date and time - can be combined or separate
         let dateVal = row.Date || row.date || '';
+        let timeVal = row.Time || row.time || '';
+        
         if (typeof dateVal === 'number' && dateVal > 40000) {
-          // Excel Julian date - convert to date string
+          // Excel Julian date (may include time as decimal)
           const excelEpoch = new Date(1899, 11, 30);
           const date = new Date(excelEpoch.getTime() + dateVal * 86400000);
           dateVal = date.toISOString().split('T')[0];
+          // Extract time if it was part of the decimal
+          if (!timeVal) {
+            timeVal = date.toTimeString().split(' ')[0]; // HH:MM:SS
+          }
+        } else if (typeof dateVal === 'string' && dateVal.includes(' ')) {
+          // Date string with time like "1/28/2026 17:05"
+          const parts = dateVal.split(' ');
+          const datePart = parts[0];
+          const timePart = parts[1] || '';
+          
+          // Parse date part (could be M/D/YYYY or YYYY-MM-DD)
+          if (datePart.includes('/')) {
+            const [m, d, y] = datePart.split('/');
+            dateVal = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+          } else {
+            dateVal = datePart;
+          }
+          
+          // Use time from date string if not provided separately
+          if (!timeVal && timePart) {
+            timeVal = timePart.includes(':') ? timePart : timePart + ':00';
+            // Ensure HH:MM:SS format
+            if (timeVal.split(':').length === 2) {
+              timeVal = timeVal + ':00';
+            }
+          }
+        }
+        
+        // Default time if still empty
+        if (!timeVal) {
+          timeVal = new Date().toLocaleTimeString('en-GB', { hour12: false });
         }
         
         return {
@@ -60,11 +93,12 @@ const BulkFTRGenerator = () => {
           Eff: parseFloat(row.Eff || row.eff || row.Efficiency || 0),
           // Temperature
           ModuleTemp: parseFloat(row.T_Object || row.t_object || row.ModuleTemp || row.Cel_T || 25),
-          AmbientTemp: parseFloat(row.Ambient || row.ambient || row.AmbientTemp || row.T_Ambient || 25),
+          AmbientTemp: parseFloat(row.Ambient || row.ambient || row.AmbientTemp || row.T_Ambient || row.T_Ambient || 25),
           // Irradiance
           Irradiance: parseFloat(row.Irr_Target || row.irr_target || row.Irradiance || 1000),
-          // Date
+          // Date and Time
           Date: dateVal,
+          Time: timeVal,
           // Class
           Class: row.Class || row.class || row.Irr_Target_Class || ''
         };
