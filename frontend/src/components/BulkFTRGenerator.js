@@ -51,6 +51,10 @@ const BulkFTRGenerator = () => {
       };
       
       // Normalize data - map various column names to standard names
+      // Ask user for module area to apply when Excel doesn't contain it
+      const moduleAreaInput = prompt('Enter Module Area in m² for these records (e.g., 2.7). Leave blank to use values from Excel if present:', '2.7');
+      const defaultModuleArea = moduleAreaInput !== null && moduleAreaInput !== '' ? parseFloat(moduleAreaInput) : null;
+
       const normalizedData = data.map((row, idx) => {
         // Debug: log first row column names
         if (idx === 0) {
@@ -122,6 +126,15 @@ const BulkFTRGenerator = () => {
           AmbientTemp: parseFloat(getValue(row, 'T_Ambient', 't_ambient', 'AmbientTemp', 'Ambient', 'Ambient_Temp') || 25),
           // Irradiance - check all possible column names
           Irradiance: parseFloat(getValue(row, 'Irradiance', 'irradiance', 'Irr_Target', 'irr_target', 'IRR', 'Irr', 'IrrTarget') || 1000),
+          // Module Area (m2) - prefer Excel value, otherwise use prompt default or 2.7
+          ModuleArea: (() => {
+            const ma = getValue(row, 'ModuleArea', 'Module Area', 'Module_Area', 'Area');
+            if (ma !== null && ma !== '') {
+              const parsed = parseFloat(ma);
+              return isNaN(parsed) ? (defaultModuleArea !== null ? defaultModuleArea : 2.7) : parsed;
+            }
+            return defaultModuleArea !== null ? defaultModuleArea : 2.7;
+          })(),
           // Date and Time
           Date: dateVal,
           Time: timeVal,
@@ -331,15 +344,7 @@ const BulkFTRGenerator = () => {
           pmax: testData.results.pmax
         });
         
-        // Download each PDF individually
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `FTR_${testData.serialNumber.replace(/\//g, '_')}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        // (no per-file download here) collect blob for upload/merge
         
       } catch (error) {
         console.error(`Error generating PDF for ${testData.serialNumber}:`, error);
@@ -349,6 +354,41 @@ const BulkFTRGenerator = () => {
       
       // Small delay to prevent browser freeze
       await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    // Merge all PDFs into single file for user download (client-side)
+    if (pdfDataArray.length > 0) {
+      try {
+        setProgress(90);
+        const { PDFDocument } = await import('pdf-lib');
+        const mergedPdf = await PDFDocument.create();
+
+        for (let i = 0; i < pdfDataArray.length; i++) {
+          const item = pdfDataArray[i];
+          const arrayBuffer = await item.blob.arrayBuffer();
+          const donor = await PDFDocument.load(arrayBuffer);
+          const copied = await mergedPdf.copyPages(donor, donor.getPageIndices());
+          copied.forEach((p) => mergedPdf.addPage(p));
+          // update merge progress a bit
+          setProgress(90 + Math.round(((i + 1) / pdfDataArray.length) * 8));
+          await new Promise(r => setTimeout(r, 50));
+        }
+
+        const mergedBytes = await mergedPdf.save();
+        const mergedBlob = new Blob([mergedBytes], { type: 'application/pdf' });
+
+        const url = window.URL.createObjectURL(mergedBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `FTR_Reports_${new Date().toISOString().split('T')[0]}_${pdfDataArray.length}files.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        setProgress(95);
+      } catch (mergeError) {
+        console.error('Error merging PDFs:', mergeError);
+      }
     }
 
     // Upload all PDFs to backend
