@@ -13,6 +13,7 @@ const PDIFTRGenerator = () => {
   const [progress, setProgress] = useState(0);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [moduleAreaDefault, setModuleAreaDefault] = useState(2.7); // User-configurable default
 
   // Check if user is super admin
   const isSuperAdmin = () => {
@@ -31,6 +32,15 @@ const PDIFTRGenerator = () => {
       const sheet = workbook.Sheets[sheetName];
       const data = XLSX.utils.sheet_to_json(sheet);
       
+      // Ask user for module area
+      const moduleAreaInput = prompt('Enter Module Area in m² (e.g., 2.7):', '2.7');
+      if (moduleAreaInput !== null && moduleAreaInput !== '') {
+        const parsed = parseFloat(moduleAreaInput);
+        if (!isNaN(parsed)) {
+          setModuleAreaDefault(parsed);
+        }
+      }
+      
       setExcelData(data);
       alert(`${data.length} records loaded from Excel!`);
     };
@@ -40,9 +50,8 @@ const PDIFTRGenerator = () => {
 
 
   // Auto-generate test data from serial number and power
-  const generateTestData = (serialNumber, power) => {
+  const generateTestData = (serialNumber, power, moduleArea = 2.7) => {
     const today = new Date();
-    const moduleArea = 2.70; // Standard area
     
     // Generate realistic test parameters based on power
     const baseValues = {
@@ -241,7 +250,7 @@ const PDIFTRGenerator = () => {
         const powerMatch = String(row.Power || row.ModuleType || '').match(/(\d+)/);
         const power = powerMatch ? powerMatch[1] : '630';
         
-        testData = generateTestData(serialNumber, power);
+        testData = generateTestData(serialNumber, power, moduleAreaDefault);
       } else {
         // Full mode: Complete data from Excel
         testData = {
@@ -253,7 +262,7 @@ const PDIFTRGenerator = () => {
           irradiance: parseFloat(row.Irradiance) || 1000,
           moduleTemp: parseFloat(row.ModuleTemp || row['Module Temperature']) || 25,
           ambientTemp: parseFloat(row.AmbientTemp || row['Ambient Temperature']) || 23,
-          moduleArea: parseFloat(row.ModuleArea || row['Module Area']) || 2.7,
+          moduleArea: parseFloat(row.ModuleArea || row['Module Area']) || moduleAreaDefault,
           results: {
             pmax: parseFloat(row.Pmax) || 0,
             vpm: parseFloat(row.Vpm) || 0,
@@ -287,36 +296,64 @@ const PDIFTRGenerator = () => {
           pmax: testData.results.pmax
         });
         
-        // Download each PDF individually
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `FTR_${testData.serialNumber.replace(/\//g, '_')}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
+        // (no per-file download) collect blob for upload/merge
         
       } catch (error) {
         console.error(`Error generating PDF for ${testData.serialNumber}:`, error);
       }
 
-      setProgress(((i + 1) / excelData.length) * 100);
+      setProgress(Math.round(((i + 1) / excelData.length) * 85));
       
       // Small delay between PDFs
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
+    // Merge all PDFs into single file for user download (client-side)
+    if (pdfDataArray.length > 0) {
+      try {
+        setProgress(87);
+        const { PDFDocument } = await import('pdf-lib');
+        const mergedPdf = await PDFDocument.create();
+
+        for (let i = 0; i < pdfDataArray.length; i++) {
+          const item = pdfDataArray[i];
+          const arrayBuffer = await item.blob.arrayBuffer();
+          const donor = await PDFDocument.load(arrayBuffer);
+          const copied = await mergedPdf.copyPages(donor, donor.getPageIndices());
+          copied.forEach((p) => mergedPdf.addPage(p));
+          // update merge progress
+          setProgress(87 + Math.round(((i + 1) / pdfDataArray.length) * 8));
+          await new Promise(r => setTimeout(r, 30));
+        }
+
+        const mergedBytes = await mergedPdf.save();
+        const mergedBlob = new Blob([mergedBytes], { type: 'application/pdf' });
+
+        const url = window.URL.createObjectURL(mergedBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `FTR_Reports_${new Date().toISOString().split('T')[0]}_${pdfDataArray.length}files.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        setProgress(96);
+      } catch (mergeError) {
+        console.error('Error merging PDFs:', mergeError);
+      }
+    }
+
     // Upload all PDFs to backend
     try {
+      setProgress(98);
       const uploadResult = await uploadPDFsToBackend(pdfDataArray);
       setIsGenerating(false);
-      setProgress(0);
-      alert(`✅ ${uploadResult.files.length} FTR reports generated and downloaded successfully!`);
+      setProgress(100);
+      alert(`✅ ${uploadResult.files.length} FTR reports generated and merged PDF downloaded successfully!`);
     } catch (error) {
       setIsGenerating(false);
-      setProgress(0);
-      alert(`✅ ${pdfDataArray.length} FTR reports generated and downloaded!\n\n⚠️ Upload to server failed: ${error.message}`);
+      setProgress(100);
+      alert(`✅ ${pdfDataArray.length} FTR reports generated and merged PDF downloaded!\n\n⚠️ Upload to server failed: ${error.message}`);
     }
   };
 
