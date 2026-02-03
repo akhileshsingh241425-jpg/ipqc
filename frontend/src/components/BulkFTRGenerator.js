@@ -12,6 +12,9 @@ const BulkFTRGenerator = () => {
   const [progress, setProgress] = useState(0);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [downloadType, setDownloadType] = useState('merged'); // 'merged' or 'split'
+  const [downloadFormat, setDownloadFormat] = useState('pdf'); // 'pdf' or 'word'
+  const [moduleType, setModuleType] = useState('monofacial'); // 'monofacial' or 'bifacial'
 
   // Check if user is super admin
   const isSuperAdmin = () => {
@@ -265,7 +268,7 @@ const BulkFTRGenerator = () => {
   };
 
   // Generate all reports
-  const generateAllReports = async () => {
+  const generateAllReports = async (downloadMode = 'merged', format = 'pdf', modType = 'monofacial') => {
     if (excelData.length === 0) {
       alert('Please upload Excel file first!');
       return;
@@ -278,8 +281,10 @@ const BulkFTRGenerator = () => {
       return;
     }
 
-    // Get available wattages
-    const availableWattages = Object.keys(storedGraphs).sort((a, b) => parseInt(a) - parseInt(b));
+    // Filter available keys by module type if specified
+    const graphKeys = Object.keys(storedGraphs);
+    // Extract unique wattages (handle both "630" and "630_bifacial" formats)
+    const availableWattages = [...new Set(graphKeys.map(key => key.split('_')[0]))].sort((a, b) => parseInt(a) - parseInt(b));
     
     // Ask user which wattage to use for bulk generation
     const wattagePrompt = `Available wattages with graphs:\n${availableWattages.join('W, ')}W\n\nEnter the wattage (WP) for these modules:`;
@@ -289,9 +294,11 @@ const BulkFTRGenerator = () => {
       return; // User cancelled
     }
     
-    // Validate selected wattage
-    if (!storedGraphs[selectedWattage]) {
-      alert(`No graphs found for ${selectedWattage}W! Please select from available wattages or upload graphs for ${selectedWattage}W first.`);
+    // Check if graphs exist for selected wattage (with or without module type)
+    const graphKey = `${selectedWattage}_${modType}`;
+    const hasGraphs = storedGraphs[graphKey] || storedGraphs[selectedWattage];
+    if (!hasGraphs) {
+      alert(`No graphs found for ${selectedWattage}W (${modType})! Please upload graphs first.`);
       return;
     }
 
@@ -327,21 +334,23 @@ const BulkFTRGenerator = () => {
         }
       };
 
-      // Get random graph for selected wattage (already returns base64)
-      const graphImage = await getRandomGraphForPower(selectedWattage);
+      // Get random graph for selected wattage and module type (already returns base64)
+      const graphImage = await getRandomGraphForPower(selectedWattage, modType);
       
       if (!graphImage) {
         console.warn(`Warning: Could not load graph image for ${testData.serialNumber}`);
       }
 
       try {
-        // Generate PDF blob
+        // Generate PDF blob (for both PDF and Word we generate PDF first, Word will be created later)
         const blob = await generateSinglePDFBlob(testData, graphImage);
         pdfDataArray.push({
           blob: blob,
           serialNumber: testData.serialNumber,
           moduleType: testData.moduleType,
-          pmax: testData.results.pmax
+          pmax: testData.results.pmax,
+          testData: testData, // Keep testData for Word generation
+          graphImage: graphImage // Keep graph for Word generation
         });
         
         // (no per-file download here) collect blob for upload/merge
@@ -350,67 +359,182 @@ const BulkFTRGenerator = () => {
         console.error(`Error generating PDF for ${testData.serialNumber}:`, error);
       }
 
-      setProgress(((i + 1) / excelData.length) * 100);
+      setProgress(((i + 1) / excelData.length) * 85 / 100);
       
       // Small delay to prevent browser freeze
       await new Promise(resolve => setTimeout(resolve, 500));
     }
 
-    // Merge all PDFs into single file for user download (client-side)
-    let mergeSuccess = false;
+    // Download based on selected mode and format
+    // eslint-disable-next-line no-unused-vars
+    let downloadSuccess = false;
     if (pdfDataArray.length > 0) {
-      try {
-        setProgress(90);
-        const { PDFDocument } = await import('pdf-lib');
-        const mergedPdf = await PDFDocument.create();
-
-        for (let i = 0; i < pdfDataArray.length; i++) {
-          const item = pdfDataArray[i];
-          const arrayBuffer = await item.blob.arrayBuffer();
-          const donor = await PDFDocument.load(arrayBuffer);
-          const copied = await mergedPdf.copyPages(donor, donor.getPageIndices());
-          copied.forEach((p) => mergedPdf.addPage(p));
-          // update merge progress a bit
-          setProgress(90 + Math.round(((i + 1) / pdfDataArray.length) * 8));
-          await new Promise(r => setTimeout(r, 50));
+      if (format === 'word') {
+        // Word format generation
+        try {
+          setProgress(87);
+          // eslint-disable-next-line no-unused-vars
+          const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, AlignmentType, BorderStyle, ImageRun } = await import('docx');
+          const { saveAs } = await import('file-saver');
+          
+          if (downloadMode === 'split') {
+            // Generate individual Word files
+            for (let i = 0; i < pdfDataArray.length; i++) {
+              const item = pdfDataArray[i];
+              const td = item.testData;
+              
+              const doc = new Document({
+                sections: [{
+                  children: [
+                    new Paragraph({ children: [new TextRun({ text: 'Production Testing Report', bold: true, size: 32 })], alignment: AlignmentType.CENTER }),
+                    new Paragraph({ children: [new TextRun({ text: `Producer: ${td.producer}`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Module Type: ${td.moduleType}`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `S/N: ${td.serialNumber}`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: '', size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: 'Test Conditions', bold: true, size: 28 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Date: ${td.testDate}`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Time: ${td.testTime}`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Irradiance: ${td.irradiance?.toFixed(2) || 1000} W/m²`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Module Temp: ${td.moduleTemp?.toFixed(2) || 25} °C`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Ambient Temp: ${td.ambientTemp?.toFixed(2) || 25} °C`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: '', size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: 'Test Results', bold: true, size: 28 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Pmax: ${td.results.pmax?.toFixed(2) || 0} W`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Vpm: ${td.results.vpm?.toFixed(2) || 0} V`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Ipm: ${td.results.ipm?.toFixed(2) || 0} A`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Voc: ${td.results.voc?.toFixed(2) || 0} V`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Isc: ${td.results.isc?.toFixed(2) || 0} A`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Fill Factor: ${td.results.fillFactor?.toFixed(2) || 0} %`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Rs: ${td.results.rs?.toFixed(2) || 0} Ω`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Rsh: ${td.results.rsh?.toFixed(2) || 0} Ω`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Efficiency: ${td.results.efficiency?.toFixed(2) || 0} %`, size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: '', size: 24 })] }),
+                    new Paragraph({ children: [new TextRun({ text: `Module Area: ${td.moduleArea || 2.7} m²`, size: 24 })] }),
+                  ]
+                }]
+              });
+              
+              const blob = await Packer.toBlob(doc);
+              saveAs(blob, `FTR_${item.serialNumber.replace(/\//g, '_')}.docx`);
+              setProgress(87 + Math.round(((i + 1) / pdfDataArray.length) * 10));
+              await new Promise(r => setTimeout(r, 300));
+            }
+            downloadSuccess = true;
+          } else {
+            // Merged Word document
+            const sections = pdfDataArray.map((item, idx) => {
+              const td = item.testData;
+              return {
+                children: [
+                  new Paragraph({ children: [new TextRun({ text: `Report ${idx + 1} of ${pdfDataArray.length}`, bold: true, size: 20, color: '666666' })], alignment: AlignmentType.RIGHT }),
+                  new Paragraph({ children: [new TextRun({ text: 'Production Testing Report', bold: true, size: 32 })], alignment: AlignmentType.CENTER }),
+                  new Paragraph({ children: [new TextRun({ text: `Producer: ${td.producer}`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: `Module Type: ${td.moduleType}`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: `S/N: ${td.serialNumber}`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: '', size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: 'Test Conditions', bold: true, size: 28 })] }),
+                  new Paragraph({ children: [new TextRun({ text: `Date: ${td.testDate}  |  Time: ${td.testTime}`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: `Irradiance: ${td.irradiance?.toFixed(2) || 1000} W/m²  |  Module Temp: ${td.moduleTemp?.toFixed(2) || 25} °C`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: '', size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: 'Test Results', bold: true, size: 28 })] }),
+                  new Paragraph({ children: [new TextRun({ text: `Pmax: ${td.results.pmax?.toFixed(2) || 0} W  |  Vpm: ${td.results.vpm?.toFixed(2) || 0} V  |  Ipm: ${td.results.ipm?.toFixed(2) || 0} A`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: `Voc: ${td.results.voc?.toFixed(2) || 0} V  |  Isc: ${td.results.isc?.toFixed(2) || 0} A  |  FF: ${td.results.fillFactor?.toFixed(2) || 0} %`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: `Rs: ${td.results.rs?.toFixed(2) || 0} Ω  |  Rsh: ${td.results.rsh?.toFixed(2) || 0} Ω  |  Eff: ${td.results.efficiency?.toFixed(2) || 0} %`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: `Module Area: ${td.moduleArea || 2.7} m²`, size: 24 })] }),
+                  new Paragraph({ children: [new TextRun({ text: '─'.repeat(50), size: 24, color: '999999' })], alignment: AlignmentType.CENTER }),
+                ],
+                properties: idx < pdfDataArray.length - 1 ? { page: { pageBreak: true } } : {}
+              };
+            });
+            
+            const doc = new Document({ sections });
+            const blob = await Packer.toBlob(doc);
+            saveAs(blob, `FTR_Reports_Merged_${new Date().toISOString().split('T')[0]}_${pdfDataArray.length}files.docx`);
+            downloadSuccess = true;
+          }
+          setProgress(98);
+        } catch (wordError) {
+          console.error('Word generation error:', wordError);
+          alert('⚠️ Word generation failed: ' + wordError.message);
         }
+      } else {
+        // PDF format (existing code)
+        if (downloadMode === 'split') {
+          // Split mode: download each PDF individually
+          setProgress(87);
+          for (let i = 0; i < pdfDataArray.length; i++) {
+            const item = pdfDataArray[i];
+            const url = window.URL.createObjectURL(item.blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `FTR_${item.serialNumber.replace(/\//g, '_')}.pdf`;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            
+            setTimeout(() => {
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+            }, 500);
+            
+            setProgress(87 + Math.round(((i + 1) / pdfDataArray.length) * 10));
+            await new Promise(r => setTimeout(r, 400));
+          }
+          downloadSuccess = true;
+        } else {
+          // Merged mode: merge all PDFs into single file
+          try {
+            setProgress(87);
+            const { PDFDocument } = await import('pdf-lib');
+            const mergedPdf = await PDFDocument.create();
 
-        const mergedBytes = await mergedPdf.save();
-        const mergedBlob = new Blob([mergedBytes], { type: 'application/pdf' });
+            for (let i = 0; i < pdfDataArray.length; i++) {
+              const item = pdfDataArray[i];
+              const arrayBuffer = await item.blob.arrayBuffer();
+              const donor = await PDFDocument.load(arrayBuffer);
+              const copied = await mergedPdf.copyPages(donor, donor.getPageIndices());
+              copied.forEach((p) => mergedPdf.addPage(p));
+              setProgress(87 + Math.round(((i + 1) / pdfDataArray.length) * 10));
+              await new Promise(r => setTimeout(r, 50));
+            }
 
-        const url = window.URL.createObjectURL(mergedBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `FTR_Reports_${new Date().toISOString().split('T')[0]}_${pdfDataArray.length}files.pdf`;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        
-        // Delay removal to ensure download starts
-        setTimeout(() => {
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-        }, 1000);
-        
-        setProgress(95);
-        mergeSuccess = true;
-      } catch (mergeError) {
-        console.error('Error merging PDFs:', mergeError);
-        alert('⚠️ PDF merge failed: ' + mergeError.message + '\nDownloading individual PDFs instead...');
-        
-        // Fallback: download each PDF individually
-        for (const item of pdfDataArray) {
-          const url = window.URL.createObjectURL(item.blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `FTR_${item.serialNumber.replace(/\//g, '_')}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-          await new Promise(r => setTimeout(r, 300));
+            const mergedBytes = await mergedPdf.save();
+            const mergedBlob = new Blob([mergedBytes], { type: 'application/pdf' });
+
+            const url = window.URL.createObjectURL(mergedBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `FTR_Reports_Merged_${new Date().toISOString().split('T')[0]}_${pdfDataArray.length}files.pdf`;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            
+            setTimeout(() => {
+              document.body.removeChild(a);
+              window.URL.revokeObjectURL(url);
+            }, 1000);
+            
+            downloadSuccess = true;
+          } catch (mergeError) {
+            console.error('Error merging PDFs:', mergeError);
+            alert('⚠️ PDF merge failed: ' + mergeError.message + '\nDownloading individual PDFs instead...');
+            
+            // Fallback: download each PDF individually
+            for (const item of pdfDataArray) {
+              const url = window.URL.createObjectURL(item.blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = `FTR_${item.serialNumber.replace(/\//g, '_')}.pdf`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+              await new Promise(r => setTimeout(r, 300));
+            }
+            downloadSuccess = true;
+          }
         }
-        mergeSuccess = true; // Individual downloads done
+        setProgress(98);
       }
     }
 
@@ -418,14 +542,14 @@ const BulkFTRGenerator = () => {
     try {
       const uploadResult = await uploadPDFsToBackend(pdfDataArray);
       setIsGenerating(false);
-      if (mergeSuccess) {
-        alert(`✅ ${uploadResult.files.length} FTR reports generated and merged PDF downloaded!`);
-      } else {
-        alert(`✅ ${uploadResult.files.length} FTR reports generated! Check downloads.`);
-      }
+      const formatText = format === 'word' ? 'Word' : 'PDF';
+      const modeText = downloadMode === 'merged' ? `merged ${formatText}` : `${pdfDataArray.length} individual ${formatText} files`;
+      alert(`✅ ${uploadResult.files.length} FTR reports generated!\n📥 Downloaded: ${modeText}`);
     } catch (error) {
       setIsGenerating(false);
-      alert(`✅ ${pdfDataArray.length} FTR reports generated and downloaded!\n\n⚠️ Upload to server failed: ${error.message}`);
+      const formatText = format === 'word' ? 'Word' : 'PDF';
+      const modeText = downloadMode === 'merged' ? `merged ${formatText}` : `${pdfDataArray.length} individual ${formatText} files`;
+      alert(`✅ ${pdfDataArray.length} FTR reports generated!\n📥 Downloaded: ${modeText}\n\n⚠️ Upload to server failed: ${error.message}`);
     }
   };
 
@@ -634,12 +758,68 @@ const BulkFTRGenerator = () => {
       )}
 
       <div className="generate-section">
+        {/* Module Type Selection */}
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '600', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>Module Type:</label>
+          <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 15px', border: moduleType === 'monofacial' ? '2px solid #4CAF50' : '2px solid #ddd', borderRadius: '8px', backgroundColor: moduleType === 'monofacial' ? '#E8F5E9' : '#fff' }}>
+              <input type="radio" name="moduleType" value="monofacial" checked={moduleType === 'monofacial'} onChange={(e) => setModuleType(e.target.value)} />
+              <span style={{ fontWeight: '600' }}>◻️ Monofacial</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 15px', border: moduleType === 'bifacial' ? '2px solid #4CAF50' : '2px solid #ddd', borderRadius: '8px', backgroundColor: moduleType === 'bifacial' ? '#E8F5E9' : '#fff' }}>
+              <input type="radio" name="moduleType" value="bifacial" checked={moduleType === 'bifacial'} onChange={(e) => setModuleType(e.target.value)} />
+              <span style={{ fontWeight: '600' }}>🔄 Bifacial</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Download Format Selection */}
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '600', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>Download Format:</label>
+          <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 15px', border: downloadFormat === 'pdf' ? '2px solid #E91E63' : '2px solid #ddd', borderRadius: '8px', backgroundColor: downloadFormat === 'pdf' ? '#FCE4EC' : '#fff' }}>
+              <input type="radio" name="downloadFormat" value="pdf" checked={downloadFormat === 'pdf'} onChange={(e) => setDownloadFormat(e.target.value)} />
+              <span style={{ fontWeight: '600' }}>📄 PDF</span>
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 15px', border: downloadFormat === 'word' ? '2px solid #E91E63' : '2px solid #ddd', borderRadius: '8px', backgroundColor: downloadFormat === 'word' ? '#FCE4EC' : '#fff' }}>
+              <input type="radio" name="downloadFormat" value="word" checked={downloadFormat === 'word'} onChange={(e) => setDownloadFormat(e.target.value)} />
+              <span style={{ fontWeight: '600' }}>📝 Word</span>
+            </label>
+          </div>
+        </div>
+        
+        {/* Download Type Selection */}
+        <div style={{ marginBottom: '15px', display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 15px', border: downloadType === 'merged' ? '2px solid #1565C0' : '2px solid #ddd', borderRadius: '8px', backgroundColor: downloadType === 'merged' ? '#E3F2FD' : '#fff' }}>
+            <input 
+              type="radio" 
+              name="downloadType" 
+              value="merged" 
+              checked={downloadType === 'merged'}
+              onChange={(e) => setDownloadType(e.target.value)}
+            />
+            <span style={{ fontWeight: '600' }}>📄 Merged {downloadFormat === 'pdf' ? 'PDF' : 'Word'}</span>
+            <small style={{ color: '#666' }}>(Single file)</small>
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 15px', border: downloadType === 'split' ? '2px solid #1565C0' : '2px solid #ddd', borderRadius: '8px', backgroundColor: downloadType === 'split' ? '#E3F2FD' : '#fff' }}>
+            <input 
+              type="radio" 
+              name="downloadType" 
+              value="split" 
+              checked={downloadType === 'split'}
+              onChange={(e) => setDownloadType(e.target.value)}
+            />
+            <span style={{ fontWeight: '600' }}>📑 Split Files</span>
+            <small style={{ color: '#666' }}>(Individual files)</small>
+          </label>
+        </div>
+        
         <button 
-          onClick={generateAllReports}
+          onClick={() => generateAllReports(downloadType, downloadFormat, moduleType)}
           disabled={isGenerating || excelData.length === 0}
           className="generate-btn"
         >
-          {isGenerating ? `Generating... ${Math.round(progress)}%` : 'Generate All Reports'}
+          {isGenerating ? `Generating... ${Math.round(progress)}%` : `Generate ${downloadType === 'merged' ? 'Merged' : 'Split'} ${downloadFormat.toUpperCase()}`}
         </button>
       </div>
 
