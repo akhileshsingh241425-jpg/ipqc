@@ -357,6 +357,7 @@ const BulkFTRGenerator = () => {
     }
 
     // Merge all PDFs into single file for user download (client-side)
+    let mergeSuccess = false;
     if (pdfDataArray.length > 0) {
       try {
         setProgress(90);
@@ -381,13 +382,35 @@ const BulkFTRGenerator = () => {
         const a = document.createElement('a');
         a.href = url;
         a.download = `FTR_Reports_${new Date().toISOString().split('T')[0]}_${pdfDataArray.length}files.pdf`;
+        a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+        
+        // Delay removal to ensure download starts
+        setTimeout(() => {
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(url);
+        }, 1000);
+        
         setProgress(95);
+        mergeSuccess = true;
       } catch (mergeError) {
         console.error('Error merging PDFs:', mergeError);
+        alert('⚠️ PDF merge failed: ' + mergeError.message + '\nDownloading individual PDFs instead...');
+        
+        // Fallback: download each PDF individually
+        for (const item of pdfDataArray) {
+          const url = window.URL.createObjectURL(item.blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `FTR_${item.serialNumber.replace(/\//g, '_')}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          await new Promise(r => setTimeout(r, 300));
+        }
+        mergeSuccess = true; // Individual downloads done
       }
     }
 
@@ -395,7 +418,11 @@ const BulkFTRGenerator = () => {
     try {
       const uploadResult = await uploadPDFsToBackend(pdfDataArray);
       setIsGenerating(false);
-      alert(`✅ ${uploadResult.files.length} FTR reports generated and downloaded successfully!`);
+      if (mergeSuccess) {
+        alert(`✅ ${uploadResult.files.length} FTR reports generated and merged PDF downloaded!`);
+      } else {
+        alert(`✅ ${uploadResult.files.length} FTR reports generated! Check downloads.`);
+      }
     } catch (error) {
       setIsGenerating(false);
       alert(`✅ ${pdfDataArray.length} FTR reports generated and downloaded!\n\n⚠️ Upload to server failed: ${error.message}`);
