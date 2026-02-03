@@ -627,7 +627,7 @@ const AIAssistant = () => {
   // PDI Dispatch Status Check
   const handlePdiDispatchStatus = async () => {
     if (!pdiNumber.trim()) {
-      alert('Please enter a PDI number');
+      alert('Please select a PDI');
       return;
     }
 
@@ -635,7 +635,7 @@ const AIAssistant = () => {
 
     setMessages(prev => [...prev, {
       role: 'user',
-      content: `📋 Checking dispatch status for PDI: ${pdiNumber}...`
+      content: `📋 Checking dispatch status for ${selectedCompany} - ${pdiNumber}...`
     }]);
 
     try {
@@ -646,9 +646,69 @@ const AIAssistant = () => {
       });
 
       if (response.data.success) {
+        const { total, dispatched, packed, pending } = response.data;
+        const dispatchPercent = total > 0 ? Math.round((dispatched / total) * 100) : 0;
+        const packedPercent = total > 0 ? Math.round((packed / total) * 100) : 0;
+        
+        // Create dashboard-style HTML response
+        const dashboardHtml = `
+<div class="pdi-dashboard">
+  <div class="pdi-dash-header">
+    <h3>📊 ${selectedCompany}</h3>
+    <span class="pdi-badge">${pdiNumber}</span>
+  </div>
+  
+  <div class="pdi-dash-cards">
+    <div class="pdi-card total">
+      <div class="pdi-card-icon">📦</div>
+      <div class="pdi-card-value">${total.toLocaleString()}</div>
+      <div class="pdi-card-label">Total Assigned</div>
+    </div>
+    
+    <div class="pdi-card dispatched">
+      <div class="pdi-card-icon">🚚</div>
+      <div class="pdi-card-value">${dispatched.toLocaleString()}</div>
+      <div class="pdi-card-label">Dispatched</div>
+      <div class="pdi-card-percent">${dispatchPercent}%</div>
+    </div>
+    
+    <div class="pdi-card packed">
+      <div class="pdi-card-icon">📤</div>
+      <div class="pdi-card-value">${packed.toLocaleString()}</div>
+      <div class="pdi-card-label">Packed</div>
+      <div class="pdi-card-percent">${packedPercent}%</div>
+    </div>
+    
+    <div class="pdi-card pending">
+      <div class="pdi-card-icon">⏳</div>
+      <div class="pdi-card-value">${pending.toLocaleString()}</div>
+      <div class="pdi-card-label">Pending</div>
+    </div>
+  </div>
+  
+  <div class="pdi-progress-section">
+    <div class="pdi-progress-label">
+      <span>Dispatch Progress</span>
+      <span>${dispatchPercent}%</span>
+    </div>
+    <div class="pdi-progress-bar">
+      <div class="pdi-progress-fill dispatch" style="width: ${dispatchPercent}%"></div>
+    </div>
+    
+    <div class="pdi-progress-label">
+      <span>Packing Progress</span>
+      <span>${packedPercent}%</span>
+    </div>
+    <div class="pdi-progress-bar">
+      <div class="pdi-progress-fill pack" style="width: ${packedPercent}%"></div>
+    </div>
+  </div>
+</div>`;
+
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: response.data.answer
+          content: dashboardHtml,
+          isDashboard: true
         }]);
       } else {
         setMessages(prev => [...prev, {
@@ -1099,7 +1159,11 @@ const AIAssistant = () => {
                   {msg.role === 'user' ? '👤' : '🤖'}
                 </div>
                 <div className="message-content">
-                  <pre>{msg.content}</pre>
+                  {msg.isDashboard ? (
+                    <div dangerouslySetInnerHTML={{ __html: msg.content }} />
+                  ) : (
+                    <pre>{msg.content}</pre>
+                  )}
                   {msg.hasExcel && msg.excelData && (
                     <button
                       className="btn-download-excel"

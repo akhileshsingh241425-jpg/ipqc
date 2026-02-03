@@ -903,3 +903,267 @@
     font-size: 13px;
   }
 }
+
+/* ===== PDI Dashboard Cards ===== */
+.pdi-dashboard {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  padding: 20px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.pdi-dash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pdi-dash-header h3 {
+  margin: 0;
+  color: #00d4ff;
+  font-size: 18px;
+}
+
+.pdi-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: bold;
+  color: white;
+}
+
+.pdi-dash-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.pdi-card {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 15px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.pdi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pdi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+}
+
+.pdi-card.total::before { background: linear-gradient(90deg, #667eea, #764ba2); }
+.pdi-card.dispatched::before { background: linear-gradient(90deg, #11998e, #38ef7d); }
+.pdi-card.packed::before { background: linear-gradient(90deg, #00d4ff, #0099ff); }
+.pdi-card.pending::before { background: linear-gradient(90deg, #f093fb, #f5576c); }
+
+.pdi-card-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.pdi-card-value {
+  font-size: 28px;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 4px;
+}
+
+.pdi-card-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pdi-card-percent {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 255, 136, 0.2);
+  color: #00ff88;
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: bold;
+}
+
+.pdi-card.pending .pdi-card-value {
+  color: #f5576c;
+}
+
+/* Progress Section */
+.pdi-progress-section {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 15px;
+}
+
+.pdi-progress-label {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.pdi-progress-bar {
+  height: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 15px;
+}
+
+.pdi-progress-bar:last-child {
+  margin-bottom: 0;
+}
+
+.pdi-progress-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.5s ease-out;
+}
+
+.pdi-progress-fill.dispatch {
+  background: linear-gradient(90deg, #11998e, #38ef7d);
+}
+
+.pdi-progress-fill.pack {
+  background: linear-gradient(90deg, #00d4ff, #0099ff);
+}
+
+/* Mobile Responsive - Dashboard */
+@media (max-width: 768px) {
+  .pdi-dash-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .pdi-card {
+    padding: 12px;
+  }
+  
+  .pdi-card-icon {
+    font-size: 24px;
+  }
+  
+  .pdi-card-value {
+    font-size: 22px;
+  }
+  
+  .pdi-card-label {
+    font-size: 10px;
+  }
+  
+  .pdi-dash-header h3 {
+    font-size: 16px;
+  }
+  
+  .pdi-badge {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pdi-dashboard {
+    padding: 15px;
+    border-radius: 12px;
+  }
+  
+  .pdi-dash-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  
+  .pdi-card {
+    padding: 10px 8px;
+  }
+  
+  .pdi-card-icon {
+    font-size: 20px;
+    margin-bottom: 5px;
+  }
+  
+  .pdi-card-value {
+    font-size: 18px;
+  }
+  
+  .pdi-card-label {
+    font-size: 9px;
+  }
+  
+  .pdi-card-percent {
+    font-size: 9px;
+    padding: 2px 5px;
+    top: 5px;
+    right: 5px;
+  }
+  
+  .pdi-progress-bar {
+    height: 8px;
+  }
+}
+
+/* ===== Mobile Full Width Improvements ===== */
+@media (max-width: 768px) {
+  .ai-main-content {
+    flex-direction: column;
+  }
+  
+  .ai-sidebar {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    max-height: 40vh;
+    overflow-y: auto;
+  }
+  
+  .ai-chat-area {
+    flex: 1;
+    min-height: 60vh;
+  }
+  
+  .message-content {
+    max-width: 95% !important;
+  }
+  
+  .message-content pre {
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+}
+
+@media (max-width: 480px) {
+  .ai-sidebar {
+    max-height: 35vh;
+    padding: 15px;
+  }
+  
+  .message-content {
+    max-width: 100% !important;
+    padding: 10px !important;
+  }
+  
+  .validation-section select,
+  .validation-section input {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+  }
+}
