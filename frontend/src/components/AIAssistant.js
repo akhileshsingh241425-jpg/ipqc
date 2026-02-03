@@ -23,6 +23,7 @@ const AIAssistant = () => {
   const [vehicleToDate, setVehicleToDate] = useState('');
   const [pdiNumber, setPdiNumber] = useState('');
   const [pdiStatusLoading, setPdiStatusLoading] = useState(false);
+  const [pdiList, setPdiList] = useState([]); // PDI dropdown list
   const fileInputRef = useRef(null);
   const binningFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -605,6 +606,24 @@ const AIAssistant = () => {
     }
   };
 
+  // Get PDI list when company changes
+  const handleCompanyChange = (companyName) => {
+    setSelectedCompany(companyName);
+    setPdiNumber(''); // Reset PDI selection
+    
+    // Find company data and get PDI list
+    if (ftrData?.companies && companyName) {
+      const company = ftrData.companies.find(c => c.name === companyName);
+      if (company?.pdi_breakdown) {
+        setPdiList(company.pdi_breakdown);
+      } else {
+        setPdiList([]);
+      }
+    } else {
+      setPdiList([]);
+    }
+  };
+
   // PDI Dispatch Status Check
   const handlePdiDispatchStatus = async () => {
     if (!pdiNumber.trim()) {
@@ -976,7 +995,7 @@ const AIAssistant = () => {
             {/* Company Selector */}
             <select
               value={selectedCompany}
-              onChange={(e) => setSelectedCompany(e.target.value)}
+              onChange={(e) => handleCompanyChange(e.target.value)}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -993,11 +1012,11 @@ const AIAssistant = () => {
               ))}
             </select>
 
-            <input
-              type="text"
+            {/* PDI Dropdown */}
+            <select
               value={pdiNumber}
               onChange={(e) => setPdiNumber(e.target.value)}
-              placeholder="Enter PDI Number (e.g. PDI-001)"
+              disabled={!selectedCompany}
               style={{
                 width: '100%',
                 padding: '10px',
@@ -1005,9 +1024,18 @@ const AIAssistant = () => {
                 border: '1px solid #ddd',
                 fontSize: '13px',
                 marginBottom: '8px',
-                boxSizing: 'border-box'
+                backgroundColor: !selectedCompany ? '#f5f5f5' : '#fff',
+                cursor: !selectedCompany ? 'not-allowed' : 'pointer'
               }}
-            />
+            >
+              <option value="">-- Select PDI --</option>
+              {pdiList.map((pdi, idx) => (
+                <option key={idx} value={pdi.pdi}>
+                  {pdi.pdi} ({pdi.count.toLocaleString()} serials)
+                </option>
+              ))}
+            </select>
+
             <button
               onClick={handlePdiDispatchStatus}
               disabled={pdiStatusLoading || !pdiNumber.trim()}
