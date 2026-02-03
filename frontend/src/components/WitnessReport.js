@@ -134,11 +134,13 @@ function WitnessReport() {
   
   // RFID Data
   const [rfidSerials, setRfidSerials] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [rfidFile, setRfidFile] = useState(null);
   
   // FTR Deviation Data
   const [hasDeviationData, setHasDeviationData] = useState(false);
   const [deviationSerials, setDeviationSerials] = useState({}); // {serial: {pmax, isc, voc, ...}}
+  // eslint-disable-next-line no-unused-vars
   const [deviationFile, setDeviationFile] = useState(null);
   
   // Generated FTR data

@@ -5,6 +5,7 @@ import PDIFTRGenerator from './PDIFTRGenerator';
 
 function PDIBatchManager() {
   const [batches, setBatches] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [companies, setCompanies] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [loading, setLoading] = useState(false);

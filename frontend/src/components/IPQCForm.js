@@ -23,6 +23,7 @@ const IPQCForm = () => {
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
+  // eslint-disable-next-line no-unused-vars
   const [templateInfo, setTemplateInfo] = useState(null);
 
   useEffect(() => {

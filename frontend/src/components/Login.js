@@ -22,6 +22,7 @@ const Login = ({ onLogin }) => {
     if (!storedUsers) {
       localStorage.setItem('system_users', JSON.stringify(DEFAULT_USERS));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleChange = (e) => {

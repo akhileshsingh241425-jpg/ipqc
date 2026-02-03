@@ -5,6 +5,7 @@ import '../styles/FTRReportManager.css';
 const API_BASE_URL = process.env.REACT_APP_API_URL || '/api';
 
 function FTRReportManager() {
+  // eslint-disable-next-line no-unused-vars
   const [excelFile, setExcelFile] = useState(null);
   const [flashData, setFlashData] = useState([]);
   const [pdiNumber, setPdiNumber] = useState('');

@@ -16,6 +16,7 @@ const PDIDashboard = ({ companyId, companyName }) => {
     if (companyId) {
       loadQuickData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
   const loadQuickData = async () => {

@@ -109,6 +109,7 @@ const TestReport = ({ moduleDatabase }) => {
   };
 
   // Image-based Chart Component - displays pre-generated graph based on power rating
+  // eslint-disable-next-line no-unused-vars
   const IVCurveChart = ({ power }) => {
     if (!power) {
       return (

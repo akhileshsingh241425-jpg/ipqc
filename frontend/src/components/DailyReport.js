@@ -4181,7 +4181,7 @@ function DailyReport() {
                             }
                           });
 
-                          const avgRejPct = recsWithRej > 0 ? (totalRejPct / recsWithRej).toFixed(2) : 0;
+                          // avgRejPct calculation removed (unused)
 
                           // ======== STYLES ========
                           const titleStyle = {
@@ -4202,6 +4202,7 @@ function DailyReport() {
                             alignment: { horizontal: 'center', vertical: 'center' },
                             border: { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } }
                           };
+                          // eslint-disable-next-line no-unused-vars
                           const dataStyle = {
                             font: { sz: 11 },
                             alignment: { horizontal: 'center', vertical: 'center' },
@@ -4401,7 +4402,6 @@ function DailyReport() {
                           supplierData.push([]);
                           supplierData.push(['EFFICIENCY', 'SUPPLIER', 'QTY RECEIVED', 'EST. MODULES', '% OF TOTAL']);
 
-                          let supplierRow = 5;
                           effGrades.forEach(eff => {
                             const effData = cellEffReceived[eff] || {};
                             if (typeof effData === 'object' && Object.keys(effData).length > 0) {
@@ -4409,11 +4409,9 @@ function DailyReport() {
                               Object.entries(effData).forEach(([company, qty]) => {
                                 const percent = totalForEff > 0 ? ((qty / totalForEff) * 100).toFixed(1) + '%' : '0%';
                                 supplierData.push([`${eff}%`, company, qty || 0, Math.floor((qty || 0) / 66), percent]);
-                                supplierRow++;
                               });
                             } else {
                               supplierData.push([`${eff}%`, 'No Data', 0, 0, '0%']);
-                              supplierRow++;
                             }
                           });
 
@@ -4484,7 +4482,7 @@ function DailyReport() {
                               totalUsedFromRecords += totalCellsUsed;
                             }
                           });
-                          const unassignedCellsExcel = grandTotalUsed - totalUsedFromRecords;
+                          // unassignedCellsExcel calculation removed (unused)
                           
                           Object.keys(brandTotalsExcel).forEach(brand => {
                             const matchedSupplier = Object.keys(supplierWiseUsageExcel).find(
@@ -5751,7 +5749,6 @@ function DailyReport() {
                         />
                         <button
                           onClick={() => {
-                            const current = bomMaterials[material.name] || {};
                             handleBomMaterialChange(material.name, 'showCustomCompany', false);
                           }}
                           style={{ padding: '5px 10px', backgroundColor: '#f44336', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}
@@ -6356,7 +6353,7 @@ function DailyReport() {
           if (name.includes('rays')) return 'rays power';
           return name;
         };
-        const currentCompanyShort = getCompanyShortName(selectedCompany?.companyName);
+        // getCompanyShortName available for future use
 
         // Helper function to find assigned COC data from MRP API
         const getAssignedCocForMaterial = (materialName, pdiNumber) => {
@@ -6450,7 +6447,7 @@ function DailyReport() {
           const assignedCocs = materialCocPairs.filter(bm => {
             const bmNameLower = bm.materialName.toLowerCase();
             const materialNameLower = material.name.toLowerCase();
-            const baseNameLower = baseName.toLowerCase();
+            // baseName available for extended matching if needed
 
             // For Ribbon(BUSBAR) 4mm and 6mm, match by spec
             if (materialNameLower.includes('busbar') && materialNameLower.includes('4mm')) {
@@ -6819,8 +6816,7 @@ function DailyReport() {
                             // Use spec from bm first, then lookup from COC_SPEC_MAP
                             const specification = bm.spec && bm.spec !== '' ? bm.spec : getSpecFromCOCMaterials(bm.materialName);
 
-                            // Check if COC is assigned (has lotNumber/invoiceNo)
-                            const hasCocAssigned = bm.lotNumber && bm.lotNumber !== '-';
+                            // COC assignment status available via bm.lotNumber
 
                             return (
                               <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? 'white' : '#f8f9fa' }}>
