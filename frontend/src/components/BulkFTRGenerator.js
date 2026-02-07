@@ -15,6 +15,8 @@ const BulkFTRGenerator = () => {
   const [downloadType, setDownloadType] = useState('merged'); // 'merged' or 'split'
   const [downloadFormat, setDownloadFormat] = useState('pdf'); // 'pdf' or 'word'
   const [moduleType, setModuleType] = useState('monofacial'); // 'monofacial' or 'bifacial'
+  const [defaultDate, setDefaultDate] = useState(new Date().toISOString().split('T')[0]); // Default date for Excel without date
+  const [defaultTime, setDefaultTime] = useState(new Date().toLocaleTimeString('en-GB', { hour12: false })); // Default time for Excel without time
 
   // Check if user is super admin
   const isSuperAdmin = () => {
@@ -102,9 +104,14 @@ const BulkFTRGenerator = () => {
           }
         }
         
-        // Default time if still empty
+        // Default time if still empty - use user input
         if (!timeVal) {
-          timeVal = new Date().toLocaleTimeString('en-GB', { hour12: false });
+          timeVal = defaultTime || new Date().toLocaleTimeString('en-GB', { hour12: false });
+        }
+        
+        // Default date if still empty - use user input
+        if (!dateVal) {
+          dateVal = defaultDate || new Date().toISOString().split('T')[0];
         }
         
         return {
@@ -196,12 +203,12 @@ const BulkFTRGenerator = () => {
               }
             });
             
-            // Timeout fallback after 3 seconds
-            setTimeout(resolve, 3000);
+            // Timeout fallback after 800ms (optimized from 3s)
+            setTimeout(resolve, 800);
           });
         };
         
-        // Wait for component render + images
+        // Wait for component render + images (reduced from 500ms)
         setTimeout(async () => {
           await waitForImages();
           
@@ -213,7 +220,8 @@ const BulkFTRGenerator = () => {
               useCORS: true,
               allowTaint: true,
               backgroundColor: '#ffffff',
-              logging: false
+              logging: false,
+              imageTimeout: 800
             },
             jsPDF: { 
               orientation: 'portrait', 
@@ -228,7 +236,7 @@ const BulkFTRGenerator = () => {
             document.body.removeChild(container);
             resolve(blob);
           }).catch(reject);
-        }, 500);
+        }, 100);
       }).catch(reject);
     });
   };
@@ -306,9 +314,19 @@ const BulkFTRGenerator = () => {
     setProgress(0);
 
     const pdfDataArray = [];
+    
+    // Process reports in batches of 5 for faster generation
+    const BATCH_SIZE = 5;
+    const totalBatches = Math.ceil(excelData.length / BATCH_SIZE);
 
-    for (let i = 0; i < excelData.length; i++) {
-      const row = excelData[i];
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const batchStart = batchIndex * BATCH_SIZE;
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, excelData.length);
+      const batchRows = excelData.slice(batchStart, batchEnd);
+      
+      // Process batch in parallel
+      const batchPromises = batchRows.map(async (row, indexInBatch) => {
+        const i = batchStart + indexInBatch;
       
       // Map Excel data to testData format (data is already normalized)
       const testData = {
@@ -334,35 +352,43 @@ const BulkFTRGenerator = () => {
         }
       };
 
-      // Get random graph for selected wattage and module type (already returns base64)
-      const graphImage = await getRandomGraphForPower(selectedWattage, modType);
-      
-      if (!graphImage) {
-        console.warn(`Warning: Could not load graph image for ${testData.serialNumber}`);
-      }
-
-      try {
-        // Generate PDF blob (for both PDF and Word we generate PDF first, Word will be created later)
-        const blob = await generateSinglePDFBlob(testData, graphImage);
-        pdfDataArray.push({
-          blob: blob,
-          serialNumber: testData.serialNumber,
-          moduleType: testData.moduleType,
-          pmax: testData.results.pmax,
-          testData: testData, // Keep testData for Word generation
-          graphImage: graphImage // Keep graph for Word generation
-        });
+        // Get random graph for selected wattage and module type (already returns base64)
+        const graphImage = await getRandomGraphForPower(selectedWattage, modType);
         
-        // (no per-file download here) collect blob for upload/merge
-        
-      } catch (error) {
-        console.error(`Error generating PDF for ${testData.serialNumber}:`, error);
-      }
+        if (!graphImage) {
+          console.warn(`Warning: Could not load graph image for ${testData.serialNumber}`);
+        }
 
-      setProgress(((i + 1) / excelData.length) * 85 / 100);
+        try {
+          // Generate PDF blob (for both PDF and Word we generate PDF first, Word will be created later)
+          const blob = await generateSinglePDFBlob(testData, graphImage);
+          return {
+            blob: blob,
+            serialNumber: testData.serialNumber,
+            moduleType: testData.moduleType,
+            pmax: testData.results.pmax,
+            testData: testData, // Keep testData for Word generation
+            graphImage: graphImage // Keep graph for Word generation
+          };
+        } catch (error) {
+          console.error(`Error generating PDF for ${testData.serialNumber}:`, error);
+          return null;
+        }
+      });
       
-      // Small delay to prevent browser freeze
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait for batch to complete
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Add successful results to array
+      batchResults.forEach(result => {
+        if (result) pdfDataArray.push(result);
+      });
+      
+      // Update progress
+      setProgress((batchEnd / excelData.length) * 85);
+      
+      // Small delay between batches to prevent browser freeze (reduced from 500ms)
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
 
     // Download based on selected mode and format
@@ -771,6 +797,32 @@ const BulkFTRGenerator = () => {
               <span style={{ fontWeight: '600' }}>🔄 Bifacial</span>
             </label>
           </div>
+        </div>
+
+        {/* Default Date & Time (used when Excel doesn't have date/time) */}
+        <div style={{ marginBottom: '15px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '600', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>Default Date & Time (if not in Excel):</label>
+          <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #9C27B0', borderRadius: '8px', backgroundColor: '#F3E5F5' }}>
+              <span style={{ fontWeight: '600' }}>📅 Date:</span>
+              <input 
+                type="date" 
+                value={defaultDate} 
+                onChange={(e) => setDefaultDate(e.target.value)} 
+                style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }}
+              />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #9C27B0', borderRadius: '8px', backgroundColor: '#F3E5F5' }}>
+              <span style={{ fontWeight: '600' }}>⏰ Time:</span>
+              <input 
+                type="time" 
+                value={defaultTime.substring(0, 5)} 
+                onChange={(e) => setDefaultTime(e.target.value + ':00')} 
+                style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }}
+              />
+            </label>
+          </div>
+          <p style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>These values will be used when Excel file doesn't contain Date/Time columns</p>
         </div>
 
         {/* Download Format Selection */}
