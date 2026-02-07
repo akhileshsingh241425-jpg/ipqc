@@ -915,104 +915,86 @@ const BulkFTRGenerator = () => {
         </div>
       )}
 
-      <div className="generate-section">
-        {/* Module Type Selection */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ fontSize: '14px', fontWeight: '600', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>Module Type:</label>
-          <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 15px', border: moduleType === 'monofacial' ? '2px solid #4CAF50' : '2px solid #ddd', borderRadius: '8px', backgroundColor: moduleType === 'monofacial' ? '#E8F5E9' : '#fff' }}>
-              <input type="radio" name="moduleType" value="monofacial" checked={moduleType === 'monofacial'} onChange={(e) => setModuleType(e.target.value)} />
-              <span style={{ fontWeight: '600' }}>◻️ Monofacial</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 15px', border: moduleType === 'bifacial' ? '2px solid #4CAF50' : '2px solid #ddd', borderRadius: '8px', backgroundColor: moduleType === 'bifacial' ? '#E8F5E9' : '#fff' }}>
-              <input type="radio" name="moduleType" value="bifacial" checked={moduleType === 'bifacial'} onChange={(e) => setModuleType(e.target.value)} />
-              <span style={{ fontWeight: '600' }}>🔄 Bifacial</span>
-            </label>
+      <div className="generate-section" style={{ padding: '20px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '20px' }}>
+          
+          {/* Module Type */}
+          <div style={{ background: 'white', padding: '15px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <label style={{ fontSize: '13px', fontWeight: '700', color: '#1e3a8a', display: 'block', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Module Type</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', padding: '10px', border: moduleType === 'monofacial' ? '2px solid #10b981' : '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: moduleType === 'monofacial' ? '#ecfdf5' : '#fff', transition: 'all 0.2s' }}>
+                <input type="radio" name="moduleType" value="monofacial" checked={moduleType === 'monofacial'} onChange={(e) => setModuleType(e.target.value)} style={{ display: 'none' }} />
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>◻️ Mono</span>
+              </label>
+              <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', padding: '10px', border: moduleType === 'bifacial' ? '2px solid #10b981' : '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: moduleType === 'bifacial' ? '#ecfdf5' : '#fff', transition: 'all 0.2s' }}>
+                <input type="radio" name="moduleType" value="bifacial" checked={moduleType === 'bifacial'} onChange={(e) => setModuleType(e.target.value)} style={{ display: 'none' }} />
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>🔄 Bifacial</span>
+              </label>
+            </div>
           </div>
-        </div>
 
-        {/* Default Date & Time Range (used when Excel doesn't have date/time) */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ fontSize: '14px', fontWeight: '600', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>Default Date & Time Range (if not in Excel):</label>
-          <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #9C27B0', borderRadius: '8px', backgroundColor: '#F3E5F5' }}>
-              <span style={{ fontWeight: '600' }}>📅 Date:</span>
-              <input 
-                type="date" 
-                value={defaultDate} 
-                onChange={(e) => setDefaultDate(e.target.value)} 
-                style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }}
-              />
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #FF5722', borderRadius: '8px', backgroundColor: '#FBE9E7' }}>
-              <span style={{ fontWeight: '600' }}>⏰ Start:</span>
-              <input 
-                type="time" 
-                value={startTime.substring(0, 5)} 
-                onChange={(e) => setStartTime(e.target.value + ':00')} 
-                style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }}
-              />
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #FF5722', borderRadius: '8px', backgroundColor: '#FBE9E7' }}>
-              <span style={{ fontWeight: '600' }}>⏰ End:</span>
-              <input 
-                type="time" 
-                value={endTime.substring(0, 5)} 
-                onChange={(e) => setEndTime(e.target.value + ':00')} 
-                style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }}
-              />
-            </label>
+          {/* Date & Time */}
+          <div style={{ background: 'white', padding: '15px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <label style={{ fontSize: '13px', fontWeight: '700', color: '#1e3a8a', display: 'block', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Date & Time Range</label>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '12px', width: '45px', color: '#64748b' }}>📅 Date</span>
+                <input type="date" value={defaultDate} onChange={(e) => setDefaultDate(e.target.value)} style={{ flex: 1, padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '11px', color: '#64748b' }}>⏰</span>
+                  <input type="time" value={startTime.substring(0, 5)} onChange={(e) => setStartTime(e.target.value + ':00')} style={{ flex: 1, padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px' }} />
+                </div>
+                <span style={{ color: '#94a3b8', alignSelf: 'center' }}>→</span>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <input type="time" value={endTime.substring(0, 5)} onChange={(e) => setEndTime(e.target.value + ':00')} style={{ flex: 1, padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px' }} />
+                </div>
+              </div>
+              <p style={{ fontSize: '10px', color: '#94a3b8', margin: '4px 0 0 0', textAlign: 'center' }}>Random gap: 45s - 3min</p>
+            </div>
           </div>
-          <p style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>Each report will have random time gap of 45 sec to 3 min within the time range</p>
-        </div>
 
-        {/* Download Format Selection */}
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ fontSize: '14px', fontWeight: '600', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>Download Format:</label>
-          <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 15px', border: downloadFormat === 'pdf' ? '2px solid #E91E63' : '2px solid #ddd', borderRadius: '8px', backgroundColor: downloadFormat === 'pdf' ? '#FCE4EC' : '#fff' }}>
-              <input type="radio" name="downloadFormat" value="pdf" checked={downloadFormat === 'pdf'} onChange={(e) => setDownloadFormat(e.target.value)} />
-              <span style={{ fontWeight: '600' }}>📄 PDF</span>
-            </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '8px 15px', border: downloadFormat === 'word' ? '2px solid #E91E63' : '2px solid #ddd', borderRadius: '8px', backgroundColor: downloadFormat === 'word' ? '#FCE4EC' : '#fff' }}>
-              <input type="radio" name="downloadFormat" value="word" checked={downloadFormat === 'word'} onChange={(e) => setDownloadFormat(e.target.value)} />
-              <span style={{ fontWeight: '600' }}>📝 Word</span>
-            </label>
+          {/* Download Format */}
+          <div style={{ background: 'white', padding: '15px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <label style={{ fontSize: '13px', fontWeight: '700', color: '#1e3a8a', display: 'block', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Format</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', padding: '10px', border: downloadFormat === 'pdf' ? '2px solid #ec4899' : '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: downloadFormat === 'pdf' ? '#fdf2f8' : '#fff', transition: 'all 0.2s' }}>
+                <input type="radio" name="downloadFormat" value="pdf" checked={downloadFormat === 'pdf'} onChange={(e) => setDownloadFormat(e.target.value)} style={{ display: 'none' }} />
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>📄 PDF</span>
+              </label>
+              <label style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', cursor: 'pointer', padding: '10px', border: downloadFormat === 'word' ? '2px solid #ec4899' : '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: downloadFormat === 'word' ? '#fdf2f8' : '#fff', transition: 'all 0.2s' }}>
+                <input type="radio" name="downloadFormat" value="word" checked={downloadFormat === 'word'} onChange={(e) => setDownloadFormat(e.target.value)} style={{ display: 'none' }} />
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>📝 Word</span>
+              </label>
+            </div>
           </div>
-        </div>
-        
-        {/* Download Type Selection */}
-        <div style={{ marginBottom: '15px', display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 15px', border: downloadType === 'merged' ? '2px solid #1565C0' : '2px solid #ddd', borderRadius: '8px', backgroundColor: downloadType === 'merged' ? '#E3F2FD' : '#fff' }}>
-            <input 
-              type="radio" 
-              name="downloadType" 
-              value="merged" 
-              checked={downloadType === 'merged'}
-              onChange={(e) => setDownloadType(e.target.value)}
-            />
-            <span style={{ fontWeight: '600' }}>📄 Merged {downloadFormat === 'pdf' ? 'PDF' : 'Word'}</span>
-            <small style={{ color: '#666' }}>(Single file)</small>
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '10px 15px', border: downloadType === 'split' ? '2px solid #1565C0' : '2px solid #ddd', borderRadius: '8px', backgroundColor: downloadType === 'split' ? '#E3F2FD' : '#fff' }}>
-            <input 
-              type="radio" 
-              name="downloadType" 
-              value="split" 
-              checked={downloadType === 'split'}
-              onChange={(e) => setDownloadType(e.target.value)}
-            />
-            <span style={{ fontWeight: '600' }}>📑 Split Files</span>
-            <small style={{ color: '#666' }}>(Individual files)</small>
-          </label>
+
+          {/* Download Type */}
+          <div style={{ background: 'white', padding: '15px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+            <label style={{ fontSize: '13px', fontWeight: '700', color: '#1e3a8a', display: 'block', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Output Type</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px 8px', border: downloadType === 'merged' ? '2px solid #3b82f6' : '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: downloadType === 'merged' ? '#eff6ff' : '#fff', transition: 'all 0.2s' }}>
+                <input type="radio" name="downloadType" value="merged" checked={downloadType === 'merged'} onChange={(e) => setDownloadType(e.target.value)} style={{ display: 'none' }} />
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>📄 Merged</span>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>Single file</span>
+              </label>
+              <label style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: '10px 8px', border: downloadType === 'split' ? '2px solid #3b82f6' : '2px solid #e2e8f0', borderRadius: '8px', backgroundColor: downloadType === 'split' ? '#eff6ff' : '#fff', transition: 'all 0.2s' }}>
+                <input type="radio" name="downloadType" value="split" checked={downloadType === 'split'} onChange={(e) => setDownloadType(e.target.value)} style={{ display: 'none' }} />
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>📑 Split</span>
+                <span style={{ fontSize: '10px', color: '#64748b' }}>Individual</span>
+              </label>
+            </div>
+          </div>
         </div>
         
         <button 
           onClick={() => generateAllReports(downloadType, downloadFormat, moduleType)}
           disabled={isGenerating || excelData.length === 0}
           className="generate-btn"
+          style={{ width: '100%', maxWidth: '400px', margin: '0 auto', display: 'block' }}
         >
-          {isGenerating ? `Generating... ${Math.round(progress)}%` : `Generate ${downloadType === 'merged' ? 'Merged' : 'Split'} ${downloadFormat.toUpperCase()}`}
+          {isGenerating ? `Generating... ${Math.round(progress)}%` : `🚀 Generate ${downloadType === 'merged' ? 'Merged' : 'Split'} ${downloadFormat.toUpperCase()}`}
         </button>
       </div>
 
