@@ -16,7 +16,8 @@ const BulkFTRGenerator = () => {
   const [downloadFormat, setDownloadFormat] = useState('pdf'); // 'pdf' or 'word'
   const [moduleType, setModuleType] = useState('monofacial'); // 'monofacial' or 'bifacial'
   const [defaultDate, setDefaultDate] = useState(new Date().toISOString().split('T')[0]); // Default date for Excel without date
-  const [defaultTime, setDefaultTime] = useState(new Date().toLocaleTimeString('en-GB', { hour12: false })); // Default time for Excel without time
+  const [startTime, setStartTime] = useState('09:00:00'); // Start time for time range
+  const [endTime, setEndTime] = useState('11:00:00'); // End time for time range
 
   // Check if user is super admin
   const isSuperAdmin = () => {
@@ -104,9 +105,9 @@ const BulkFTRGenerator = () => {
           }
         }
         
-        // Default time if still empty - use user input
+        // Default time if still empty - mark as empty, will be assigned during generation
         if (!timeVal) {
-          timeVal = defaultTime || new Date().toLocaleTimeString('en-GB', { hour12: false });
+          timeVal = ''; // Will be assigned during report generation with random interval
         }
         
         // Default date if still empty - use user input
@@ -313,6 +314,33 @@ const BulkFTRGenerator = () => {
     setIsGenerating(true);
     setProgress(0);
 
+    // Pre-calculate times for all reports (random interval 45s-180s between each)
+    const generatedTimes = [];
+    const parseTimeToSeconds = (timeStr) => {
+      const [h, m, s] = timeStr.split(':').map(Number);
+      return h * 3600 + m * 60 + (s || 0);
+    };
+    const secondsToTime = (totalSeconds) => {
+      const h = Math.floor(totalSeconds / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = Math.floor(totalSeconds % 60);
+      return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+    
+    let currentTimeSeconds = parseTimeToSeconds(startTime);
+    const endTimeSeconds = parseTimeToSeconds(endTime);
+    
+    for (let i = 0; i < excelData.length; i++) {
+      generatedTimes.push(secondsToTime(currentTimeSeconds));
+      // Random interval: 45 seconds to 180 seconds (3 min)
+      const randomInterval = Math.floor(Math.random() * (180 - 45 + 1)) + 45;
+      currentTimeSeconds += randomInterval;
+      // If exceeds end time, wrap around or stay within range
+      if (currentTimeSeconds > endTimeSeconds) {
+        currentTimeSeconds = parseTimeToSeconds(startTime) + Math.floor(Math.random() * 60);
+      }
+    }
+
     const pdfDataArray = [];
     
     // Process reports in batches of 5 for faster generation
@@ -329,12 +357,15 @@ const BulkFTRGenerator = () => {
         const i = batchStart + indexInBatch;
       
       // Map Excel data to testData format (data is already normalized)
+      // Use pre-generated time if Excel doesn't have time
+      const assignedTime = row.Time || generatedTimes[i] || startTime;
+      
       const testData = {
         producer: row.Producer || 'Gautam Solar',
         moduleType: `${selectedWattage}W`, // Use selected wattage
         serialNumber: row.SerialNumber || '',
-        testDate: row.Date || new Date().toLocaleDateString('en-CA'),
-        testTime: row.Time || new Date().toLocaleTimeString('en-GB', { hour12: false }),
+        testDate: row.Date || defaultDate || new Date().toLocaleDateString('en-CA'),
+        testTime: assignedTime,
         irradiance: row.Irradiance || 1000,
         moduleTemp: row.ModuleTemp || 25,
         ambientTemp: row.AmbientTemp || 23,
@@ -799,9 +830,9 @@ const BulkFTRGenerator = () => {
           </div>
         </div>
 
-        {/* Default Date & Time (used when Excel doesn't have date/time) */}
+        {/* Default Date & Time Range (used when Excel doesn't have date/time) */}
         <div style={{ marginBottom: '15px' }}>
-          <label style={{ fontSize: '14px', fontWeight: '600', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>Default Date & Time (if not in Excel):</label>
+          <label style={{ fontSize: '14px', fontWeight: '600', color: '#1e3a8a', display: 'block', marginBottom: '10px' }}>Default Date & Time Range (if not in Excel):</label>
           <div style={{ display: 'flex', gap: '15px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #9C27B0', borderRadius: '8px', backgroundColor: '#F3E5F5' }}>
               <span style={{ fontWeight: '600' }}>📅 Date:</span>
@@ -812,17 +843,26 @@ const BulkFTRGenerator = () => {
                 style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }}
               />
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #9C27B0', borderRadius: '8px', backgroundColor: '#F3E5F5' }}>
-              <span style={{ fontWeight: '600' }}>⏰ Time:</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #FF5722', borderRadius: '8px', backgroundColor: '#FBE9E7' }}>
+              <span style={{ fontWeight: '600' }}>⏰ Start:</span>
               <input 
                 type="time" 
-                value={defaultTime.substring(0, 5)} 
-                onChange={(e) => setDefaultTime(e.target.value + ':00')} 
+                value={startTime.substring(0, 5)} 
+                onChange={(e) => setStartTime(e.target.value + ':00')} 
+                style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }}
+              />
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 15px', border: '2px solid #FF5722', borderRadius: '8px', backgroundColor: '#FBE9E7' }}>
+              <span style={{ fontWeight: '600' }}>⏰ End:</span>
+              <input 
+                type="time" 
+                value={endTime.substring(0, 5)} 
+                onChange={(e) => setEndTime(e.target.value + ':00')} 
                 style={{ padding: '6px 10px', border: '1px solid #ccc', borderRadius: '4px', fontSize: '14px' }}
               />
             </label>
           </div>
-          <p style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>These values will be used when Excel file doesn't contain Date/Time columns</p>
+          <p style={{ fontSize: '12px', color: '#666', marginTop: '5px', textAlign: 'center' }}>Each report will have random time gap of 45 sec to 3 min within the time range</p>
         </div>
 
         {/* Download Format Selection */}
