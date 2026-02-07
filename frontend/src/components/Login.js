@@ -13,7 +13,10 @@ const Login = ({ onLogin }) => {
   const DEFAULT_USERS = [
     { id: 1, username: 'admin@gautam', password: 'Admin@2025', name: 'Super Admin', role: 'super_admin' },
     { id: 2, username: 'user@gautam', password: 'User@2025', name: 'Production User', role: 'user' },
-    { id: 3, username: 'Gautam@123', password: 'Gautam@321', name: 'Gautam Solar', role: 'super_admin' }
+    { id: 3, username: 'Gautam@123', password: 'Gautam@321', name: 'Gautam Solar', role: 'super_admin' },
+    { id: 4, username: 'ftr@gautam', password: 'Ftr@2025', name: 'FTR User', role: 'ftr_only' },
+    { id: 5, username: 'ipqc@gautam', password: 'Ipqc@2025', name: 'IPQC User', role: 'ipqc_only' },
+    { id: 6, username: 'coc@gautam', password: 'Coc@2025', name: 'COC User', role: 'coc_only' }
   ];
 
   // Initialize default users in localStorage on mount

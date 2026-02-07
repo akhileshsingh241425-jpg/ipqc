@@ -35,7 +35,10 @@ const UserManagement = () => {
       const defaultUsers = [
         { id: 1, username: 'admin@gautam', password: 'Admin@2025', name: 'Super Admin', role: 'super_admin' },
         { id: 2, username: 'user@gautam', password: 'User@2025', name: 'Production User', role: 'user' },
-        { id: 3, username: 'Gautam@123', password: 'Gautam@321', name: 'Gautam Solar', role: 'super_admin' }
+        { id: 3, username: 'Gautam@123', password: 'Gautam@321', name: 'Gautam Solar', role: 'super_admin' },
+        { id: 4, username: 'ftr@gautam', password: 'Ftr@2025', name: 'FTR User', role: 'ftr_only' },
+        { id: 5, username: 'ipqc@gautam', password: 'Ipqc@2025', name: 'IPQC User', role: 'ipqc_only' },
+        { id: 6, username: 'coc@gautam', password: 'Coc@2025', name: 'COC User', role: 'coc_only' }
       ];
       localStorage.setItem('system_users', JSON.stringify(defaultUsers));
       setUsers(defaultUsers);
@@ -145,6 +148,12 @@ const UserManagement = () => {
                   <td>
                     {user.role === 'super_admin' ? (
                       <span className="role-badge admin">👑 Super Admin</span>
+                    ) : user.role === 'ftr_only' ? (
+                      <span className="role-badge ftr">⚡ FTR Only</span>
+                    ) : user.role === 'ipqc_only' ? (
+                      <span className="role-badge ipqc">📝 IPQC Only</span>
+                    ) : user.role === 'coc_only' ? (
+                      <span className="role-badge coc">📦 COC Only</span>
                     ) : (
                       <span className="role-badge user">👤 User</span>
                     )}
@@ -224,6 +233,9 @@ const UserManagement = () => {
               >
                 <option value="user">👤 Normal User (View/Update Only)</option>
                 <option value="super_admin">👑 Super Admin (Full Access)</option>
+                <option value="ftr_only">⚡ FTR Only (Flash Test Reports)</option>
+                <option value="ipqc_only">📝 IPQC Only (IPQC & Daily Report)</option>
+                <option value="coc_only">📦 COC Only (COC Management)</option>
               </select>
             </div>
             <div className="modal-actions">
@@ -276,6 +288,9 @@ const UserManagement = () => {
               >
                 <option value="user">👤 Normal User (View/Update Only)</option>
                 <option value="super_admin">👑 Super Admin (Full Access)</option>
+                <option value="ftr_only">⚡ FTR Only (Flash Test Reports)</option>
+                <option value="ipqc_only">📝 IPQC Only (IPQC & Daily Report)</option>
+                <option value="coc_only">📦 COC Only (COC Management)</option>
               </select>
             </div>
             <div className="modal-actions">

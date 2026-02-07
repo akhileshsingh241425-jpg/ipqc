@@ -677,6 +677,84 @@ const BulkFTRGenerator = () => {
     }
   };
 
+  // Download sample Excel template
+  const downloadSampleTemplate = () => {
+    // Sample data with all required columns
+    const sampleData = [
+      {
+        'SerialNumber': 'GS-2026-001',
+        'ModuleType': 'Mono PERC',
+        'Producer': 'Gautam Solar',
+        'Pmax': 545.50,
+        'Vpm': 41.25,
+        'Ipm': 13.23,
+        'Voc': 49.80,
+        'Isc': 14.05,
+        'FillFactor': 78.50,
+        'Rs': 0.25,
+        'Rsh': 450.00,
+        'Efficiency': 21.15,
+        'Irradiance': 1000,
+        'ModuleTemp': 25.0,
+        'AmbientTemp': 23.0,
+        'ModuleArea': 2.7,
+        'Date': '2026-02-07',
+        'Time': '10:30:00'
+      },
+      {
+        'SerialNumber': 'GS-2026-002',
+        'ModuleType': 'Mono PERC',
+        'Producer': 'Gautam Solar',
+        'Pmax': 548.20,
+        'Vpm': 41.35,
+        'Ipm': 13.26,
+        'Voc': 49.90,
+        'Isc': 14.08,
+        'FillFactor': 78.65,
+        'Rs': 0.24,
+        'Rsh': 465.00,
+        'Efficiency': 21.25,
+        'Irradiance': 1000,
+        'ModuleTemp': 25.0,
+        'AmbientTemp': 23.0,
+        'ModuleArea': 2.7,
+        'Date': '2026-02-07',
+        'Time': '10:32:15'
+      }
+    ];
+
+    // Create workbook and worksheet
+    const ws = XLSX.utils.json_to_sheet(sampleData);
+    
+    // Set column widths for better readability
+    ws['!cols'] = [
+      { wch: 15 }, // SerialNumber
+      { wch: 12 }, // ModuleType
+      { wch: 14 }, // Producer
+      { wch: 8 },  // Pmax
+      { wch: 8 },  // Vpm
+      { wch: 8 },  // Ipm
+      { wch: 8 },  // Voc
+      { wch: 8 },  // Isc
+      { wch: 10 }, // FillFactor
+      { wch: 6 },  // Rs
+      { wch: 8 },  // Rsh
+      { wch: 10 }, // Efficiency
+      { wch: 10 }, // Irradiance
+      { wch: 12 }, // ModuleTemp
+      { wch: 12 }, // AmbientTemp
+      { wch: 11 }, // ModuleArea
+      { wch: 12 }, // Date
+      { wch: 10 }, // Time
+    ];
+    
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'FTR Data');
+    
+    // Download the file
+    XLSX.writeFile(wb, 'FTR_Sample_Template.xlsx');
+  };
+
   return (
     <div className="bulk-ftr-container">
       <h2>Bulk FTR Report Generator</h2>
@@ -684,8 +762,31 @@ const BulkFTRGenerator = () => {
       <div className="upload-section">
         <div className="upload-box" style={{gridColumn: '1 / -1'}}>
           <h3>Upload Excel Data</h3>
-          <p>Excel should have columns: Producer, ModuleType, SerialNumber, Date, Time, Irradiance, ModuleTemp, AmbientTemp, ModuleArea, Pmax, Vpm, Ipm, Voc, Isc, FillFactor, Rs, Rsh, Efficiency</p>
-          <p style={{fontSize: '13px', color: '#1e3a8a', fontWeight: '600', marginTop: '8px'}}>📊 Graphs will be automatically loaded from Graph Manager</p>
+          <p style={{fontSize: '13px', color: '#666', marginBottom: '10px'}}>Excel should have columns: SerialNumber, ModuleType, Producer, Pmax, Vpm, Ipm, Voc, Isc, FillFactor, Rs, Rsh, Efficiency, Irradiance, ModuleTemp, AmbientTemp, ModuleArea, Date, Time</p>
+          
+          {/* Download Template Button */}
+          <button 
+            onClick={downloadSampleTemplate}
+            style={{
+              backgroundColor: '#4CAF50',
+              color: 'white',
+              padding: '10px 20px',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px',
+              fontWeight: '600',
+              marginBottom: '15px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              margin: '0 auto 15px auto'
+            }}
+          >
+            📥 Download Sample Template
+          </button>
+          
+          <p style={{fontSize: '12px', color: '#1e3a8a', fontWeight: '600', marginBottom: '10px'}}>📊 Graphs will be automatically loaded from Graph Manager</p>
           <input 
             type="file" 
             accept=".xlsx,.xls" 

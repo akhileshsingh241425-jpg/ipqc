@@ -286,11 +286,39 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
 
+  // Get user role
+  const userRole = localStorage.getItem('userRole') || 'user';
+
+  // Role-based access configuration
+  const roleAccess = {
+    super_admin: ['all'], // Full access
+    user: ['all'], // Full access for normal users too
+    ftr_only: ['ftr-download', 'ftr-delivered', 'ftr-report', 'ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'witness-report'],
+    ipqc_only: ['ipqc', 'daily-report', 'pdi-batches', 'peel-test'],
+    coc_only: ['coc-dashboard', 'coc-management']
+  };
+
+  // Check if user has access to a section
+  const hasAccess = (section) => {
+    const access = roleAccess[userRole] || ['all'];
+    return access.includes('all') || access.includes(section);
+  };
+
+  // Get default section based on role
+  const getDefaultSection = () => {
+    if (userRole === 'ftr_only') return 'ftr-report';
+    if (userRole === 'ipqc_only') return 'ipqc';
+    if (userRole === 'coc_only') return 'coc-dashboard';
+    return 'ipqc';
+  };
+
   useEffect(() => {
     // Check if user is already logged in
     const authStatus = localStorage.getItem('isAuthenticated');
     if (authStatus === 'true') {
       setIsAuthenticated(true);
+      // Set default section based on role
+      setActiveSection(getDefaultSection());
     }
     
     // Handle window resize for mobile detection
@@ -423,10 +451,25 @@ function App() {
 
         {/* User Role Badge */}
         <div className={`user-role-badge ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          {localStorage.getItem('userRole') === 'super_admin' ? (
+          {userRole === 'super_admin' ? (
             <>
               <span className="role-icon">👑</span>
               {!sidebarCollapsed && <span className="role-text">Super Admin</span>}
+            </>
+          ) : userRole === 'ftr_only' ? (
+            <>
+              <span className="role-icon">⚡</span>
+              {!sidebarCollapsed && <span className="role-text">FTR Access</span>}
+            </>
+          ) : userRole === 'ipqc_only' ? (
+            <>
+              <span className="role-icon">📝</span>
+              {!sidebarCollapsed && <span className="role-text">IPQC Access</span>}
+            </>
+          ) : userRole === 'coc_only' ? (
+            <>
+              <span className="role-icon">📦</span>
+              {!sidebarCollapsed && <span className="role-text">COC Access</span>}
             </>
           ) : (
             <>
@@ -438,103 +481,127 @@ function App() {
         </div>
 
         <ul className="sidebar-menu">
-          <li 
-            className={activeSection === 'daily-report' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('daily-report')}
-            title="Daily Report"
-          >
-            <span className="icon">📊</span>
-            {!sidebarCollapsed && <span className="label">Daily Report</span>}
-          </li>
-          <li 
-            className={activeSection === 'pdi-batches' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('pdi-batches')}
-            title="PDI Batch Manager"
-          >
-            <span className="icon">🔢</span>
-            {!sidebarCollapsed && <span className="label">PDI Batches</span>}
-          </li>
-          <li 
-            className={activeSection === 'ipqc' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('ipqc')}
-            title="IPQC Form"
-          >
-            <span className="icon">📝</span>
-            {!sidebarCollapsed && <span className="label">IPQC Form</span>}
-          </li>
-          <li 
-            className={activeSection === 'peel-test' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('peel-test')}
-            title="Peel Test Report"
-          >
-            <span className="icon">🧪</span>
-            {!sidebarCollapsed && <span className="label">Peel Test Report</span>}
-          </li>
-          <li 
-            className={activeSection === 'ftr-download' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('ftr-download')}
-            title="FTR Download"
-          >
-            <span className="icon">📥</span>
-            {!sidebarCollapsed && <span className="label">FTR Download</span>}
-          </li>
-          <li 
-            className={activeSection === 'ftr-delivered' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('ftr-delivered')}
-            title="FTR Delivered"
-          >
-            <span className="icon">✅</span>
-            {!sidebarCollapsed && <span className="label">FTR Delivered</span>}
-          </li>
-          <li 
-            className={activeSection === 'ftr-report' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('ftr-report')}
-            title="FTR & Flash Report"
-          >
-            <span className="icon">⚡</span>
-            {!sidebarCollapsed && <span className="label">FTR & Flash Report</span>}
-          </li>
-          <li 
-            className={activeSection === 'ftr-management' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('ftr-management')}
-            title="FTR Management"
-          >
-            <span className="icon">🏭</span>
-            {!sidebarCollapsed && <span className="label">FTR Management</span>}
-          </li>
-          <li 
-            className={activeSection === 'witness-report' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('witness-report')}
-            title="Witness Report"
-          >
-            <span className="icon">📋</span>
-            {!sidebarCollapsed && <span className="label">Witness Report</span>}
-          </li>
-          <li 
-            className={activeSection === 'ai-assistant' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('ai-assistant')}
-            title="AI FTR Assistant"
-          >
-            <span className="icon">🤖</span>
-            {!sidebarCollapsed && <span className="label">AI Assistant</span>}
-          </li>
-          <li 
-            className={activeSection === 'test-report' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('test-report')}
-            title="Production Test Report"
-          >
-            <span className="icon">🔬</span>
-            {!sidebarCollapsed && <span className="label">Production Test</span>}
-          </li>
-          <li 
-            className={activeSection === 'graph-manager' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('graph-manager')}
-            title="I-V Graph Manager"
-          >
-            <span className="icon">📊</span>
-            {!sidebarCollapsed && <span className="label">Graph Manager</span>}
-          </li>
-          {localStorage.getItem('userRole') === 'super_admin' && (
+          {hasAccess('daily-report') && (
+            <li 
+              className={activeSection === 'daily-report' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('daily-report')}
+              title="Daily Report"
+            >
+              <span className="icon">📊</span>
+              {!sidebarCollapsed && <span className="label">Daily Report</span>}
+            </li>
+          )}
+          {hasAccess('pdi-batches') && (
+            <li 
+              className={activeSection === 'pdi-batches' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('pdi-batches')}
+              title="PDI Batch Manager"
+            >
+              <span className="icon">🔢</span>
+              {!sidebarCollapsed && <span className="label">PDI Batches</span>}
+            </li>
+          )}
+          {hasAccess('ipqc') && (
+            <li 
+              className={activeSection === 'ipqc' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('ipqc')}
+              title="IPQC Form"
+            >
+              <span className="icon">📝</span>
+              {!sidebarCollapsed && <span className="label">IPQC Form</span>}
+            </li>
+          )}
+          {hasAccess('peel-test') && (
+            <li 
+              className={activeSection === 'peel-test' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('peel-test')}
+              title="Peel Test Report"
+            >
+              <span className="icon">🧪</span>
+              {!sidebarCollapsed && <span className="label">Peel Test Report</span>}
+            </li>
+          )}
+          {hasAccess('ftr-download') && (
+            <li 
+              className={activeSection === 'ftr-download' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('ftr-download')}
+              title="FTR Download"
+            >
+              <span className="icon">📥</span>
+              {!sidebarCollapsed && <span className="label">FTR Download</span>}
+            </li>
+          )}
+          {hasAccess('ftr-delivered') && (
+            <li 
+              className={activeSection === 'ftr-delivered' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('ftr-delivered')}
+              title="FTR Delivered"
+            >
+              <span className="icon">✅</span>
+              {!sidebarCollapsed && <span className="label">FTR Delivered</span>}
+            </li>
+          )}
+          {hasAccess('ftr-report') && (
+            <li 
+              className={activeSection === 'ftr-report' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('ftr-report')}
+              title="FTR & Flash Report"
+            >
+              <span className="icon">⚡</span>
+              {!sidebarCollapsed && <span className="label">FTR & Flash Report</span>}
+            </li>
+          )}
+          {hasAccess('ftr-management') && (
+            <li 
+              className={activeSection === 'ftr-management' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('ftr-management')}
+              title="FTR Management"
+            >
+              <span className="icon">🏭</span>
+              {!sidebarCollapsed && <span className="label">FTR Management</span>}
+            </li>
+          )}
+          {hasAccess('witness-report') && (
+            <li 
+              className={activeSection === 'witness-report' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('witness-report')}
+              title="Witness Report"
+            >
+              <span className="icon">📋</span>
+              {!sidebarCollapsed && <span className="label">Witness Report</span>}
+            </li>
+          )}
+          {hasAccess('ai-assistant') && (
+            <li 
+              className={activeSection === 'ai-assistant' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('ai-assistant')}
+              title="AI FTR Assistant"
+            >
+              <span className="icon">🤖</span>
+              {!sidebarCollapsed && <span className="label">AI Assistant</span>}
+            </li>
+          )}
+          {hasAccess('test-report') && (
+            <li 
+              className={activeSection === 'test-report' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('test-report')}
+              title="Production Test Report"
+            >
+              <span className="icon">🔬</span>
+              {!sidebarCollapsed && <span className="label">Production Test</span>}
+            </li>
+          )}
+          {hasAccess('graph-manager') && (
+            <li 
+              className={activeSection === 'graph-manager' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('graph-manager')}
+              title="I-V Graph Manager"
+            >
+              <span className="icon">📊</span>
+              {!sidebarCollapsed && <span className="label">Graph Manager</span>}
+            </li>
+          )}
+          {userRole === 'super_admin' && (
             <li 
               className={activeSection === 'user-management' ? 'active' : ''}
               onClick={() => handleMenuItemClick('user-management')}
@@ -544,22 +611,26 @@ function App() {
               {!sidebarCollapsed && <span className="label">User Management</span>}
             </li>
           )}
-          <li 
-            className={activeSection === 'coc-dashboard' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('coc-dashboard')}
-            title="COC & Raw Material Dashboard"
-          >
-            <span className="icon">📋</span>
-            {!sidebarCollapsed && <span className="label">COC Dashboard</span>}
-          </li>
-          <li 
-            className={activeSection === 'coc-management' ? 'active' : ''}
-            onClick={() => handleMenuItemClick('coc-management')}
-            title="COC Usage Tracking & FIFO Management"
-          >
-            <span className="icon">📦</span>
-            {!sidebarCollapsed && <span className="label">COC Management</span>}
-          </li>
+          {hasAccess('coc-dashboard') && (
+            <li 
+              className={activeSection === 'coc-dashboard' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('coc-dashboard')}
+              title="COC & Raw Material Dashboard"
+            >
+              <span className="icon">📋</span>
+              {!sidebarCollapsed && <span className="label">COC Dashboard</span>}
+            </li>
+          )}
+          {hasAccess('coc-management') && (
+            <li 
+              className={activeSection === 'coc-management' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('coc-management')}
+              title="COC Usage Tracking & FIFO Management"
+            >
+              <span className="icon">📦</span>
+              {!sidebarCollapsed && <span className="label">COC Management</span>}
+            </li>
+          )}
           <li 
             className="logout-btn"
             onClick={handleLogout}
