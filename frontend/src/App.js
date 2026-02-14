@@ -2,14 +2,11 @@ import React, { useState, useEffect } from 'react';
 import IPQCForm from './components/IPQCForm';
 import DailyReport from './components/DailyReport';
 import FTRDownload from './components/FTRDownload';
-import FTRDeliveredUpload from './components/FTRDeliveredUpload';
 import COCDashboard from './components/COCDashboard';
 import PDIBatchManager from './components/PDIBatchManager';
-import FTRReportManager from './components/FTRReportManager';
 import TestReport from './components/TestReport';
 import GraphManager from './components/GraphManager';
 import UserManagement from './components/UserManagement';
-import FTRManagement from './components/FTRManagement';
 import AIAssistant from './components/AIAssistant';
 import FTRDashboard from './components/FTRDashboard';
 import COCManagementDashboard from './components/COCManagementDashboard';
@@ -295,7 +292,7 @@ function App() {
   const roleAccess = {
     super_admin: ['all'], // Full access
     user: ['all'], // Full access for normal users too
-    ftr_only: ['ftr-download', 'ftr-delivered', 'ftr-report', 'ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report'],
+    ftr_only: ['ftr-download', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report'],
     ipqc_only: ['ipqc', 'daily-report', 'pdi-batches'],
     coc_only: ['coc-dashboard', 'coc-management']
   };
@@ -308,7 +305,7 @@ function App() {
 
   // Get default section based on role
   const getDefaultSection = () => {
-    if (userRole === 'ftr_only') return 'ftr-report';
+    if (userRole === 'ftr_only') return 'ftr-download';
     if (userRole === 'ipqc_only') return 'ipqc';
     if (userRole === 'coc_only') return 'coc-dashboard';
     return 'ipqc';
@@ -369,12 +366,7 @@ function App() {
 
       case 'ftr-download':
         return <FTRDownload />;
-      case 'ftr-delivered':
-        return <FTRDeliveredUpload />;
-      case 'ftr-report':
-        return <FTRReportManager />;
-      case 'ftr-management':
-        return <FTRManagement />;
+
       case 'witness-report':
         return <WitnessReport />;
       case 'ai-assistant':
@@ -529,36 +521,7 @@ function App() {
               {!sidebarCollapsed && <span className="label">FTR Download</span>}
             </li>
           )}
-          {hasAccess('ftr-delivered') && (
-            <li 
-              className={activeSection === 'ftr-delivered' ? 'active' : ''}
-              onClick={() => handleMenuItemClick('ftr-delivered')}
-              title="FTR Delivered"
-            >
-              <span className="icon">✅</span>
-              {!sidebarCollapsed && <span className="label">FTR Delivered</span>}
-            </li>
-          )}
-          {hasAccess('ftr-report') && (
-            <li 
-              className={activeSection === 'ftr-report' ? 'active' : ''}
-              onClick={() => handleMenuItemClick('ftr-report')}
-              title="FTR & Flash Report"
-            >
-              <span className="icon">⚡</span>
-              {!sidebarCollapsed && <span className="label">FTR & Flash Report</span>}
-            </li>
-          )}
-          {hasAccess('ftr-management') && (
-            <li 
-              className={activeSection === 'ftr-management' ? 'active' : ''}
-              onClick={() => handleMenuItemClick('ftr-management')}
-              title="FTR Management"
-            >
-              <span className="icon">🏭</span>
-              {!sidebarCollapsed && <span className="label">FTR Management</span>}
-            </li>
-          )}
+
           {hasAccess('witness-report') && (
             <li 
               className={activeSection === 'witness-report' ? 'active' : ''}
