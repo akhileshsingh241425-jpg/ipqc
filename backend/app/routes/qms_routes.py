@@ -185,82 +185,196 @@ class QMSAuditLog(db.Model):
 QMS_CATEGORIES = {
     'Quality Manual': {
         'iso_clause': '4.2.2',
-        'sub_categories': ['Quality Policy', 'Quality Objectives', 'Organization Chart', 'Process Interaction']
+        'sub_categories': ['Quality Policy', 'Quality Objectives', 'Organization Chart', 'Process Interaction', 'Scope of QMS', 'Exclusions', 'Management Commitment', 'Customer Focus Policy']
     },
     'Procedures (SOP)': {
         'iso_clause': '4.2.1',
-        'sub_categories': ['Document Control', 'Record Control', 'Internal Audit', 'Corrective Action', 
+        'departments': {
+            'Quality': ['Document Control SOP', 'Record Control SOP', 'Internal Audit SOP', 'Corrective Action SOP', 'Preventive Action SOP', 'Nonconformance SOP', 'CAPA SOP', 'Inspection & Testing SOP', 'Calibration SOP', 'Customer Complaint SOP', 'Sampling Plan SOP'],
+            'Production': ['Production Control SOP', 'Process Change SOP', 'Rework & Repair SOP', 'Line Clearance SOP', 'Shift Handover SOP', 'Machine Startup SOP', 'Machine Shutdown SOP', 'Production Planning SOP', 'Output Recording SOP'],
+            'Engineering': ['Design Control SOP', 'New Product Development SOP', 'Engineering Change SOP', 'BOM Management SOP', 'Drawing Control SOP', 'R&D Testing SOP'],
+            'Procurement': ['Purchasing SOP', 'Supplier Evaluation SOP', 'Incoming Inspection SOP', 'Vendor Development SOP', 'PO Management SOP', 'Material Approval SOP'],
+            'HR': ['Training SOP', 'Competency Assessment SOP', 'Induction SOP', 'Performance Review SOP'],
+            'Warehouse': ['Material Storage SOP', 'FIFO/FEFO SOP', 'Inventory Control SOP', 'Dispatch SOP', 'Packaging SOP', 'Material Handling SOP'],
+            'Maintenance': ['Preventive Maintenance SOP', 'Breakdown Maintenance SOP', 'Spare Parts SOP', 'TPM SOP', 'Equipment Validation SOP'],
+            'Management': ['Management Review SOP', 'Risk Assessment SOP', 'Customer Communication SOP', 'Continual Improvement SOP'],
+            'EHS': ['Safety SOP', 'Emergency Response SOP', 'Waste Disposal SOP', 'PPE Usage SOP', 'Fire Safety SOP', 'First Aid SOP']
+        },
+        'sub_categories': ['Document Control', 'Record Control', 'Internal Audit', 'Corrective Action',
                           'Preventive Action', 'Management Review', 'Training', 'Purchasing',
                           'Customer Communication', 'Design Control', 'Production Control',
                           'Inspection & Testing', 'Calibration', 'Nonconformance', 'CAPA']
     },
     'Work Instructions': {
         'iso_clause': '7.5.1',
+        'departments': {
+            'Cell Preparation': ['Cell Sorting WI', 'Cell Grading WI', 'Cell Visual Inspection WI', 'Cell Handling WI', 'Cell Storage WI', 'Cell Inventory WI'],
+            'Stringing / Soldering': ['Cell Soldering WI', 'Stringer Machine Setup WI', 'Ribbon Cutting WI', 'Flux Application WI', 'Soldering Temperature Profile WI', 'String Inspection WI', 'Busbar Soldering WI', 'Lead Wire Soldering WI'],
+            'Layup': ['Layup WI', 'Glass Cleaning WI', 'EVA/EPE Cutting WI', 'String Arrangement WI', 'Backsheet Cutting WI', 'Layup Inspection WI', 'Interconnection WI'],
+            'Lamination': ['Lamination WI', 'Laminator Setup WI', 'Temperature & Pressure Profile WI', 'Lamination Inspection WI', 'Crosslink Test WI', 'Peel Test WI'],
+            'Trimming & Finishing': ['Trimming WI', 'Edge Cleaning WI', 'Module Cleaning WI', 'Visual Check Post-Lamination WI'],
+            'Framing': ['Framing WI', 'Frame Cutting WI', 'Sealant Application WI', 'Corner Key Assembly WI', 'Frame Alignment WI', 'Frame Torque WI'],
+            'Junction Box': ['Junction Box Attach WI', 'J-Box Wiring WI', 'Diode Testing WI', 'Potting WI', 'J-Box Adhesive Application WI', 'Cable & Connector Attach WI'],
+            'Testing & QC': ['Flash Testing WI', 'EL Testing WI', 'Hi-Pot Testing WI', 'Insulation Resistance WI', 'Visual Inspection WI', 'IV Curve Analysis WI', 'Leakage Current Test WI', 'Wet Leakage Test WI', 'Ground Continuity Test WI'],
+            'Packing & Dispatch': ['Packing WI', 'Label Printing WI', 'Palletizing WI', 'Strapping WI', 'Loading WI', 'PDI Inspection WI', 'Dispatch Documentation WI'],
+            'Maintenance Dept': ['Daily Machine Check WI', 'Laminator Maintenance WI', 'Stringer Maintenance WI', 'Framing Machine Maintenance WI', 'Simulator Maintenance WI', 'Compressor Maintenance WI']
+        },
         'sub_categories': ['Cell Sorting', 'Cell Soldering', 'Layup', 'Lamination', 'Framing',
                           'Junction Box', 'Flash Testing', 'EL Testing', 'Visual Inspection',
                           'Packing', 'Hi-Pot Testing', 'Label Printing']
     },
     'Forms & Templates': {
         'iso_clause': '4.2.4',
+        'departments': {
+            'Quality': ['IPQC Forms', 'PDI Forms', 'FTR Forms', 'Final Inspection Form', 'NCR Form', 'CAPA Form', 'Audit Checklist', 'Hold Tag', 'Rejection Tag', 'COC Template', 'Deviation Report Form', 'Sampling Inspection Form'],
+            'Production': ['Production Daily Report', 'Shift Report Form', 'Line Clearance Form', 'Rework Form', 'Downtime Log', 'Output Register', 'Process Deviation Form', 'Batch Record Form'],
+            'Incoming QC': ['Incoming Inspection Form', 'Material Receiving Form', 'GRN Format', 'Incoming Rejection Form', 'Supplier Rating Form', 'COA Verification Form'],
+            'Warehouse': ['Stock Register', 'Dispatch Challan', 'Material Issue Slip', 'GRN Format', 'Inventory Count Sheet', 'FIFO Register'],
+            'HR': ['Training Record', 'Training Need Form', 'Skill Matrix Template', 'Attendance Register', 'Induction Checklist'],
+            'Maintenance': ['PM Checklist', 'Breakdown Report', 'Spare Request Form', 'Equipment Log', 'Machine History Card'],
+            'Management': ['MRM Minutes Template', 'Action Items Tracker', 'KPI Template', 'Risk Register Template']
+        },
         'sub_categories': ['IPQC Forms', 'PDI Forms', 'FTR Forms', 'Incoming Inspection',
                           'Process Control', 'Final Inspection', 'NCR Form', 'CAPA Form',
                           'Training Record', 'Audit Checklist', 'MRM Minutes']
     },
     'Specifications': {
         'iso_clause': '7.1',
+        'departments': {
+            'Raw Materials': ['Solar Cell Spec', 'EVA/EPE Spec', 'Backsheet Spec', 'Glass Spec', 'Frame (Al Profile) Spec', 'Junction Box Spec', 'Ribbon/Busbar Spec', 'Sealant/Silicone Spec', 'Flux Spec', 'Label Spec', 'Connector Spec', 'Cable Spec', 'Corner Key Spec', 'Potting Material Spec'],
+            'In-Process': ['Soldering Spec', 'Lamination Spec', 'Framing Torque Spec', 'EL Criteria Spec', 'Flash Test Limits', 'Hi-Pot Limits', 'Visual Inspection Criteria'],
+            'Finished Goods': ['Module Datasheet (Mono/Poly)', 'Module Datasheet (Bifacial)', 'Module Datasheet (TopCon)', 'Module Datasheet (HJT)', 'Power Tolerance Spec', 'Dimension Spec'],
+            'Packaging': ['Packaging Spec', 'Pallet Spec', 'Carton Spec', 'Strapping Spec', 'Label Placement Spec', 'Corner Protector Spec']
+        },
         'sub_categories': ['Raw Material Specs', 'In-Process Specs', 'Finished Goods Specs',
                           'Packaging Specs', 'BOM Specifications', 'Module Specifications']
     },
     'Test Reports': {
         'iso_clause': '8.2.4',
+        'departments': {
+            'Type Testing': ['IEC 61215 Report', 'IEC 61730 Report', 'IEC 62804 (PID) Report', 'IEC 62716 (Ammonia) Report', 'IEC 61701 (Salt Mist) Report', 'UL 61730 Report'],
+            'Reliability Testing': ['Thermal Cycling Report', 'Humidity Freeze Report', 'Damp Heat Report', 'UV Exposure Report', 'Mechanical Load Report', 'Hail Impact Report', 'Hot Spot Report', 'Bypass Diode Report'],
+            'Performance Testing': ['Flash Test Reports', 'EL Test Reports', 'IV Curve Reports', 'Temperature Coefficient Report', 'NOCT Report', 'Module Efficiency Report'],
+            'Safety Testing': ['Hi-Pot Test Reports', 'Insulation Resistance Reports', 'Wet Leakage Reports', 'Ground Continuity Reports', 'Fire Classification Report'],
+            'Certification': ['BIS Certificate', 'ALMM Certificate', 'TUV Certificate', 'UL Certificate', 'MCS Certificate', 'CE Certificate']
+        },
         'sub_categories': ['IEC Certificates', 'BIS Certificates', 'Type Test Reports',
                           'Reliability Test', 'Salt Mist Test', 'Ammonia Test', 'PID Test',
                           'Mechanical Load Test', 'Hail Test', 'Hot Spot Test']
     },
     'Inspection Records': {
         'iso_clause': '8.2.4',
+        'departments': {
+            'Incoming QC': ['Cell Incoming Inspection', 'Glass Incoming Inspection', 'EVA/EPE Incoming Inspection', 'Backsheet Incoming Inspection', 'Frame Incoming Inspection', 'JBox Incoming Inspection', 'Ribbon Incoming Inspection', 'Chemical/Flux Incoming Inspection', 'Packaging Material Inspection'],
+            'In-Process QC (IPQC)': ['Stringer Output Check', 'Layup Check', 'Pre-Lamination Check', 'Post-Lamination Check', 'Trimming Check', 'Framing Check', 'JBox Fitment Check', 'Cleaning Check', 'EL Inspection', 'Visual Inspection'],
+            'Final QC': ['Flash Test Record', 'Hi-Pot Record', 'Final Visual Record', 'Label Verification', 'Dimension Check Record', 'Packing Inspection'],
+            'PDI': ['Pre-Dispatch Inspection', 'Customer Specific Inspection', 'Loading Inspection'],
+            'Third Party': ['Customer Inspection Record', 'Third Party Lab Report', 'Bureau Veritas Report', 'TUV Inspection Report']
+        },
         'sub_categories': ['Incoming Inspection', 'In-Process Inspection', 'Final Inspection',
                           'Customer Inspection', 'Third Party Inspection']
     },
     'Calibration Records': {
         'iso_clause': '7.6',
+        'departments': {
+            'Production Instruments': ['Flash Simulator Calibration', 'EL Camera Calibration', 'Laminator Thermocouple Calibration', 'Stringer Temperature Calibration', 'Torque Wrench Calibration', 'Weighing Scale Calibration'],
+            'QC Instruments': ['Multimeter Calibration', 'Megger Calibration', 'Hi-Pot Tester Calibration', 'IR Thermometer Calibration', 'Vernier Caliper Calibration', 'Measuring Tape Calibration', 'Peel Tester Calibration', 'Surface Roughness Tester'],
+            'Lab Instruments': ['UV-Vis Spectrophotometer', 'Cross-link Tester', 'Gel Content Tester', 'Shore Hardness Tester', 'Thickness Gauge'],
+            'Environmental': ['Temperature Logger Calibration', 'Humidity Logger Calibration', 'Lux Meter Calibration'],
+            'MSA': ['MSA Study Reports', 'GR&R Reports', 'Bias Study', 'Linearity Study', 'Stability Study']
+        },
         'sub_categories': ['Calibration Certificates', 'Calibration Schedule', 'MSA Reports']
     },
     'Audit Reports': {
         'iso_clause': '8.2.2',
+        'departments': {
+            'Internal': ['Quality System Audit', 'Process Audit', 'Product Audit', 'Layered Process Audit', '5S Audit', 'EHS Audit'],
+            'External': ['ISO 9001 Surveillance Audit', 'ISO 14001 Audit', 'ISO 45001 Audit', 'BIS Audit', 'ALMM Audit'],
+            'Customer': ['Customer Quality Audit', 'Customer Process Audit', 'Partner Assessment Audit', 'Second Party Audit'],
+            'Supplier': ['Supplier Quality Audit', 'Supplier Process Audit', 'Supplier Development Audit', 'New Supplier Audit']
+        },
         'sub_categories': ['Internal Audit', 'External Audit', 'Supplier Audit',
                           'Customer Audit', 'Surveillance Audit']
     },
     'CAPA & NCR': {
         'iso_clause': '8.5',
+        'departments': {
+            'Customer Related': ['Customer Complaints', 'Warranty Claims', 'Field Failures', 'Customer Returns', 'Customer Feedback'],
+            'Internal': ['Internal NCR', 'Process NCR', 'Product NCR', 'Rework NCR', 'Scrap NCR'],
+            'Supplier Related': ['Supplier NCR', 'Incoming Rejection', 'Supplier Corrective Action'],
+            'Analysis': ['Root Cause Analysis (8D)', 'Why-Why Analysis', 'Fishbone Analysis', 'Pareto Analysis', 'Trend Analysis'],
+            'Actions': ['Corrective Actions', 'Preventive Actions', 'Containment Actions', 'Effectiveness Verification']
+        },
         'sub_categories': ['Customer Complaints', 'Internal NCR', 'Supplier NCR',
                           'Corrective Actions', 'Preventive Actions', 'Root Cause Analysis']
     },
     'Training Records': {
         'iso_clause': '6.2',
+        'departments': {
+            'Quality': ['QMS Awareness Training', 'Internal Auditor Training', 'Statistical Techniques', 'Inspection Techniques', 'Calibration Training'],
+            'Production': ['Operator Skill Training', 'Machine Operation Training', 'Soldering Training', 'Lamination Training', 'Safety Training', 'New Joinee OJT'],
+            'Engineering': ['New Product Training', 'Design Tools Training', 'Process Engineering Training'],
+            'HR/Admin': ['Induction Training', 'Competency Matrix', 'Training Needs Identification', 'Training Effectiveness Evaluation', 'Annual Training Plan'],
+            'Maintenance': ['Equipment Handling Training', 'TPM Training', 'Electrical Safety Training'],
+            'EHS': ['Fire Safety Training', 'First Aid Training', 'Chemical Handling Training', 'Emergency Drill Record']
+        },
         'sub_categories': ['Training Matrix', 'Competency Records', 'Training Plans',
                           'Training Certificates', 'Skill Assessment']
     },
     'Supplier Documents': {
         'iso_clause': '7.4',
+        'departments': {
+            'Supplier Management': ['Approved Supplier List', 'Supplier Evaluation Report', 'Supplier Score Card', 'Supplier Audit Report', 'Supplier Development Plan'],
+            'Supplier Certificates': ['ISO Certificate (Supplier)', 'Test Reports (Supplier)', 'IEC Certificate (Supplier)', 'BIS Certificate (Supplier)', 'RoHS/REACH Certificate'],
+            'Material Documents': ['Raw Material COA', 'Material Test Certificate', 'MSDS/SDS', 'Batch Certificate', 'Material Datasheet'],
+            'Commercial': ['Purchase Orders', 'Rate Contract', 'Supplier Agreement', 'Quality Agreement', 'NDA']
+        },
         'sub_categories': ['Approved Supplier List', 'Supplier Evaluation', 'Supplier Certificates',
                           'Raw Material COA', 'MSDS/SDS']
     },
     'Management Review': {
         'iso_clause': '5.6',
+        'departments': {
+            'MRM': ['MRM Minutes', 'MRM Presentations', 'MRM Action Items', 'MRM Attendance'],
+            'KPIs': ['Quality KPI Report', 'Production KPI Report', 'Delivery KPI Report', 'Customer Satisfaction KPI', 'Supplier KPI Report', 'EHS KPI Report'],
+            'Objectives': ['Quality Objectives Review', 'Department Objectives', 'Annual Targets', 'Objective Achievement Report'],
+            'Analysis': ['Trend Analysis Report', 'Cost of Quality Report', 'Continual Improvement Report', 'Risk & Opportunity Review']
+        },
         'sub_categories': ['MRM Minutes', 'MRM Presentations', 'KPI Reports',
                           'Quality Objectives Review', 'Action Items']
     },
     'Process Documents': {
         'iso_clause': '7.5',
+        'departments': {
+            'Process Planning': ['Process Flow Chart', 'Control Plan', 'FMEA (Process)', 'FMEA (Design)', 'Process Validation Report'],
+            'Production Layout': ['Plant Layout', 'Line Layout', 'Material Flow Diagram', 'Operator Station Layout'],
+            'Process Control': ['SPC Charts', 'Process Capability Study (Cpk)', 'Run Charts', 'Control Charts', 'Process Parameter Sheet'],
+            'Improvement': ['Kaizen Reports', 'Poka-Yoke Register', 'Value Stream Map', 'OEE Reports', '5S Implementation']
+        },
         'sub_categories': ['Process Flow Chart', 'Control Plan', 'FMEA',
                           'Process Validation', 'Production Layout']
     },
     'Certificates & Licenses': {
         'iso_clause': '',
+        'departments': {
+            'Quality Certificates': ['ISO 9001:2015 Certificate', 'ISO 14001:2015 Certificate', 'ISO 45001:2018 Certificate', 'IATF 16949 Certificate'],
+            'Product Certificates': ['IEC 61215 Certificate', 'IEC 61730 Certificate', 'BIS Certificate', 'ALMM Certificate', 'TUV Certificate', 'UL Certificate', 'MCS Certificate', 'CE Marking'],
+            'Statutory Licenses': ['Factory License', 'Pollution Certificate (CTO/CTE)', 'Fire NOC', 'Electrical Inspector License', 'Boiler License', 'Trade License', 'FSSAI (Canteen)', 'Contract Labour License'],
+            'Company': ['Company Registration', 'GST Certificate', 'PAN Card', 'MSME/Udyam Certificate', 'Import-Export Code (IEC)', 'Insurance Policies']
+        },
         'sub_categories': ['ISO 9001 Certificate', 'ISO 14001 Certificate', 'ISO 45001 Certificate',
                           'IEC 61215', 'IEC 61730', 'BIS Certificate', 'ALMM Certificate',
                           'Factory License', 'Pollution Certificate', 'Fire NOC']
+    },
+    'EHS Documents': {
+        'iso_clause': '6.4',
+        'departments': {
+            'Safety': ['Safety Policy', 'Safety Manual', 'HIRA Register', 'JSA (Job Safety Analysis)', 'PPE Matrix', 'Safety Induction Record', 'Accident/Incident Report', 'Near Miss Report'],
+            'Environment': ['EMS Manual', 'Aspect-Impact Register', 'Waste Management Plan', 'Pollution Control Records', 'Environmental Monitoring Report'],
+            'Health': ['Health Checkup Records', 'First Aid Register', 'Occupational Health Report'],
+            'Emergency': ['Emergency Preparedness Plan', 'Evacuation Plan', 'Fire Drill Record', 'Mock Drill Record', 'Emergency Contact List']
+        },
+        'sub_categories': ['Safety Policy', 'HIRA Register', 'PPE Matrix', 'Accident Report', 'Waste Management', 'Emergency Plan', 'Mock Drill Record']
     }
 }
 
