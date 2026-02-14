@@ -544,7 +544,9 @@ const CalibrationDashboard = () => {
       {/* Header */}
       <div className="cal-header">
         <div className="cal-header-left">
-          <div className="cal-header-icon">⚙</div>
+          <div className="cal-header-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          </div>
           <div>
             <h1>Calibration Management</h1>
             <p>Track and manage instrument calibration records</p>
@@ -552,7 +554,7 @@ const CalibrationDashboard = () => {
         </div>
         <div className="cal-header-right">
           <label className="cal-btn cal-btn-ai">
-            <span>⚡</span> {scanning ? 'Scanning...' : 'AI Scan'}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg> {scanning ? 'Scanning...' : 'AI Scan'}
             <input 
               type="file" 
               accept="image/*,.pdf" 
@@ -589,17 +591,17 @@ const CalibrationDashboard = () => {
             />
           </label>
           <label className="cal-btn cal-btn-primary">
-            <span>↑</span> Upload Excel
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload Excel
             <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} hidden />
           </label>
           <button className="cal-btn cal-btn-secondary" onClick={handleExport}>
-            <span>↓</span> Export Excel
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export
           </button>
-          <button className="cal-btn cal-btn-secondary" onClick={handleDownloadPDF} style={{ background: '#dc2626', color: 'white', border: 'none' }}>
-            <span>↓</span> Download PDF
+          <button className="cal-btn cal-btn-danger" onClick={handleDownloadPDF}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> PDF Report
           </button>
           <button className="cal-btn cal-btn-success" onClick={handleAddNew}>
-            <span>+</span> Add New
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add New
           </button>
         </div>
       </div>
@@ -607,28 +609,28 @@ const CalibrationDashboard = () => {
       {/* Stats Cards */}
       <div className="cal-stats-grid">
         <div className="cal-stat-card total">
-          <div className="cal-stat-icon">◼</div>
+          <div className="cal-stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg></div>
           <div className="cal-stat-info">
             <span className="cal-stat-number">{stats.total}</span>
             <span className="cal-stat-label">Total Instruments</span>
           </div>
         </div>
         <div className="cal-stat-card valid">
-          <div className="cal-stat-icon">●</div>
+          <div className="cal-stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
           <div className="cal-stat-info">
             <span className="cal-stat-number">{stats.valid}</span>
             <span className="cal-stat-label">Valid</span>
           </div>
         </div>
         <div className="cal-stat-card due-soon">
-          <div className="cal-stat-icon">▲</div>
+          <div className="cal-stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
           <div className="cal-stat-info">
             <span className="cal-stat-number">{stats.due_soon}</span>
             <span className="cal-stat-label">Due Soon (30 days)</span>
           </div>
         </div>
         <div className="cal-stat-card overdue">
-          <div className="cal-stat-icon">■</div>
+          <div className="cal-stat-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
           <div className="cal-stat-info">
             <span className="cal-stat-number">{stats.overdue}</span>
             <span className="cal-stat-label">Overdue</span>
@@ -647,7 +649,7 @@ const CalibrationDashboard = () => {
       {/* Filters */}
       <div className="cal-toolbar">
         <div className="cal-search-box">
-          <span>⌕</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginRight:'10px',flexShrink:0}}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input
             type="text"
             placeholder="Search by ID, Name, Make, Certificate..."
@@ -725,7 +727,7 @@ const CalibrationDashboard = () => {
                         className="cal-cert-link"
                         title="Click to download certificate"
                       >
-                        📄 {inst.certificate_no || 'Download'}
+                        {inst.certificate_no || 'Download'}
                       </a>
                     ) : (
                       <span className="cal-cert">{inst.certificate_no || '-'}</span>
@@ -735,7 +737,7 @@ const CalibrationDashboard = () => {
                     {inst.image_path ? (
                       <div className="cal-photo-actions">
                         <button className="cal-photo-btn has-photo" onClick={() => handleViewDetails(inst)} title="View Certificate">
-                          🖼️
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         </button>
                         <a 
                           href={`${window.location.hostname === 'localhost' ? 'http://localhost:5003' : ''}/uploads/${inst.image_path}`}
@@ -743,23 +745,23 @@ const CalibrationDashboard = () => {
                           className="cal-photo-btn download-btn"
                           title="Download Certificate"
                         >
-                          ⬇️
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         </a>
                         <button className="cal-photo-btn delete-photo" onClick={() => handleDeleteImage(inst.id)} title="Delete Certificate">
-                          🗑️
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                         </button>
                       </div>
                     ) : (
                       <label className="cal-photo-btn no-photo" title="Upload Certificate">
-                        📷
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                         <input type="file" accept="image/*,.pdf" onChange={(e) => handleImageUpload(inst.id, e.target.files[0])} hidden />
                       </label>
                     )}
                   </td>
                   <td className="cal-actions">
-                    <button className="cal-action-btn view" onClick={() => handleViewDetails(inst)} title="View">👁️</button>
-                    <button className="cal-action-btn edit" onClick={() => handleEdit(inst)} title="Edit">✏️</button>
-                    <button className="cal-action-btn delete" onClick={() => handleDelete(inst.id)} title="Delete">🗑️</button>
+                    <button className="cal-action-btn view" onClick={() => handleViewDetails(inst)} title="View"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>
+                    <button className="cal-action-btn edit" onClick={() => handleEdit(inst)} title="Edit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                    <button className="cal-action-btn delete" onClick={() => handleDelete(inst.id)} title="Delete"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
                   </td>
                 </tr>
               ))}
@@ -767,7 +769,7 @@ const CalibrationDashboard = () => {
                 <tr>
                   <td colSpan="12" className="cal-empty">
                     <div className="cal-empty-state">
-                      <span>📋</span>
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{margin:'0 auto 12px',display:'block'}}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
                       <h3>No instruments found</h3>
                       <p>Upload an Excel file or add manually</p>
                     </div>
@@ -796,7 +798,7 @@ const CalibrationDashboard = () => {
               ) : (
                 <div className="cal-card-no-img">
                   <label>
-                    <span>📷</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                     <p>Add Photo</p>
                     <input type="file" accept="image/*,.pdf" onChange={(e) => handleImageUpload(inst.id, e.target.files[0])} hidden />
                   </label>
@@ -815,15 +817,15 @@ const CalibrationDashboard = () => {
               </div>
               
               <div className="cal-card-actions">
-                <button onClick={() => handleEdit(inst)}>✏️ Edit</button>
-                <button onClick={() => handleViewDetails(inst)}>👁️ View</button>
-                <button className="delete" onClick={() => handleDelete(inst.id)}>🗑️</button>
+                <button onClick={() => handleEdit(inst)}>Edit</button>
+                <button onClick={() => handleViewDetails(inst)}>View</button>
+                <button className="delete" onClick={() => handleDelete(inst.id)}>Delete</button>
               </div>
             </div>
           ))}
           {instruments.length === 0 && (
             <div className="cal-empty-cards">
-              <span>📋</span>
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.5" style={{margin:'0 auto 12px',display:'block'}}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
               <h3>No instruments found</h3>
               <p>Upload an Excel file or add manually</p>
             </div>
@@ -836,7 +838,7 @@ const CalibrationDashboard = () => {
         <div className="cal-modal-bg" onClick={() => setShowForm(false)}>
           <div className="cal-modal cal-modal-wide" onClick={e => e.stopPropagation()}>
             <div className="cal-modal-head">
-              <h2>{editingInstrument ? '✏️ Edit Instrument' : '➕ Add New Instrument'}</h2>
+              <h2>{editingInstrument ? 'Edit Instrument' : 'Add New Instrument'}</h2>
               <button onClick={() => setShowForm(false)}>×</button>
             </div>
             <div className="cal-modal-body">
@@ -844,7 +846,7 @@ const CalibrationDashboard = () => {
               {!editingInstrument && (
                 <div className="cal-scan-section">
                   <div className="cal-scan-header">
-                    <span>🤖</span>
+                    <span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
                     <div>
                       <h3>AI Certificate Scanner</h3>
                       <p>Upload certificate image to auto-fill all fields using AI</p>
@@ -876,7 +878,7 @@ const CalibrationDashboard = () => {
                   {scanResult && (
                     <div className={`cal-scan-result ${Object.keys(scanResult.data || {}).length > 0 ? 'success' : 'partial'}`}>
                       <div className="cal-scan-result-header">
-                        <span>{Object.keys(scanResult.data || {}).length > 0 ? '✅' : '⚠️'}</span>
+                        <span>{Object.keys(scanResult.data || {}).length > 0 ? '✓' : '!'}</span>
                         <span>
                           {Object.keys(scanResult.data || {}).length > 0 
                             ? `${Object.keys(scanResult.data || {}).length} fields extracted - verify & save`
