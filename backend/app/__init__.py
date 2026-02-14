@@ -39,9 +39,16 @@ def create_app():
     from app.models.database import db
     db.init_app(app)
     
+    # Import ALL models before create_all so tables get created
+    from app.models.qms_models import QMSDocument, QMSPartnerAudit, QMSActionPlan, QMSAuditLog
+    
     # Create tables
     with app.app_context():
         db.create_all()
+    
+    # Ensure QMS upload directory exists
+    qms_upload_dir = os.path.join(app.config['UPLOAD_FOLDER'], 'qms_documents')
+    os.makedirs(qms_upload_dir, exist_ok=True)
     
     # Register blueprints
     from app.routes.ipqc_routes import ipqc_bp
