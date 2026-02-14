@@ -544,7 +544,7 @@ const CalibrationDashboard = () => {
       {/* Header */}
       <div className="cal-header">
         <div className="cal-header-left">
-          <div className="cal-header-icon">🔧</div>
+          <div className="cal-header-icon">⚙</div>
           <div>
             <h1>Calibration Management</h1>
             <p>Track and manage instrument calibration records</p>
@@ -552,7 +552,7 @@ const CalibrationDashboard = () => {
         </div>
         <div className="cal-header-right">
           <label className="cal-btn cal-btn-ai">
-            <span>🤖</span> {scanning ? 'Scanning...' : 'AI Scan'}
+            <span>⚡</span> {scanning ? 'Scanning...' : 'AI Scan'}
             <input 
               type="file" 
               accept="image/*,.pdf" 
@@ -589,17 +589,17 @@ const CalibrationDashboard = () => {
             />
           </label>
           <label className="cal-btn cal-btn-primary">
-            <span>📤</span> Upload Excel
+            <span>↑</span> Upload Excel
             <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} hidden />
           </label>
           <button className="cal-btn cal-btn-secondary" onClick={handleExport}>
-            <span>📥</span> Export Excel
+            <span>↓</span> Export Excel
           </button>
-          <button className="cal-btn cal-btn-secondary" onClick={handleDownloadPDF} style={{ background: '#e53935', color: 'white', borderColor: '#e53935' }}>
-            <span>📄</span> Download PDF
+          <button className="cal-btn cal-btn-secondary" onClick={handleDownloadPDF} style={{ background: '#dc2626', color: 'white', border: 'none' }}>
+            <span>↓</span> Download PDF
           </button>
           <button className="cal-btn cal-btn-success" onClick={handleAddNew}>
-            <span>➕</span> Add New
+            <span>+</span> Add New
           </button>
         </div>
       </div>
@@ -607,28 +607,28 @@ const CalibrationDashboard = () => {
       {/* Stats Cards */}
       <div className="cal-stats-grid">
         <div className="cal-stat-card total">
-          <div className="cal-stat-icon">📊</div>
+          <div className="cal-stat-icon">◼</div>
           <div className="cal-stat-info">
             <span className="cal-stat-number">{stats.total}</span>
             <span className="cal-stat-label">Total Instruments</span>
           </div>
         </div>
         <div className="cal-stat-card valid">
-          <div className="cal-stat-icon">✅</div>
+          <div className="cal-stat-icon">●</div>
           <div className="cal-stat-info">
             <span className="cal-stat-number">{stats.valid}</span>
             <span className="cal-stat-label">Valid</span>
           </div>
         </div>
         <div className="cal-stat-card due-soon">
-          <div className="cal-stat-icon">⚠️</div>
+          <div className="cal-stat-icon">▲</div>
           <div className="cal-stat-info">
             <span className="cal-stat-number">{stats.due_soon}</span>
             <span className="cal-stat-label">Due Soon (30 days)</span>
           </div>
         </div>
         <div className="cal-stat-card overdue">
-          <div className="cal-stat-icon">❌</div>
+          <div className="cal-stat-icon">■</div>
           <div className="cal-stat-info">
             <span className="cal-stat-number">{stats.overdue}</span>
             <span className="cal-stat-label">Overdue</span>
@@ -647,7 +647,7 @@ const CalibrationDashboard = () => {
       {/* Filters */}
       <div className="cal-toolbar">
         <div className="cal-search-box">
-          <span>🔍</span>
+          <span>⌕</span>
           <input
             type="text"
             placeholder="Search by ID, Name, Make, Certificate..."
@@ -658,20 +658,20 @@ const CalibrationDashboard = () => {
         </div>
         <div className="cal-filters">
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="all">📋 All Status</option>
-            <option value="valid">✅ Valid</option>
-            <option value="due_soon">⚠️ Due Soon</option>
-            <option value="overdue">❌ Overdue</option>
+            <option value="all">All Status</option>
+            <option value="valid">Valid</option>
+            <option value="due_soon">Due Soon</option>
+            <option value="overdue">Overdue</option>
           </select>
           <select value={locationFilter} onChange={(e) => setLocationFilter(e.target.value)}>
-            <option value="all">📍 All Locations</option>
+            <option value="all">All Locations</option>
             {locations.map(loc => (
               <option key={loc} value={loc}>{loc}</option>
             ))}
           </select>
           <div className="cal-view-btns">
-            <button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')}>📋</button>
-            <button className={viewMode === 'cards' ? 'active' : ''} onClick={() => setViewMode('cards')}>🗂️</button>
+            <button className={viewMode === 'table' ? 'active' : ''} onClick={() => setViewMode('table')}>≡</button>
+            <button className={viewMode === 'cards' ? 'active' : ''} onClick={() => setViewMode('cards')}>▦</button>
           </div>
         </div>
       </div>
@@ -859,7 +859,7 @@ const CalibrationDashboard = () => {
                         </>
                       ) : (
                         <>
-                          <span>🔍</span>
+                          <span>�</span>
                           <span>Scan Certificate with AI</span>
                         </>
                       )}
