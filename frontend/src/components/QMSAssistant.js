@@ -4,20 +4,25 @@ import '../styles/QMSAssistant.css';
 const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
 
 // ═══════════════════════════════════════════════════════════════
-// QMS AI Document Assistant — Advanced Document-Aware Chatbot
-// Reads uploaded document content and answers questions from it
+// QMS AI Document Assistant — RAG-Powered ChatGPT-Style Interface
+// Groq LLM + TF-IDF Document Search = Intelligent QMS Expert
 // ═══════════════════════════════════════════════════════════════
 
 const QMSAssistant = ({ isOpen, onClose }) => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [indexStats, setIndexStats] = useState(null);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [aiStatus, setAiStatus] = useState(null);
+  const [typingText, setTypingText] = useState('');
+  const [isTypingAnim, setIsTypingAnim] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(true);
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
+  const typingRef = useRef(null);
 
-  // ── Load index stats ────────────────────────────────
+  // ── Load stats & AI status ──────────────────────
   const loadIndexStats = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/qms/assistant/index-stats`);
@@ -32,19 +37,27 @@ const QMSAssistant = ({ isOpen, onClose }) => {
     return null;
   }, []);
 
-  // ── Greeting on first open ──────────────────────────
+  const loadAiStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/qms/assistant/ai-status`);
+      if (res.ok) {
+        const data = await res.json();
+        setAiStatus(data);
+      }
+    } catch (err) {
+      console.error('AI status check failed:', err);
+    }
+  }, []);
+
+  // ── Greeting on first open ──────────────────────
   useEffect(() => {
     if (isOpen && messages.length === 0) {
       loadIndexStats();
+      loadAiStatus();
       const greeting = {
         id: Date.now(),
         type: 'bot',
-        text: '',
-        richContent: {
-          type: 'greeting',
-          title: '🤖 QMS Document AI Assistant',
-          subtitle: 'Main aapke uploaded documents ka content padh kar jawab deta hu. Koi bhi sawal poochiye — document ke andar kya likha hai, koi procedure, specification, ya data chahiye — sab bata dunga.',
-        },
+        isGreeting: true,
         time: new Date()
       };
       setMessages([greeting]);
@@ -52,27 +65,49 @@ const QMSAssistant = ({ isOpen, onClose }) => {
   // eslint-disable-next-line
   }, [isOpen]);
 
-  // ── Auto-scroll ─────────────────────────────────────
+  // ── Auto-scroll ─────────────────────────────────
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isSearching]);
+  }, [messages, isThinking, typingText]);
 
-  // ── Focus input ─────────────────────────────────────
+  // ── Focus input ─────────────────────────────────
   useEffect(() => {
     if (isOpen) setTimeout(() => inputRef.current?.focus(), 300);
   }, [isOpen]);
 
-  // ── Extract all pending documents ───────────────────
+  // ── Typing animation ───────────────────────────
+  const typeMessage = useCallback((fullText, msgId) => {
+    setIsTypingAnim(true);
+    setTypingText('');
+    let i = 0;
+    const speed = 6;
+    
+    if (typingRef.current) clearInterval(typingRef.current);
+    
+    typingRef.current = setInterval(() => {
+      if (i < fullText.length) {
+        const chunk = fullText.substring(0, i + 4);
+        setTypingText(chunk);
+        i += 4;
+      } else {
+        clearInterval(typingRef.current);
+        setTypingText('');
+        setIsTypingAnim(false);
+        setMessages(prev => prev.map(m => 
+          m.id === msgId ? { ...m, isTyping: false, text: fullText } : m
+        ));
+      }
+    }, speed);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (typingRef.current) clearInterval(typingRef.current); };
+  }, []);
+
+  // ── Extract all documents ───────────────────────
   const handleExtractAll = async () => {
     setIsExtracting(true);
-    const statusMsg = {
-      id: Date.now(),
-      type: 'bot',
-      text: '🔄 Sab documents se text extract ho raha hai... Please wait...',
-      time: new Date()
-    };
-    setMessages(prev => [...prev, statusMsg]);
-
+    addBotMessage('🔄 Extracting text from all documents... AI index updating...', 'system');
     try {
       const res = await fetch(`${API_BASE}/api/qms/assistant/extract-all`, {
         method: 'POST',
@@ -80,47 +115,32 @@ const QMSAssistant = ({ isOpen, onClose }) => {
         body: JSON.stringify({ force: false })
       });
       const data = await res.json();
-      
-      const resultMsg = {
-        id: Date.now() + 1,
-        type: 'bot',
-        text: '',
-        richContent: {
-          type: 'extraction-result',
-          data: data.results || data
-        },
-        time: new Date()
-      };
-      // Replace the loading message with result
-      setMessages(prev => {
-        const filtered = prev.filter(m => m.id !== statusMsg.id);
-        return [...filtered, resultMsg];
-      });
+      const r = data.results || data;
+      addBotMessage(`✅ **Extraction Complete!**\n\n- ✅ **${r.success || 0}** documents extracted\n- ❌ **${r.failed || 0}** failed\n- ⏭️ **${r.skipped || 0}** skipped\n\nAb aap kuch bhi pooch sakte hain! 🎉`, 'system');
       loadIndexStats();
     } catch (err) {
-      const errMsg = {
-        id: Date.now() + 1,
-        type: 'bot',
-        text: `❌ Extraction failed: ${err.message}`,
-        time: new Date()
-      };
-      setMessages(prev => {
-        const filtered = prev.filter(m => m.id !== statusMsg.id);
-        return [...filtered, errMsg];
-      });
+      addBotMessage(`❌ Extraction failed: ${err.message}`, 'error');
     }
     setIsExtracting(false);
   };
 
-  // ── Send query to AI backend ────────────────────────
-  const handleSend = async () => {
-    const text = input.trim();
-    if (!text || isSearching) return;
+  const addBotMessage = (text, subtype = 'normal') => {
+    setMessages(prev => [...prev, {
+      id: Date.now() + Math.random(),
+      type: 'bot', text, subtype,
+      time: new Date()
+    }]);
+  };
 
-    const userMsg = { id: Date.now(), type: 'user', text, time: new Date() };
-    setMessages(prev => [...prev, userMsg]);
+  // ── Send query ──────────────────────────────────
+  const handleSend = async (customQuery) => {
+    const text = (customQuery || input).trim();
+    if (!text || isThinking) return;
+
+    setMessages(prev => [...prev, { id: Date.now(), type: 'user', text, time: new Date() }]);
     setInput('');
-    setIsSearching(true);
+    setIsThinking(true);
+    setShowSuggestions(false);
 
     try {
       const res = await fetch(`${API_BASE}/api/qms/assistant/query`, {
@@ -129,37 +149,34 @@ const QMSAssistant = ({ isOpen, onClose }) => {
         body: JSON.stringify({ query: text })
       });
 
-      if (!res.ok) throw new Error('Search failed');
+      if (!res.ok) throw new Error('Query failed');
       const data = await res.json();
 
-      const botMsg = {
-        id: Date.now() + 1,
+      const botMsgId = Date.now() + 1;
+      setMessages(prev => [...prev, {
+        id: botMsgId,
         type: 'bot',
         text: '',
-        richContent: {
-          type: 'search-result',
-          query: text,
+        isTyping: true,
+        data: {
           answer: data.answer,
           sources: data.sources || [],
           confidence: data.confidence,
+          aiPowered: data.ai_powered,
           totalDocs: data.total_docs,
           indexedDocs: data.indexed_docs,
           resultsCount: data.results_count,
           suggestions: data.suggestions || []
         },
         time: new Date()
-      };
-      setMessages(prev => [...prev, botMsg]);
+      }]);
+      setIsThinking(false);
+      typeMessage(data.answer || 'No answer available', botMsgId);
+
     } catch (err) {
-      const errMsg = {
-        id: Date.now() + 1,
-        type: 'bot',
-        text: `❌ Error: ${err.message}. Backend se connection check karein.`,
-        time: new Date()
-      };
-      setMessages(prev => [...prev, errMsg]);
+      setIsThinking(false);
+      addBotMessage(`❌ Error: ${err.message}`, 'error');
     }
-    setIsSearching(false);
   };
 
   const handleKeyDown = (e) => {
@@ -169,269 +186,27 @@ const QMSAssistant = ({ isOpen, onClose }) => {
     }
   };
 
-  // ── Quick action click (query type) ─────────────────
-  const handleQuickQuery = (query) => {
-    setInput('');
-    const userMsg = { id: Date.now(), type: 'user', text: query, time: new Date() };
-    setMessages(prev => [...prev, userMsg]);
-    setIsSearching(true);
-
-    fetch(`${API_BASE}/api/qms/assistant/query`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    })
-      .then(res => res.json())
-      .then(data => {
-        const botMsg = {
-          id: Date.now() + 1,
-          type: 'bot',
-          text: '',
-          richContent: {
-            type: 'search-result',
-            query,
-            answer: data.answer,
-            sources: data.sources || [],
-            confidence: data.confidence,
-            totalDocs: data.total_docs,
-            indexedDocs: data.indexed_docs,
-            resultsCount: data.results_count,
-            suggestions: data.suggestions || []
-          },
-          time: new Date()
-        };
-        setMessages(prev => [...prev, botMsg]);
-        setIsSearching(false);
-      })
-      .catch(err => {
-        setMessages(prev => [...prev, {
-          id: Date.now() + 1, type: 'bot',
-          text: `❌ Error: ${err.message}`, time: new Date()
-        }]);
-        setIsSearching(false);
-      });
+  const handleClearChat = async () => {
+    try { await fetch(`${API_BASE}/api/qms/assistant/chat-history`, { method: 'DELETE' }); } catch (e) {}
+    if (typingRef.current) clearInterval(typingRef.current);
+    setTypingText('');
+    setIsTypingAnim(false);
+    setShowSuggestions(true);
+    setMessages([{ id: Date.now(), type: 'bot', isGreeting: true, time: new Date() }]);
   };
 
-  // ── View document content ─────────────────────────
   const handleViewContent = async (docId, title) => {
-    setIsSearching(true);
+    setIsThinking(true);
     try {
       const res = await fetch(`${API_BASE}/api/qms/assistant/document-content/${docId}`);
       const data = await res.json();
-
-      const msg = {
-        id: Date.now(),
-        type: 'bot',
-        text: '',
-        richContent: {
-          type: 'document-content',
-          title: data.title || title,
-          docNumber: data.doc_number,
-          content: data.content || 'No text extracted yet.',
-          textLength: data.text_length
-        },
-        time: new Date()
-      };
-      setMessages(prev => [...prev, msg]);
+      addBotMessage(`📄 **${data.title || title}** (${data.doc_number || ''})\n\n📏 Size: ${formatSize(data.text_length)}\n\n---\n\n${(data.content || 'No text extracted.').substring(0, 3000)}${data.content?.length > 3000 ? '\n\n... [truncated]' : ''}`);
     } catch (err) {
-      setMessages(prev => [...prev, {
-        id: Date.now(), type: 'bot',
-        text: `❌ Content load failed: ${err.message}`, time: new Date()
-      }]);
+      addBotMessage(`❌ Failed: ${err.message}`, 'error');
     }
-    setIsSearching(false);
+    setIsThinking(false);
   };
 
-  // ── Quick Actions ───────────────────────────────────
-  const quickActions = [
-    { label: '📊 Index Status', action: 'status' },
-    { label: '🔄 Extract Docs', action: 'extract' },
-    { label: '📋 Inspection', query: 'inspection criteria parameters' },
-    { label: '🌡️ Temperature', query: 'temperature profile lamination' },
-    { label: '📦 Packing', query: 'packing specification procedure' },
-    { label: '🔬 Testing', query: 'flash test EL hi-pot parameters' },
-    { label: '📏 Calibration', query: 'calibration schedule instrument' },
-    { label: '⚠️ NCR/CAPA', query: 'non-conformance rejection procedure' },
-  ];
-
-  // ═══════════════════════════════════════════════════
-  //  RICH CONTENT RENDERERS
-  // ═══════════════════════════════════════════════════
-
-  const renderRichContent = (content) => {
-    if (!content) return null;
-    switch (content.type) {
-      case 'greeting': return renderGreeting(content);
-      case 'search-result': return renderSearchResult(content);
-      case 'extraction-result': return renderExtractionResult(content);
-      case 'document-content': return renderDocumentContent(content);
-      case 'index-status': return renderIndexStatus(content);
-      default: return null;
-    }
-  };
-
-  const renderGreeting = (content) => (
-    <div className="qa-rich-greeting">
-      <div className="qa-greeting-title">{content.title}</div>
-      <div className="qa-greeting-text">{content.subtitle}</div>
-      {indexStats && (
-        <div className="qa-index-bar">
-          <div className="qa-idx-stat">
-            <span className="qa-idx-num">{indexStats.total_documents}</span>
-            <span className="qa-idx-label">Documents</span>
-          </div>
-          <div className="qa-idx-divider" />
-          <div className="qa-idx-stat">
-            <span className="qa-idx-num">{indexStats.indexed}</span>
-            <span className="qa-idx-label">Indexed</span>
-          </div>
-          <div className="qa-idx-divider" />
-          <div className="qa-idx-stat">
-            <span className="qa-idx-num">{indexStats.pending}</span>
-            <span className="qa-idx-label">Pending</span>
-          </div>
-          <div className="qa-idx-divider" />
-          <div className="qa-idx-stat">
-            <span className="qa-idx-num">{formatSize(indexStats.total_text_size)}</span>
-            <span className="qa-idx-label">Text Data</span>
-          </div>
-        </div>
-      )}
-      <div className="qa-greeting-hint">
-        💡 Documents upload karne ke baad <strong>"🔄 Extract Docs"</strong> click karein taaki AI unka text padh sake.
-      </div>
-    </div>
-  );
-
-  const renderSearchResult = (content) => (
-    <div className="qa-rich-search">
-      {/* Confidence Badge */}
-      <div className={`qa-confidence qa-conf-${content.confidence}`}>
-        <span className="qa-conf-icon">
-          {content.confidence === 'high' ? '✅' : content.confidence === 'medium' ? '🟡' : '🔴'}
-        </span>
-        <span className="qa-conf-text">
-          {content.confidence === 'high' ? 'High Confidence' : content.confidence === 'medium' ? 'Medium Match' : 'Low Match'}
-        </span>
-        <span className="qa-conf-meta">
-          {content.resultsCount} result{content.resultsCount !== 1 ? 's' : ''} • {content.indexedDocs}/{content.totalDocs} indexed
-        </span>
-      </div>
-
-      {/* Answer */}
-      <div className="qa-answer-text" dangerouslySetInnerHTML={{ __html: formatMarkdown(content.answer) }} />
-
-      {/* Source Documents */}
-      {content.sources && content.sources.length > 0 && (
-        <div className="qa-sources">
-          <div className="qa-sources-title">📚 Source Documents:</div>
-          {content.sources.map((src, i) => (
-            <div key={i} className="qa-source-card" onClick={() => handleViewContent(src.id, src.title)}>
-              <div className="qa-src-header">
-                <span className="qa-src-icon">📄</span>
-                <div className="qa-src-info">
-                  <div className="qa-src-title">{src.title}</div>
-                  <div className="qa-src-meta">
-                    {src.doc_number} • {src.category}
-                    {src.coverage > 0 && <span className="qa-src-match"> • {src.coverage}% match</span>}
-                  </div>
-                </div>
-                <div className={`qa-src-score score-${content.confidence}`}>
-                  {src.score?.toFixed(2)}
-                </div>
-              </div>
-              {src.matched_terms && src.matched_terms.length > 0 && (
-                <div className="qa-src-terms">
-                  {src.matched_terms.slice(0, 8).map((t, j) => (
-                    <span key={j} className="qa-term-tag">{t}</span>
-                  ))}
-                </div>
-              )}
-              <div className="qa-src-view">📖 Full document content dekhein →</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Follow-up Suggestions */}
-      {content.suggestions && content.suggestions.length > 0 && (
-        <div className="qa-suggestions">
-          <span className="qa-sugg-label">🔍 Related:</span>
-          <div className="qa-sugg-chips">
-            {content.suggestions.map((s, i) => (
-              <button key={i} className="qa-sugg-chip" onClick={() => handleQuickQuery(s)}>
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-
-  const renderExtractionResult = (content) => {
-    const d = content.data;
-    return (
-      <div className="qa-rich-extract">
-        <div className="qa-extract-header">📥 Text Extraction Complete</div>
-        <div className="qa-extract-stats">
-          <div className="qa-ext-stat success">✅ {d.success || 0} Extracted</div>
-          <div className="qa-ext-stat fail">❌ {d.failed || 0} Failed</div>
-          <div className="qa-ext-stat skip">⏭️ {d.skipped || 0} Skipped</div>
-        </div>
-        {d.details && d.details.length > 0 && (
-          <div className="qa-extract-details">
-            {d.details.slice(0, 10).map((item, i) => (
-              <div key={i} className={`qa-ext-item ${item.status}`}>
-                <span className="qa-ext-status">
-                  {item.status === 'success' ? '✅' : item.status === 'failed' ? '❌' : '⏭️'}
-                </span>
-                <span className="qa-ext-name">{item.title}</span>
-                {item.text_length > 0 && <span className="qa-ext-size">{formatSize(item.text_length)}</span>}
-                {item.reason && <span className="qa-ext-reason">{item.reason}</span>}
-              </div>
-            ))}
-            {d.details.length > 10 && (
-              <div className="qa-ext-more">...aur {d.details.length - 10} documents</div>
-            )}
-          </div>
-        )}
-        <div className="qa-extract-tip">Ab documents ke content ke baare mein sawal poochiye! 🎉</div>
-      </div>
-    );
-  };
-
-  const renderDocumentContent = (content) => (
-    <div className="qa-rich-doccontent">
-      <div className="qa-dc-header">
-        <span className="qa-dc-icon">📄</span>
-        <div>
-          <div className="qa-dc-title">{content.title}</div>
-          <div className="qa-dc-meta">{content.docNumber} • {formatSize(content.textLength)} extracted text</div>
-        </div>
-      </div>
-      <div className="qa-dc-body">
-        <pre className="qa-dc-text">
-          {content.content?.substring(0, 4000) || 'No content available'}
-          {content.content && content.content.length > 4000 && '\n\n... [truncated — poora document bahut bada hai]'}
-        </pre>
-      </div>
-    </div>
-  );
-
-  const renderIndexStatus = (content) => (
-    <div className="qa-rich-status">
-      <div className="qa-status-title">📊 Document Index Status</div>
-      <div className="qa-status-grid">
-        <div className="qa-st-card"><span className="qa-st-num">{content.total}</span><span className="qa-st-label">Total</span></div>
-        <div className="qa-st-card indexed"><span className="qa-st-num">{content.indexed}</span><span className="qa-st-label">Indexed</span></div>
-        <div className="qa-st-card pending"><span className="qa-st-num">{content.pending}</span><span className="qa-st-label">Pending</span></div>
-        <div className="qa-st-card"><span className="qa-st-num">{formatSize(content.textSize)}</span><span className="qa-st-label">Data</span></div>
-      </div>
-    </div>
-  );
-
-  // ── Utilities ─────────────────────────────────────
   const formatSize = (bytes) => {
     if (!bytes) return '0';
     if (bytes < 1024) return `${bytes} B`;
@@ -439,131 +214,264 @@ const QMSAssistant = ({ isOpen, onClose }) => {
     return `${(bytes / 1048576).toFixed(1)} MB`;
   };
 
-  const formatMarkdown = (text) => {
+  const renderMarkdown = (text) => {
     if (!text) return '';
     return text
+      .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre class="qa2-code"><code>$2</code></pre>')
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/_(.*?)_/g, '<em>$1</em>')
-      .replace(/\n/g, '<br/>')
-      .replace(/• /g, '<span class="qa-bullet-dot">•</span> ');
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/^### (.*$)/gm, '<h4 class="qa2-h4">$1</h4>')
+      .replace(/^## (.*$)/gm, '<h3 class="qa2-h3">$1</h3>')
+      .replace(/^[•\-] (.*$)/gm, '<div class="qa2-bullet"><span class="qa2-bdot">•</span><span>$1</span></div>')
+      .replace(/^(\d+)\. (.*$)/gm, '<div class="qa2-numlist"><span class="qa2-nnum">$1.</span><span>$2</span></div>')
+      .replace(/^---$/gm, '<hr class="qa2-hr"/>')
+      .replace(/\n/g, '<br/>');
   };
 
-  // ── Handle quick action buttons ─────────────────
-  const handleQuickClick = async (action) => {
-    if (action.action === 'status') {
-      const stats = await loadIndexStats();
-      if (stats) {
-        const msg = {
-          id: Date.now(), type: 'bot', text: '',
-          richContent: {
-            type: 'index-status',
-            total: stats.total_documents,
-            indexed: stats.indexed,
-            pending: stats.pending,
-            textSize: stats.total_text_size
-          },
-          time: new Date()
-        };
-        setMessages(prev => [...prev, msg]);
-      }
-      return;
-    }
-    if (action.action === 'extract') {
-      handleExtractAll();
-      return;
-    }
-    if (action.query) {
-      handleQuickQuery(action.query);
-    }
+  // ═══════════════════════════════════════════
+  //  SMART SUGGESTIONS
+  // ═══════════════════════════════════════════
+  const smartSuggestions = [
+    { icon: '📋', text: 'Quality Manual ka scope kya hai?', cat: 'Documents' },
+    { icon: '🔬', text: 'Flash test parameters for 540W module', cat: 'Testing' },
+    { icon: '🌡️', text: 'Lamination temperature profile', cat: 'Process' },
+    { icon: '📦', text: 'Packing SOP aur checklist', cat: 'Packing' },
+    { icon: '⚠️', text: 'NCR categorization aur CAPA process', cat: 'Quality' },
+    { icon: '📏', text: 'Calibration schedule requirements', cat: 'Calibration' },
+    { icon: '🔍', text: 'Incoming inspection criteria', cat: 'Inspection' },
+    { icon: '📊', text: 'ISO 9001 compliance status', cat: 'Compliance' },
+  ];
+
+  // ═══════════════════════════════════════════
+  //  RENDER
+  // ═══════════════════════════════════════════
+
+  const renderGreeting = () => (
+    <div className="qa2-greeting">
+      <div className="qa2-greeting-glow" />
+      <div className="qa2-greeting-icon">
+        <div className="qa2-brain-pulse">
+          <svg width="52" height="52" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="url(#qg1)" strokeWidth="1.5" fill="url(#qg1)" fillOpacity="0.08"/>
+            <path d="M9 8.5c0-1.38 1.12-2.5 2.5-2.5S14 7.12 14 8.5c0 1.38-1.12 2.5-2.5 2.5H11" stroke="url(#qg1)" strokeWidth="1.5" strokeLinecap="round"/>
+            <path d="M10.5 15.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5S14.38 13 13 13h-.5" stroke="url(#qg1)" strokeWidth="1.5" strokeLinecap="round"/>
+            <defs><linearGradient id="qg1" x1="2" y1="2" x2="22" y2="22"><stop stopColor="#667eea"/><stop offset="1" stopColor="#764ba2"/></linearGradient></defs>
+          </svg>
+        </div>
+      </div>
+      <h2 className="qa2-greeting-title">QMS AI Assistant</h2>
+      <p className="qa2-greeting-sub">
+        {aiStatus?.ai_available 
+          ? '🧠 Powered by Groq AI + Document RAG Engine — LLaMA 3.1'
+          : '🔍 Document Search Engine Active'}
+      </p>
+      
+      <div className="qa2-stats-row">
+        <div className="qa2-stat-card">
+          <span className="qa2-stat-num">{indexStats?.total_documents || 0}</span>
+          <span className="qa2-stat-lbl">Documents</span>
+        </div>
+        <div className="qa2-stat-card">
+          <span className="qa2-stat-num">{indexStats?.indexed || 0}</span>
+          <span className="qa2-stat-lbl">Indexed</span>
+        </div>
+        <div className="qa2-stat-card">
+          <span className="qa2-stat-num">{formatSize(indexStats?.total_text_size)}</span>
+          <span className="qa2-stat-lbl">Knowledge</span>
+        </div>
+        <div className="qa2-stat-card">
+          <span className="qa2-stat-num" style={{color: aiStatus?.ai_available ? '#22c55e' : '#f59e0b'}}>
+            {aiStatus?.ai_available ? '● ON' : '○ OFF'}
+          </span>
+          <span className="qa2-stat-lbl">AI Engine</span>
+        </div>
+      </div>
+
+      {indexStats?.pending > 0 && (
+        <button className="qa2-extract-cta" onClick={handleExtractAll} disabled={isExtracting}>
+          {isExtracting ? <><span className="qa2-spin" /> Extracting...</> : <>🔄 Extract {indexStats.pending} Pending Documents</>}
+        </button>
+      )}
+    </div>
+  );
+
+  const renderBotMsg = (msg) => {
+    const displayText = msg.isTyping ? typingText : msg.text;
+    const data = msg.data;
+
+    return (
+      <div className="qa2-msg qa2-msg-bot">
+        <div className="qa2-bot-ava">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2" strokeLinecap="round"/>
+            <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none"/>
+          </svg>
+        </div>
+        <div className="qa2-bot-body">
+          {data?.aiPowered && (
+            <div className="qa2-ai-tag">
+              <span className="qa2-ai-pulse" /> AI Powered
+              {data.resultsCount > 0 && <span> • {data.resultsCount} docs referenced</span>}
+            </div>
+          )}
+
+          {data?.confidence && data.confidence !== 'ai' && (
+            <div className={`qa2-conf qa2-conf-${data.confidence}`}>
+              {data.confidence === 'high' ? '✅ High Confidence' : data.confidence === 'medium' ? '🟡 Medium' : '🔴 Low Match'}
+            </div>
+          )}
+
+          {displayText && (
+            <div className="qa2-bot-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(displayText) }} />
+          )}
+          {msg.isTyping && <span className="qa2-blink-cursor">|</span>}
+
+          {!msg.isTyping && data?.sources?.length > 0 && (
+            <div className="qa2-src-section">
+              <div className="qa2-src-head">📚 Sources</div>
+              <div className="qa2-src-list">
+                {data.sources.map((src, i) => (
+                  <button key={i} className="qa2-src-chip" onClick={() => handleViewContent(src.id, src.title)}>
+                    <span className="qa2-src-idx">{i + 1}</span>
+                    <div className="qa2-src-info">
+                      <span className="qa2-src-title">{src.title}</span>
+                      <span className="qa2-src-meta">{src.doc_number} • {src.category}</span>
+                    </div>
+                    {src.coverage > 0 && <span className="qa2-src-pct">{src.coverage}%</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!msg.isTyping && data?.suggestions?.length > 0 && (
+            <div className="qa2-followups">
+              {data.suggestions.map((s, i) => (
+                <button key={i} className="qa2-follow-chip" onClick={() => handleSend(s)}>→ {s}</button>
+              ))}
+            </div>
+          )}
+
+          <span className="qa2-time">{msg.time?.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+        </div>
+      </div>
+    );
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="qms-assistant-overlay">
-      <div className="qms-assistant">
-        {/* ── Header ──────────────────────────── */}
-        <div className="qa-header">
-          <div className="qa-header-left">
-            <div className="qa-avatar">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>
+    <div className="qa2-overlay">
+      <div className="qa2-panel">
+        {/* Header */}
+        <div className="qa2-head">
+          <div className="qa2-head-left">
+            <div className="qa2-head-logo">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2" strokeLinecap="round"/>
+                <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none"/><circle cx="15" cy="9" r="1" fill="currentColor" stroke="none"/>
+              </svg>
             </div>
             <div>
-              <h3>QMS Document AI</h3>
-              <span className="qa-status">
-                <span className="qa-dot" />
-                {indexStats
-                  ? `${indexStats.indexed} docs indexed • ${formatSize(indexStats.total_text_size)} searchable`
-                  : 'Connecting...'}
+              <h3 className="qa2-head-title">QMS AI Assistant</h3>
+              <span className="qa2-head-sub">
+                {aiStatus?.ai_available 
+                  ? <><span className="qa2-dot-on" /> LLaMA 3.1 + RAG</>
+                  : <><span className="qa2-dot-off" /> Search Mode</>}
               </span>
             </div>
           </div>
-          <button className="qa-close" onClick={onClose}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-
-        {/* ── Quick Actions ───────────────────── */}
-        <div className="qa-quick-actions">
-          {quickActions.map((a, i) => (
-            <button
-              key={i}
-              className={`qa-quick-btn ${a.action === 'extract' && isExtracting ? 'extracting' : ''}`}
-              onClick={() => handleQuickClick(a)}
-              disabled={a.action === 'extract' && isExtracting}
-            >
-              {a.label}
+          <div className="qa2-head-btns">
+            <button className="qa2-hbtn" onClick={handleExtractAll} disabled={isExtracting} title="Index documents">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </button>
-          ))}
+            <button className="qa2-hbtn" onClick={handleClearChat} title="New chat">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+            <button className="qa2-hbtn qa2-hbtn-close" onClick={onClose}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
         </div>
 
-        {/* ── Chat Area ───────────────────────── */}
-        <div className="qa-chat">
+        {/* Chat */}
+        <div className="qa2-chat">
           {messages.map(msg => (
-            <div key={msg.id} className={`qa-msg ${msg.type}`}>
-              {msg.type === 'bot' && (
-                <div className="qa-msg-avatar">🤖</div>
-              )}
-              <div className="qa-msg-bubble">
-                {msg.richContent
-                  ? renderRichContent(msg.richContent)
-                  : <div className="qa-msg-text" dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.text) }} />
-                }
-                <span className="qa-msg-time">
-                  {msg.time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
+            <div key={msg.id}>
+              {msg.isGreeting ? renderGreeting() :
+               msg.type === 'user' ? (
+                <div className="qa2-msg qa2-msg-user">
+                  <div className="qa2-user-bubble">
+                    <div className="qa2-user-text">{msg.text}</div>
+                    <span className="qa2-time">{msg.time?.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+              ) : renderBotMsg(msg)}
             </div>
           ))}
-          {isSearching && (
-            <div className="qa-msg bot">
-              <div className="qa-msg-avatar">🤖</div>
-              <div className="qa-msg-bubble qa-typing">
-                <div className="qa-typing-text">Searching documents...</div>
-                <div className="qa-typing-dots">
-                  <span className="qa-typing-dot" />
-                  <span className="qa-typing-dot" />
-                  <span className="qa-typing-dot" />
+          
+          {isThinking && (
+            <div className="qa2-msg qa2-msg-bot">
+              <div className="qa2-bot-ava qa2-ava-think">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M8 14s1.5 2 4 2 4-2 4-2" strokeLinecap="round"/>
+                  <circle cx="9" cy="9" r="1" fill="currentColor" stroke="none"/>
+                  <circle cx="15" cy="9" r="1" fill="currentColor" stroke="none"/>
+                </svg>
+              </div>
+              <div className="qa2-bot-body qa2-thinking">
+                <div className="qa2-think-row">
+                  <span className="qa2-think-brain">🧠</span>
+                  <span className="qa2-think-label">Thinking<span className="qa2-dots"><span>.</span><span>.</span><span>.</span></span></span>
+                </div>
+                <div className="qa2-think-steps">
+                  <span className="qa2-step s1">🔍 Searching docs</span>
+                  <span className="qa2-step s2">🧠 AI analyzing</span>
+                  <span className="qa2-step s3">✍️ Composing</span>
                 </div>
               </div>
             </div>
           )}
+
+          {showSuggestions && messages.length <= 1 && (
+            <div className="qa2-sug-grid">
+              {smartSuggestions.map((s, i) => (
+                <button key={i} className="qa2-sug-card" onClick={() => handleSend(s.text)}>
+                  <span className="qa2-sug-icon">{s.icon}</span>
+                  <span className="qa2-sug-text">{s.text}</span>
+                  <span className="qa2-sug-cat">{s.cat}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div ref={chatEndRef} />
         </div>
 
-        {/* ── Input Area ──────────────────────── */}
-        <div className="qa-input-area">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Document ke baare mein kuch bhi poochiye..."
-            rows="1"
-          />
-          <button className="qa-send" onClick={handleSend} disabled={!input.trim() || isSearching}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          </button>
+        {/* Input */}
+        <div className="qa2-footer">
+          <div className="qa2-input-box">
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask anything about QMS documents..."
+              rows="1"
+            />
+            <button className={`qa2-send ${input.trim() ? 'active' : ''}`} onClick={() => handleSend()} disabled={!input.trim() || isThinking}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+          <div className="qa2-foot-info">
+            <span>{aiStatus?.ai_available ? '🧠 AI Mode' : '🔍 Search'} • {indexStats?.indexed || 0}/{indexStats?.total_documents || 0} indexed</span>
+            <span className="qa2-foot-brand">Groq + LLaMA 3.1</span>
+          </div>
         </div>
       </div>
     </div>

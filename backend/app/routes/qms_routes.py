@@ -1150,28 +1150,124 @@ def generate_action_plans(audit_id):
 
 # ═══════════════════════════════════════════════════════════════
 # AI DOCUMENT ASSISTANT ROUTES
-# Smart document search, text extraction, question answering
+# RAG-Powered: TF-IDF Search + Groq LLM for intelligent answers
 # ═══════════════════════════════════════════════════════════════
+
+import os as _os
+GROQ_API_KEY = _os.environ.get('GROQ_API_KEY', '')
+GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
+
+# Conversation memory (per-session, last N messages)
+_conversation_history = []
+MAX_HISTORY = 10
+
+
+def _call_groq_llm(system_prompt, user_message, temperature=0.4, max_tokens=1500):
+    """Call Groq LLM API"""
+    import requests as _requests
+    global GROQ_API_KEY
+    if not GROQ_API_KEY:
+        GROQ_API_KEY = _os.environ.get('GROQ_API_KEY', '')
+    if not GROQ_API_KEY:
+        return None
+
+    try:
+        headers = {
+            'Authorization': f'Bearer {GROQ_API_KEY}',
+            'Content-Type': 'application/json'
+        }
+
+        # Build messages with conversation history
+        messages = [{'role': 'system', 'content': system_prompt}]
+
+        # Add recent conversation history for context
+        for h in _conversation_history[-MAX_HISTORY:]:
+            messages.append(h)
+
+        messages.append({'role': 'user', 'content': user_message})
+
+        payload = {
+            'model': 'llama-3.1-8b-instant',
+            'messages': messages,
+            'temperature': temperature,
+            'max_tokens': max_tokens,
+            'stream': False
+        }
+
+        resp = _requests.post(GROQ_API_URL, headers=headers, json=payload, timeout=30)
+        if resp.status_code == 200:
+            data = resp.json()
+            answer = data['choices'][0]['message']['content']
+
+            # Save to conversation history
+            _conversation_history.append({'role': 'user', 'content': user_message[:500]})
+            _conversation_history.append({'role': 'assistant', 'content': answer[:500]})
+
+            # Trim history
+            while len(_conversation_history) > MAX_HISTORY * 2:
+                _conversation_history.pop(0)
+
+            return answer
+        else:
+            logger.error(f"Groq API error {resp.status_code}: {resp.text[:200]}")
+            return None
+    except Exception as e:
+        logger.error(f"Groq LLM call failed: {e}")
+        return None
+
+
+QMS_SYSTEM_PROMPT = """You are an expert QMS (Quality Management System) AI Assistant for a Solar Panel Manufacturing company (GSPL - Green Solar Power Limited).
+
+Your expertise covers:
+- ISO 9001:2015 Quality Management Systems
+- Solar panel manufacturing processes (Cell sorting, Stringing, Layup, Lamination, Trimming, Framing, J-Box, Flash Testing, EL Inspection, Hi-Pot, Packing, PDI)
+- IEC 61215 / IEC 61730 standards for PV modules
+- BIS certification and ALMM compliance
+- Document control procedures (SOPs, Work Instructions, Quality Plans, Inspection Checklists)
+- NCR (Non-Conformance Reports), CAPA (Corrective & Preventive Actions)
+- Internal & External Audits
+- Calibration management
+- Supplier quality management
+- Training & Competency management
+
+RESPONSE GUIDELINES:
+1. Answer in Hindi-English mix (Hinglish) naturally - the way Indian quality professionals speak
+2. Be specific and technical - give exact parameters, temperatures, specifications when you know them
+3. Reference document sources when available
+4. Use bullet points and structured formatting
+5. If document context is provided, ALWAYS prioritize information from the documents
+6. Add practical insights from solar manufacturing domain knowledge
+7. If you don't know something, say so honestly
+8. Use emojis sparingly for better readability (📋, ✅, ⚠️, 📊, etc.)
+9. Keep answers comprehensive but not overly long
+10. Suggest follow-up questions when relevant
+
+When document context is provided between [DOCUMENT CONTEXT START] and [DOCUMENT CONTEXT END], 
+use that information as the PRIMARY source for your answer. Cite the document title and number."""
+
 
 @qms_bp.route('/assistant/query', methods=['POST'])
 def assistant_query():
     """
-    AI Document Assistant - Query endpoint
-    Searches through extracted document text to answer questions
+    AI Document Assistant - RAG-powered Query endpoint
+    Step 1: Search documents with TF-IDF
+    Step 2: Send relevant context to Groq LLM for intelligent answer
+    Fallback: TF-IDF answer if LLM unavailable
     """
     try:
         from app.services.document_search import search_documents, answer_question
-        
+
         data = request.json
         query = data.get('query', '').strip()
-        
+        mode = data.get('mode', 'auto')  # auto, ai, search
+
         if not query:
             return jsonify({'error': 'Query is required'}), 400
-        
+
         # Get all documents with extracted text
         all_docs = QMSDocument.query.all()
         all_docs_count = len(all_docs)
-        
+
         # Prepare documents for search
         doc_list = []
         indexed_count = 0
@@ -1191,17 +1287,151 @@ def assistant_query():
             if doc.extracted_text:
                 indexed_count += 1
             doc_list.append(doc_dict)
-        
-        # Search
+
+        # Step 1: TF-IDF Search for relevant documents
         search_results = search_documents(query, doc_list, top_k=8)
-        
-        # Generate answer
-        response = answer_question(query, search_results, all_docs_count, indexed_count)
-        
+
+        # Step 2: Try RAG with Groq LLM
+        ai_answer = None
+        ai_used = False
+
+        if mode != 'search':
+            # Build context from search results
+            context_parts = []
+            for i, result in enumerate(search_results[:5]):
+                passage = result.get('passage', '')
+                title = result.get('title', '')
+                doc_num = result.get('doc_number', '')
+                context_parts.append(f"Document: {title} ({doc_num})\n{passage}")
+
+            if context_parts:
+                doc_context = "\n\n---\n\n".join(context_parts)
+                user_msg = f"""[DOCUMENT CONTEXT START]
+{doc_context}
+[DOCUMENT CONTEXT END]
+
+User Question: {query}
+
+Answer based on the document context above. If the context doesn't fully answer the question, 
+supplement with your QMS/Solar manufacturing expertise. Always mention which document the information came from."""
+            else:
+                user_msg = f"""No documents found matching this query. 
+                
+User Question: {query}
+
+Answer using your QMS and Solar Panel Manufacturing expertise. 
+Mention that no specific documents were found but provide expert guidance."""
+
+            ai_answer = _call_groq_llm(QMS_SYSTEM_PROMPT, user_msg)
+            if ai_answer:
+                ai_used = True
+
+        # Build response
+        if ai_used:
+            # Determine confidence from search results
+            confidence = 'low'
+            if search_results:
+                top_score = search_results[0].get('score', 0)
+                top_coverage = search_results[0].get('coverage', 0)
+                if top_score > 1.0 and top_coverage > 60:
+                    confidence = 'high'
+                elif top_score > 0.3:
+                    confidence = 'medium'
+
+            sources = []
+            for result in search_results[:5]:
+                sources.append({
+                    'id': result['doc_id'],
+                    'title': result['title'],
+                    'doc_number': result['doc_number'],
+                    'category': result['category'],
+                    'score': result['score'],
+                    'coverage': result['coverage'],
+                    'matched_terms': result['matched_terms']
+                })
+
+            response = {
+                'answer': ai_answer,
+                'sources': sources,
+                'total_docs': all_docs_count,
+                'indexed_docs': indexed_count,
+                'results_count': len(search_results),
+                'confidence': confidence if search_results else 'ai',
+                'ai_powered': True,
+                'suggestions': _generate_smart_suggestions(query, search_results)
+            }
+        else:
+            # Fallback to TF-IDF answer
+            response = answer_question(query, search_results, all_docs_count, indexed_count)
+            response['ai_powered'] = False
+
         return jsonify(response)
     except Exception as e:
         logger.error(f"Assistant query error: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+def _generate_smart_suggestions(query, search_results):
+    """Generate intelligent follow-up suggestions"""
+    query_lower = query.lower()
+    suggestions = []
+
+    # Based on what was found
+    if search_results:
+        categories = set(r.get('category', '') for r in search_results[:3])
+        for cat in categories:
+            if cat and cat.lower() not in query_lower:
+                suggestions.append(f"{cat} ke related procedures kya hain?")
+
+    # Domain-specific suggestions
+    topic_suggestions = {
+        'lamination': ['Lamination temperature profile kya hona chahiye?', 'Crosslink test procedure', 'EVA/EPE gel content specification'],
+        'solder': ['Stringer machine parameters', 'Ribbon soldering temperature', 'Cell breakage analysis'],
+        'testing': ['Flash test parameters for different wattages', 'EL inspection criteria', 'Hi-pot test voltage specification'],
+        'packing': ['Packing SOP checklist', 'Pallet specification', 'Dispatch documentation'],
+        'calibr': ['Calibration schedule', 'Measurement uncertainty calculation', 'Calibration certificate requirements'],
+        'audit': ['Internal audit checklist', 'Audit non-conformance categories', 'Management review inputs'],
+        'ncr': ['NCR categorization', 'Root cause analysis methods', 'CAPA effectiveness verification'],
+        'iso': ['ISO 9001:2015 clause requirements', 'Quality objectives monitoring', 'Document control procedure'],
+        'inspect': ['Incoming inspection criteria', 'In-process inspection checklist', 'Final inspection parameters'],
+        'train': ['Training needs identification', 'Competency matrix', 'Training effectiveness evaluation'],
+    }
+
+    for key, suggs in topic_suggestions.items():
+        if key in query_lower:
+            suggestions.extend(suggs[:2])
+            break
+
+    if not suggestions:
+        suggestions = [
+            'Quality Manual ka scope kya hai?',
+            'ISO 9001 compliance status',
+            'Latest audit findings kya hain?'
+        ]
+
+    return suggestions[:4]
+
+
+@qms_bp.route('/assistant/chat-history', methods=['DELETE'])
+def clear_chat_history():
+    """Clear conversation history"""
+    global _conversation_history
+    _conversation_history = []
+    return jsonify({'message': 'Chat history cleared'})
+
+
+@qms_bp.route('/assistant/ai-status', methods=['GET'])
+def ai_status():
+    """Check if AI (Groq) is configured and available"""
+    global GROQ_API_KEY
+    if not GROQ_API_KEY:
+        GROQ_API_KEY = _os.environ.get('GROQ_API_KEY', '')
+    return jsonify({
+        'ai_available': bool(GROQ_API_KEY),
+        'model': 'llama-3.1-8b-instant',
+        'provider': 'Groq',
+        'history_length': len(_conversation_history) // 2
+    })
 
 
 @qms_bp.route('/assistant/extract/<int:doc_id>', methods=['POST'])
