@@ -4,6 +4,10 @@ from datetime import datetime
 from werkzeug.utils import secure_filename
 import os
 import uuid
+import logging
+import json
+
+logger = logging.getLogger(__name__)
 
 qms_bp = Blueprint('qms', __name__, url_prefix='/api/qms')
 
@@ -38,6 +42,8 @@ class QMSDocument(db.Model):
     revision_history = db.Column(db.Text)  # JSON string of revisions
     is_controlled = db.Column(db.Boolean, default=True)
     access_level = db.Column(db.String(30), default='All')  # All, Management, QA, Production
+    extracted_text = db.Column(db.Text)  # Full extracted text content from file
+    text_extracted_at = db.Column(db.DateTime)  # When text was last extracted
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -67,6 +73,9 @@ class QMSDocument(db.Model):
             'revision_history': self.revision_history,
             'is_controlled': self.is_controlled,
             'access_level': self.access_level,
+            'has_extracted_text': bool(self.extracted_text),
+            'text_length': len(self.extracted_text) if self.extracted_text else 0,
+            'text_extracted_at': self.text_extracted_at.isoformat() if self.text_extracted_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -551,6 +560,16 @@ def create_document():
             doc.file_name = filename
             doc.file_size = os.path.getsize(filepath)
             doc.file_type = filename.rsplit('.', 1)[1].lower()
+            
+            # Auto-extract text for AI search
+            try:
+                from app.services.document_search import extract_text_from_file
+                extracted = extract_text_from_file(filepath)
+                if extracted:
+                    doc.extracted_text = extracted
+                    doc.text_extracted_at = datetime.utcnow()
+            except Exception as ex:
+                logger.warning(f'Text extraction failed: {ex}')
         
         db.session.add(doc)
         db.session.commit()
@@ -613,6 +632,16 @@ def update_document(doc_id):
             doc.file_name = filename
             doc.file_size = os.path.getsize(filepath)
             doc.file_type = filename.rsplit('.', 1)[1].lower()
+            
+            # Auto-extract text for AI search
+            try:
+                from app.services.document_search import extract_text_from_file
+                extracted = extract_text_from_file(filepath)
+                if extracted:
+                    doc.extracted_text = extracted
+                    doc.text_extracted_at = datetime.utcnow()
+            except Exception as ex:
+                logger.warning(f'Text extraction failed on update: {ex}')
         
         doc.updated_at = datetime.utcnow()
         db.session.commit()
@@ -977,4 +1006,229 @@ def generate_action_plans(audit_id):
         })
     except Exception as e:
         db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════════════════════
+# AI DOCUMENT ASSISTANT ROUTES
+# Smart document search, text extraction, question answering
+# ═══════════════════════════════════════════════════════════════
+
+@qms_bp.route('/assistant/query', methods=['POST'])
+def assistant_query():
+    """
+    AI Document Assistant - Query endpoint
+    Searches through extracted document text to answer questions
+    """
+    try:
+        from app.services.document_search import search_documents, answer_question
+        
+        data = request.json
+        query = data.get('query', '').strip()
+        
+        if not query:
+            return jsonify({'error': 'Query is required'}), 400
+        
+        # Get all documents with extracted text
+        all_docs = QMSDocument.query.all()
+        all_docs_count = len(all_docs)
+        
+        # Prepare documents for search
+        doc_list = []
+        indexed_count = 0
+        for doc in all_docs:
+            doc_dict = {
+                'id': doc.id,
+                'doc_number': doc.doc_number,
+                'title': doc.title,
+                'category': doc.category,
+                'department': doc.department,
+                'status': doc.status,
+                'file_name': doc.file_name,
+                'description': doc.description or '',
+                'tags': doc.tags or '',
+                'extracted_text': doc.extracted_text or ''
+            }
+            if doc.extracted_text:
+                indexed_count += 1
+            doc_list.append(doc_dict)
+        
+        # Search
+        search_results = search_documents(query, doc_list, top_k=8)
+        
+        # Generate answer
+        response = answer_question(query, search_results, all_docs_count, indexed_count)
+        
+        return jsonify(response)
+    except Exception as e:
+        logger.error(f"Assistant query error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/assistant/extract/<int:doc_id>', methods=['POST'])
+def extract_document_text(doc_id):
+    """Extract text from a single document and save it"""
+    try:
+        from app.services.document_search import extract_text_from_file
+        
+        doc = QMSDocument.query.get_or_404(doc_id)
+        
+        if not doc.file_path:
+            return jsonify({'error': 'No file attached to this document'}), 400
+        
+        filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads', doc.file_path)
+        
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'File not found on disk'}), 404
+        
+        extracted = extract_text_from_file(filepath)
+        
+        if extracted:
+            doc.extracted_text = extracted
+            doc.text_extracted_at = datetime.utcnow()
+            db.session.commit()
+            
+            return jsonify({
+                'message': f'Text extracted successfully ({len(extracted)} characters)',
+                'doc_id': doc.id,
+                'title': doc.title,
+                'text_length': len(extracted),
+                'preview': extracted[:500] + ('...' if len(extracted) > 500 else ''),
+                'extracted_at': doc.text_extracted_at.isoformat()
+            })
+        else:
+            return jsonify({
+                'message': 'Could not extract text from this file',
+                'doc_id': doc.id,
+                'text_length': 0
+            })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Text extraction error for doc {doc_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/assistant/extract-all', methods=['POST'])
+def extract_all_documents():
+    """Extract text from ALL uploaded documents that haven't been processed yet"""
+    try:
+        from app.services.document_search import extract_text_from_file
+        
+        force = request.json.get('force', False) if request.json else False
+        
+        if force:
+            docs = QMSDocument.query.filter(QMSDocument.file_path.isnot(None)).all()
+        else:
+            docs = QMSDocument.query.filter(
+                QMSDocument.file_path.isnot(None),
+                QMSDocument.extracted_text.is_(None)
+            ).all()
+        
+        results = {
+            'total': len(docs),
+            'success': 0,
+            'failed': 0,
+            'skipped': 0,
+            'details': []
+        }
+        
+        for doc in docs:
+            filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads', doc.file_path)
+            
+            if not os.path.exists(filepath):
+                results['skipped'] += 1
+                results['details'].append({
+                    'id': doc.id, 'title': doc.title, 'status': 'skipped', 'reason': 'File not found'
+                })
+                continue
+            
+            try:
+                extracted = extract_text_from_file(filepath)
+                if extracted:
+                    doc.extracted_text = extracted
+                    doc.text_extracted_at = datetime.utcnow()
+                    results['success'] += 1
+                    results['details'].append({
+                        'id': doc.id, 'title': doc.title, 'status': 'success',
+                        'text_length': len(extracted)
+                    })
+                else:
+                    results['failed'] += 1
+                    results['details'].append({
+                        'id': doc.id, 'title': doc.title, 'status': 'failed',
+                        'reason': 'No text extracted'
+                    })
+            except Exception as ex:
+                results['failed'] += 1
+                results['details'].append({
+                    'id': doc.id, 'title': doc.title, 'status': 'failed',
+                    'reason': str(ex)
+                })
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': f"Extraction complete: {results['success']}/{results['total']} successful",
+            'results': results
+        })
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Bulk extraction error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/assistant/index-stats', methods=['GET'])
+def assistant_index_stats():
+    """Get statistics about indexed documents for AI assistant"""
+    try:
+        total_docs = QMSDocument.query.count()
+        with_files = QMSDocument.query.filter(QMSDocument.file_path.isnot(None)).count()
+        indexed = QMSDocument.query.filter(QMSDocument.extracted_text.isnot(None)).count()
+        pending = with_files - indexed
+        
+        # Category breakdown of indexed docs
+        category_stats = {}
+        cat_results = db.session.query(
+            QMSDocument.category,
+            db.func.count(QMSDocument.id),
+            db.func.sum(db.case((QMSDocument.extracted_text.isnot(None), 1), else_=0))
+        ).group_by(QMSDocument.category).all()
+        
+        for cat, total, idx in cat_results:
+            category_stats[cat] = {'total': total, 'indexed': int(idx or 0)}
+        
+        # Total text size
+        text_sizes = db.session.query(
+            db.func.sum(db.func.length(QMSDocument.extracted_text))
+        ).filter(QMSDocument.extracted_text.isnot(None)).scalar()
+        
+        return jsonify({
+            'total_documents': total_docs,
+            'with_files': with_files,
+            'indexed': indexed,
+            'pending': pending,
+            'total_text_size': text_sizes or 0,
+            'category_stats': category_stats
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/assistant/document-content/<int:doc_id>', methods=['GET'])
+def get_document_content(doc_id):
+    """Get the extracted text content of a specific document"""
+    try:
+        doc = QMSDocument.query.get_or_404(doc_id)
+        
+        return jsonify({
+            'id': doc.id,
+            'title': doc.title,
+            'doc_number': doc.doc_number,
+            'category': doc.category,
+            'has_text': bool(doc.extracted_text),
+            'text_length': len(doc.extracted_text) if doc.extracted_text else 0,
+            'content': doc.extracted_text or '',
+            'extracted_at': doc.text_extracted_at.isoformat() if doc.text_extracted_at else None
+        })
+    except Exception as e:
         return jsonify({'error': str(e)}), 500
