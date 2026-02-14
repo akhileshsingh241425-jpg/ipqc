@@ -1,0 +1,55 @@
+# PDI Backend - Hostinger Configuration
+# Python Application using Passenger WSGI
+
+PassengerEnabled On
+PassengerAppRoot /home/YOUR_USERNAME/public_html
+
+# Python version (update path based on your Hostinger setup)
+PassengerPython /home/YOUR_USERNAME/virtualenv/pdi_backend/3.9/bin/python3
+
+# Application startup file
+PassengerStartupFile passenger_wsgi.py
+
+# Rewrite rules
+RewriteEngine On
+
+# Allow direct access to uploaded files and generated PDFs
+RewriteCond %{REQUEST_URI} ^/uploads/ [OR]
+RewriteCond %{REQUEST_URI} ^/generated_pdfs/
+RewriteRule ^ - [L]
+
+# Redirect all other requests to Flask app
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ passenger_wsgi.py [QSA,L]
+
+# Security Headers
+Header set X-Content-Type-Options "nosniff"
+Header set X-Frame-Options "SAMEORIGIN"
+Header set X-XSS-Protection "1; mode=block"
+
+# CORS Headers (IMPORTANT: Update with your actual frontend domain)
+Header set Access-Control-Allow-Origin "*"
+Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+Header set Access-Control-Allow-Credentials "true"
+
+# Gzip Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css application/json application/javascript
+</IfModule>
+
+# Cache Control for Static Files
+<FilesMatch "\.(jpg|jpeg|png|gif|svg|pdf|xlsx)$">
+    Header set Cache-Control "max-age=604800, public"
+</FilesMatch>
+
+# Prevent direct access to Python files (except passenger_wsgi.py)
+<FilesMatch "\.(py|pyc)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+<Files "passenger_wsgi.py">
+    Allow from all
+</Files>

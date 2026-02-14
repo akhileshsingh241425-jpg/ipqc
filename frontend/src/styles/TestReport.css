@@ -1,0 +1,434 @@
+.test-report-container {
+  min-height: 100vh;
+  background: white;
+  padding: 20px;
+}
+
+.test-controls {
+  background: white;
+  padding: 20px;
+  border-radius: 0;
+  margin-bottom: 20px;
+  box-shadow: none;
+  border: 1px solid #ddd;
+}
+
+.test-controls h2 {
+  color: #333;
+  margin-bottom: 20px;
+  text-align: center;
+  border-bottom: 2px solid #007bff;
+  padding-bottom: 10px;
+}
+
+.control-panel {
+  display: flex;
+  gap: 20px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.control-panel .form-group {
+  flex: 1;
+  min-width: 300px;
+}
+
+.export-pdf-btn {
+  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.export-pdf-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+}
+
+.template-report {
+  position: relative;
+  width: 210mm;
+  height: 297mm;
+  margin: 20px auto;
+  background: white;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.template-field {
+  position: absolute;
+  color: #000;
+  font-size: 10px;
+  font-family: Arial, sans-serif;
+  white-space: nowrap;
+}
+
+.template-graph {
+  position: absolute;
+  left: 295px;
+  top: 78px;
+  width: 470px;
+  height: 310px;
+  object-fit: contain;
+}
+
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 15px;
+  margin-bottom: 5px;
+}
+
+.header-line {
+  width: 100%;
+  height: 6px;
+  background: #003d82;
+  margin: 0 0 18px 0;
+  display: block;
+  box-sizing: border-box;
+}
+
+.company-logo {
+  display: flex;
+  align-items: center;
+}
+
+.logo-image {
+  height: 60px;
+  width: auto;
+  max-width: 200px;
+}
+
+.report-title {
+  display: flex;
+  align-items: center;
+}
+
+.report-title h1 {
+  color: #000;
+  font-size: 18px;
+  margin: 0;
+  text-align: right;
+  font-weight: bold;
+  font-family: Arial, sans-serif;
+}
+
+.report-content {
+  display: table;
+  width: 100%;
+  margin-top: 30px;
+}
+
+.left-section {
+  display: table-cell;
+  width: 280px;
+  vertical-align: top;
+  padding-right: 20px;
+}
+
+.right-section {
+  display: table-cell;
+  vertical-align: top;
+  padding-left: 20px;
+}
+
+.section {
+  margin-bottom: 25px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+}
+
+.section h3 {
+  color: #000;
+  padding: 0;
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: bold;
+  font-family: Arial, sans-serif;
+}
+
+.info-row {
+  display: flex;
+  padding: 2px 0;
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  margin-bottom: 2px;
+}
+
+.info-row .label {
+  font-weight: normal;
+  color: #000;
+  min-width: 150px;
+  flex-shrink: 0;
+}
+
+.info-row .value {
+  color: #000;
+  flex: 1;
+  font-weight: normal;
+  border-bottom: 1px solid #000;
+  padding-bottom: 2px;
+  padding-left: 0px;
+  background: transparent !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding-top: 0 !important;
+  padding-right: 0 !important;
+}
+
+.info-row-simple {
+  display: flex;
+  padding: 2px 0;
+  font-family: Arial, sans-serif;
+  font-size: 10px;
+  justify-content: flex-end;
+}
+
+.info-row-simple .label {
+  font-weight: normal;
+  color: #000;
+  margin-right: 10px;
+}
+
+.info-row-simple .value {
+  color: #000;
+  font-weight: normal;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.chart-container {
+  background: white;
+  padding: 10px;
+  border: 1px solid #999;
+  margin-bottom: 20px;
+  height: 380px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6c757d;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.svg-chart-container {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.iv-curve-chart {
+  background: transparent;
+  border-radius: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.iv-curve-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.iv-curve-chart text {
+  font-family: ArialMT, Arial, sans-serif;
+  font-size: 11px;
+}
+
+/* Make SVG shapes crisper and default to thinner strokes for curves */
+.iv-curve-chart path {
+  shape-rendering: geometricPrecision;
+}
+
+.iv-curve-chart line {
+  shape-rendering: crispEdges;
+}
+
+.reference-conditions {
+  background: transparent;
+  padding: 10px 0px;
+  border-radius: 0;
+  margin-bottom: 20px;
+  border-left: none;
+  font-family: Arial, sans-serif;
+}
+
+.reference-conditions h4 {
+  color: #000;
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+  font-family: Arial, sans-serif;
+}
+
+.ref-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  font-size: 10px;
+  color: #000;
+  font-family: Arial, sans-serif;
+}
+
+.other-info {
+  background: transparent;
+  padding: 10px 0;
+  border-radius: 0;
+  border-left: none;
+  font-family: Arial, sans-serif;
+}
+
+.other-info h4 {
+  color: #000;
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  font-weight: bold;
+  text-align: center;
+  font-family: Arial, sans-serif;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .report-content {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .report-header {
+    flex-direction: column;
+    text-align: center;
+    gap: 15px;
+  }
+  
+  .report-title h1 {
+    text-align: center;
+  }
+}
+
+@media (max-width: 768px) {
+  .test-report {
+    padding: 15px;
+  }
+  
+  .control-panel {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .export-pdf-btn {
+    width: 100%;
+  }
+  
+  .chart-container {
+    height: 300px;
+    padding: 10px;
+  }
+  
+  .info-row {
+    flex-direction: column;
+    gap: 5px;
+  }
+  
+  .info-row .label {
+    min-width: auto;
+    font-weight: bold;
+  }
+  
+  .ref-info {
+    flex-direction: column;
+    text-align: center;
+    gap: 10px;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .test-controls {
+    display: none;
+  }
+  
+  .test-report {
+    padding: 15px 20px;
+    margin: 0;
+    max-width: none;
+  }
+  
+  .report-content {
+    display: table;
+    width: 100%;
+  }
+  
+  .left-section {
+    display: table-cell;
+    width: 45%;
+  }
+  
+  .right-section {
+    display: table-cell;
+    width: 55%;
+  }
+  
+  .chart-container {
+    height: 280px;
+    page-break-inside: avoid;
+  }
+}
+
+/* Strong overrides to remove any pill/rounded backgrounds coming from global styles */
+.test-report, .test-report * {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  -webkit-border-radius: 0 !important;
+}
+
+.test-report .info-row .value,
+.test-report .info-row .value::before,
+.test-report .info-row .value::after {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: inline !important;
+}
+
+.test-report .chart-container img,
+.test-report .chart-container svg {
+  background: transparent !important;
+}
+
+/* Ensure exported PDF uses white page background but no pills */
+@media print {
+  .test-report, .test-report * {
+    background: transparent !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+  }
+  .test-report { background: white !important; }
+}

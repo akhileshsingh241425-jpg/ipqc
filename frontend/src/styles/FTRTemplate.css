@@ -1,0 +1,213 @@
+/* FTR Template CSS - Exact replica of PDF template */
+
+.ftr-template-page {
+  width: 210mm;
+  height: 297mm;
+  background: white;
+  padding: 0;
+  margin: 20px auto;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  font-family: Arial, sans-serif;
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Header - Original Report Style */
+.ftr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 10mm;
+  padding-left: 10mm;
+  padding-right: 15mm;
+  padding-bottom: 5mm;
+  background: #ffffff !important;
+  background-image: none !important;
+  border: none;
+}
+
+.ftr-logo {
+  width: 75mm;
+  height: auto;
+  object-fit: contain;
+  background: white;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+}
+
+.ftr-title {
+  font-size: 22px;
+  font-weight: 400;
+  color: #000000;
+  font-family: 'Times New Roman', Times, serif;
+  letter-spacing: 0.5px;
+}
+
+/* Blue Bar - Dark blue like original */
+.ftr-blue-bar {
+  height: 3mm;
+  background: #1e3a6e;
+  margin: 0 10mm;
+  position: absolute;
+  top: 32mm;
+  left: 0;
+  right: 0;
+}
+
+.ftr-blue-bar-bottom {
+  height: 3mm;
+  background: #1e3a6e;
+  margin: 0 10mm;
+  position: absolute;
+  bottom: 14mm;
+  left: 0;
+  right: 0;
+}
+
+/* Main Content */
+.ftr-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10mm;
+  padding: 0;
+  margin-top: 12.15mm;
+  padding-left: 16.46mm;
+  padding-right: 10mm;
+}
+
+/* Columns */
+.ftr-left-column,
+.ftr-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 6.4mm;
+}
+
+/* Sections */
+.ftr-section,
+.ftr-reference-section,
+.ftr-other-info {
+  margin-bottom: 4mm;
+}
+
+.ftr-section-title {
+  font-size: 20px;
+  font-family: 'Arial MT', Arial, sans-serif;
+  font-weight: 400;
+  color: #000;
+  margin-bottom: 3mm;
+  padding-bottom: 1mm;
+  padding-left: 3mm;
+}
+
+/* Field Rows */
+.ftr-field-row {
+  display: flex;
+  align-items: baseline;
+  min-height: 7.56mm;
+  margin-bottom: 1.26mm;
+  position: relative;
+}
+
+.ftr-label {
+  font-size: 16px;
+  font-family: 'Arial MT', Arial, sans-serif;
+  color: #000;
+  font-weight: 500;
+  min-width: auto;
+  margin-right: 2mm;
+  padding-left: 7mm;
+  flex-shrink: 0;
+}
+
+.ftr-value {
+  font-size: 14.4px;
+  font-family: 'Arial MT', Arial, sans-serif;
+  color: #000;
+  font-weight: 500;
+  flex: 1;
+  border-bottom: 1px solid #999;
+  padding-bottom: 1px;
+  padding-left: 3px;
+  min-height: 18px;
+  line-height: 18px;
+}
+
+.ftr-value-inline {
+  font-size: 11px;
+  color: #000;
+  margin-left: 5px;
+}
+
+.ftr-underline {
+  border-bottom: 1px solid #000;
+  min-width: 150px;
+}
+
+/* Graph */
+.ftr-graph-container {
+  width: 105.6mm;
+  height: 115.5mm;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  margin-bottom: 5mm;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.ftr-graph-image {
+  max-width: 100%;
+  max-height: 100%;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.ftr-graph-placeholder {
+  color: #999;
+  font-size: 12px;
+}
+
+/* Reference Section */
+.ftr-reference-section {
+  margin-top: 3mm;
+}
+
+.ftr-reference-section .ftr-field-row:nth-child(2) .ftr-label {
+  padding-left: 45mm;
+}
+
+.ftr-reference-section .ftr-field-row:nth-child(3) .ftr-label {
+  padding-left: 28mm;
+}
+
+.ftr-other-info .ftr-label {
+  padding-left: 20mm;
+}
+
+/* Print Styles */
+@media print {
+  .ftr-template-page {
+    width: 210mm;
+    height: 297mm;
+    margin: 0;
+    box-shadow: none;
+    page-break-after: always;
+  }
+  
+  body {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+/* PDF Export Optimization */
+.ftr-template-page * {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  color-adjust: exact !important;
+}

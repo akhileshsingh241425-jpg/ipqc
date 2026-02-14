@@ -1,0 +1,292 @@
+/* Sidebar Styles */
+.App {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 250px;
+  background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+  color: white;
+  height: 100vh;
+  position: fixed;
+  left: 0;
+  top: 0;
+  transition: all 0.3s ease;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.sidebar.collapsed {
+  width: 70px;
+}
+
+.sidebar-header {
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sidebar-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 5px;
+  transition: all 0.3s ease;
+}
+
+.toggle-btn:hover {
+  transform: scale(1.1);
+}
+
+/* User Role Badge */
+.user-role-badge {
+  padding: 15px 20px;
+  margin: 15px;
+  background: linear-gradient(135deg, rgba(52, 152, 219, 0.2), rgba(41, 128, 185, 0.2));
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  flex-direction: column;
+}
+
+.user-role-badge.collapsed {
+  padding: 10px;
+  margin: 10px;
+  justify-content: center;
+}
+
+.user-role-badge .role-icon {
+  font-size: 24px;
+}
+
+.user-role-badge .role-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ecf0f1;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.user-role-badge .user-name {
+  font-size: 12px;
+  color: #bdc3c7;
+  margin-top: 4px;
+}
+
+.sidebar-menu {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  height: calc(100vh - 80px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-menu li {
+  padding: 15px 20px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  border-left: 4px solid transparent;
+}
+
+.sidebar-menu li:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-left-color: #3498db;
+}
+
+.sidebar-menu li.active {
+  background-color: rgba(52, 152, 219, 0.2);
+  border-left-color: #3498db;
+}
+
+.sidebar-menu li .icon {
+  font-size: 24px;
+  min-width: 30px;
+  text-align: center;
+}
+
+.sidebar-menu li .label {
+  font-size: 16px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sidebar-menu li.logout-btn {
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(231, 76, 60, 0.1);
+}
+
+.sidebar-menu li.logout-btn:hover {
+  background-color: rgba(231, 76, 60, 0.3);
+  border-left-color: #e74c3c;
+}
+
+.main-content {
+  margin-left: 250px;
+  width: calc(100% - 250px);
+  height: 100vh;
+  overflow-y: auto;
+  background-color: #f5f7fa;
+  transition: all 0.3s ease;
+}
+
+.main-content.expanded {
+  margin-left: 70px;
+  width: calc(100% - 70px);
+}
+
+.section-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+}
+
+.section-placeholder h2 {
+  font-size: 36px;
+  color: #2c3e50;
+  margin-bottom: 10px;
+}
+
+.section-placeholder p {
+  font-size: 18px;
+  color: #7f8c8d;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .sidebar {
+    width: 200px;
+  }
+  
+  .main-content {
+    margin-left: 200px;
+    width: calc(100% - 200px);
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    width: 260px;
+    left: -260px;
+    top: 0;
+    height: 100vh;
+    z-index: 1000;
+    transition: left 0.3s ease;
+  }
+
+  .sidebar.mobile-open {
+    left: 0;
+  }
+
+  .sidebar.collapsed {
+    width: 0;
+    overflow: hidden;
+    left: -260px;
+  }
+
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+    padding: 10px;
+  }
+
+  .main-content.expanded {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .toggle-btn {
+    position: fixed;
+    left: 10px;
+    top: 10px;
+    z-index: 1001;
+    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    padding: 12px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  }
+
+  .sidebar-header h2 {
+    font-size: 18px;
+  }
+
+  .sidebar-menu li {
+    padding: 12px 15px;
+    gap: 12px;
+  }
+
+  .sidebar-menu li .icon {
+    font-size: 20px;
+  }
+
+  .sidebar-menu li .label {
+    font-size: 14px;
+  }
+
+  .user-role-badge {
+    padding: 12px 15px;
+    margin: 10px;
+  }
+  
+  /* Mobile Overlay */
+  .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+  
+  .sidebar-overlay.active {
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  .sidebar {
+    width: 100%;
+    left: -100%;
+  }
+  
+  .sidebar.mobile-open {
+    left: 0;
+  }
+
+  .toggle-btn {
+    padding: 10px;
+    left: 8px;
+    top: 8px;
+  }
+
+  .main-content {
+    padding: 8px;
+    padding-top: 60px;
+  }
+}

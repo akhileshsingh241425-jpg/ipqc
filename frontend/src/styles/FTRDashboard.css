@@ -1,0 +1,695 @@
+/* FTR Dashboard - Power BI Style */
+
+.ftr-dashboard {
+  min-height: 100vh;
+  width: 100%;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.ftr-dashboard * {
+  box-sizing: border-box;
+}
+
+/* Loading State */
+.ftr-dashboard-loading {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid #e0e0e0;
+  border-top: 4px solid #667eea;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Header */
+.ftr-dashboard .dashboard-header {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 15px 25px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  width: 100%;
+}
+
+.ftr-dashboard .header-left {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.ftr-dashboard .header-left h1 {
+  margin: 0;
+  font-size: 22px;
+  color: #333;
+  font-weight: 600;
+}
+
+.ftr-dashboard .header-right {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.ftr-dashboard .last-updated {
+  font-size: 13px;
+  color: #666;
+  background: #f8f9ff;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+
+.ftr-dashboard .auto-refresh-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+}
+
+.ftr-dashboard .auto-refresh-toggle input {
+  cursor: pointer;
+}
+
+.ftr-dashboard .btn-refresh {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.ftr-dashboard .btn-refresh:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+/* Summary Cards Row */
+.ftr-dashboard .summary-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.ftr-dashboard .summary-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 15px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+  min-height: 100px;
+}
+
+.ftr-dashboard .summary-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+}
+
+.ftr-dashboard .summary-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+}
+
+.ftr-dashboard .summary-card.total::before { background: linear-gradient(180deg, #667eea, #764ba2); }
+.ftr-dashboard .summary-card.assigned::before { background: linear-gradient(180deg, #11998e, #38ef7d); }
+.ftr-dashboard .summary-card.packed::before { background: linear-gradient(180deg, #27ae60, #2ecc71); }
+.ftr-dashboard .summary-card.dispatched::before { background: linear-gradient(180deg, #3498db, #2980b9); }
+.ftr-dashboard .summary-card.pending::before { background: linear-gradient(180deg, #f39c12, #e67e22); }
+.ftr-dashboard .summary-card.available::before { background: linear-gradient(180deg, #9b59b6, #8e44ad); }
+
+.ftr-dashboard .card-icon {
+  font-size: 32px;
+  min-width: 50px;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #f8f9ff;
+  flex-shrink: 0;
+}
+
+.ftr-dashboard .card-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.ftr-dashboard .card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.2;
+}
+
+.ftr-dashboard .card-label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.ftr-dashboard .card-sub {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+/* Progress Section */
+.ftr-dashboard .progress-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px 25px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  width: 100%;
+}
+
+.ftr-dashboard .progress-section h3 {
+  margin: 0 0 20px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.ftr-dashboard .progress-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.ftr-dashboard .progress-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ftr-dashboard .progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #555;
+  font-weight: 500;
+}
+
+.ftr-dashboard .progress-bar {
+  height: 12px;
+  background: #e8ecf5;
+  border-radius: 6px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.ftr-dashboard .progress-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.5s ease-out;
+}
+
+.ftr-dashboard .progress-fill.assigned { background: linear-gradient(90deg, #11998e, #38ef7d); }
+.ftr-dashboard .progress-fill.packed { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+.ftr-dashboard .progress-fill.dispatched { background: linear-gradient(90deg, #3498db, #2980b9); }
+
+/* Companies Section */
+.ftr-dashboard .companies-section {
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.ftr-dashboard .companies-section h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.ftr-dashboard .company-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 20px;
+}
+
+.ftr-dashboard .company-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 2px solid transparent;
+}
+
+.ftr-dashboard .company-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+}
+
+.ftr-dashboard .company-card.selected {
+  border-color: #667eea;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+}
+
+.ftr-dashboard .company-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f4ff;
+}
+
+.ftr-dashboard .company-header h4 {
+  margin: 0;
+  color: #333;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ftr-dashboard .company-wattage {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 15px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ftr-dashboard .company-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.ftr-dashboard .metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  background: #f8f9ff;
+  border-radius: 8px;
+}
+
+.ftr-dashboard .metric.highlight-green { background: #e8f8f0; }
+.ftr-dashboard .metric.highlight-blue { background: #e8f4fc; }
+.ftr-dashboard .metric.highlight-orange { background: #fef6e8; }
+.ftr-dashboard .metric.highlight-purple { background: #f5e8fc; }
+
+.ftr-dashboard .metric-icon {
+  font-size: 18px;
+}
+
+.ftr-dashboard .metric-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.ftr-dashboard .metric-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+}
+
+.ftr-dashboard .metric-label {
+  font-size: 10px;
+  color: #666;
+}
+
+/* Mini Progress Bars */
+.ftr-dashboard .company-progress {
+  display: flex;
+  gap: 15px;
+}
+
+.ftr-dashboard .mini-progress {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ftr-dashboard .mini-progress span {
+  font-size: 11px;
+  color: #666;
+}
+
+.ftr-dashboard .mini-bar {
+  height: 6px;
+  background: #e8ecf5;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ftr-dashboard .mini-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s;
+}
+
+.ftr-dashboard .mini-fill.green { background: linear-gradient(90deg, #27ae60, #2ecc71); }
+.ftr-dashboard .mini-fill.blue { background: linear-gradient(90deg, #3498db, #2980b9); }
+
+/* PDI Breakdown */
+.ftr-dashboard .pdi-breakdown {
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #e8e8e8;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ftr-dashboard .pdi-breakdown h5 {
+  margin: 0 0 10px 0;
+  color: #555;
+  font-size: 13px;
+}
+
+.ftr-dashboard .pdi-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.ftr-dashboard .pdi-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f8f9ff;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.ftr-dashboard .pdi-name {
+  color: #555;
+}
+
+.ftr-dashboard .pdi-count {
+  font-weight: 600;
+  color: #667eea;
+}
+
+.ftr-dashboard .binning-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.ftr-dashboard .binning-tag {
+  padding: 4px 10px;
+  background: #f0f4ff;
+  border-radius: 12px;
+  font-size: 11px;
+  color: #555;
+}
+
+/* Alerts Section */
+.ftr-dashboard .alerts-section {
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.ftr-dashboard .alerts-section h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.ftr-dashboard .alert-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+}
+
+.ftr-dashboard .alert-card.danger {
+  border-left: 4px solid #e74c3c;
+}
+
+.ftr-dashboard .alert-icon {
+  font-size: 32px;
+}
+
+.ftr-dashboard .alert-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.ftr-dashboard .alert-title {
+  font-size: 14px;
+  color: #666;
+}
+
+.ftr-dashboard .alert-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #e74c3c;
+}
+
+.ftr-dashboard .alert-desc {
+  font-size: 12px;
+  color: #999;
+}
+
+/* Stats Table Section */
+.ftr-dashboard .stats-table-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px 25px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  width: 100%;
+}
+
+.ftr-dashboard .stats-table-section h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.ftr-dashboard .stats-table-wrapper {
+  overflow-x: auto;
+}
+
+.ftr-dashboard .stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.ftr-dashboard .stats-table th {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 15px;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ftr-dashboard .stats-table th:first-child {
+  border-radius: 8px 0 0 0;
+}
+
+.ftr-dashboard .stats-table th:last-child {
+  border-radius: 0 8px 0 0;
+}
+
+.ftr-dashboard .stats-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #f0f0f0;
+  color: #333;
+}
+
+.ftr-dashboard .stats-table tbody tr:hover {
+  background: #f8f9ff;
+}
+
+.ftr-dashboard .stats-table .company-name-cell {
+  font-weight: 600;
+  color: #333;
+}
+
+.ftr-dashboard .stats-table .highlight-green {
+  color: #27ae60;
+  font-weight: 600;
+}
+
+.ftr-dashboard .stats-table .highlight-blue {
+  color: #3498db;
+  font-weight: 600;
+}
+
+.ftr-dashboard .stats-table .highlight-orange {
+  color: #e67e22;
+  font-weight: 600;
+}
+
+.ftr-dashboard .stats-table .total-row {
+  background: #f8f9ff;
+  border-top: 2px solid #667eea;
+}
+
+.ftr-dashboard .stats-table .total-row td {
+  border-bottom: none;
+}
+
+.ftr-dashboard .percent-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f0f4ff;
+  color: #667eea;
+}
+
+.ftr-dashboard .percent-badge.good {
+  background: #e8f8f0;
+  color: #27ae60;
+}
+
+.ftr-dashboard .percent-badge.medium {
+  background: #fef6e8;
+  color: #e67e22;
+}
+
+.ftr-dashboard .percent-badge.low {
+  background: #fee8e8;
+  color: #e74c3c;
+}
+
+/* Footer */
+.ftr-dashboard .dashboard-footer {
+  text-align: center;
+  padding: 15px;
+  color: #888;
+  font-size: 12px;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .ftr-dashboard .summary-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .ftr-dashboard {
+    padding: 10px;
+  }
+
+  .ftr-dashboard .dashboard-header {
+    flex-direction: column;
+    gap: 15px;
+    padding: 15px;
+  }
+
+  .ftr-dashboard .header-left, 
+  .ftr-dashboard .header-right {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .ftr-dashboard .header-left h1 {
+    font-size: 18px;
+  }
+
+  .ftr-dashboard .summary-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .ftr-dashboard .summary-card {
+    padding: 15px;
+  }
+
+  .ftr-dashboard .card-icon {
+    font-size: 28px;
+    min-width: 40px;
+    width: 40px;
+    height: 40px;
+  }
+
+  .ftr-dashboard .card-value {
+    font-size: 20px;
+  }
+
+  .ftr-dashboard .company-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .ftr-dashboard .company-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ftr-dashboard .stats-table {
+    font-size: 11px;
+  }
+
+  .ftr-dashboard .stats-table th, 
+  .ftr-dashboard .stats-table td {
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ftr-dashboard .summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .ftr-dashboard .company-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .ftr-dashboard .progress-section,
+  .ftr-dashboard .stats-table-section {
+    padding: 15px;
+  }
+}

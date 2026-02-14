@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDI IPQC - Frontend Test Checklist</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .status-excellent {
+            background: #4caf50;
+            color: white;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            border-left: 4px solid #667eea;
+            padding-left: 20px;
+        }
+
+        .section-title {
+            font-size: 1.5em;
+            color: #333;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .section-title::before {
+            content: '✓';
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+        }
+
+        .checklist {
+            list-style: none;
+        }
+
+        .checklist-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: #f5f5f5;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+        }
+
+        .checklist-item:hover {
+            background: #e8f5e9;
+            transform: translateX(5px);
+        }
+
+        .checklist-item.completed {
+            background: #c8e6c9;
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+
+        .checklist-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            cursor: pointer;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .credentials {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 20px 0;
+        }
+
+        .credentials h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+
+        .cred-item {
+            margin: 5px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2.5em;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 2px solid #e0e0e0;
+            color: #666;
+        }
+
+        @media print {
+            body {
+                background: white;
+            }
+            .checklist-item:hover {
+                transform: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 PDI IPQC System</h1>
+        <div class="subtitle">Frontend Testing Checklist</div>
+        
+        <div style="text-align: center;">
+            <span class="status-badge status-excellent">✓ BACKEND: 100% OPERATIONAL</span>
+        </div>
+
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill">0%</div>
+        </div>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="totalTests">0</div>
+                <div class="stat-label">Total Tests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="completedTests">0</div>
+                <div class="stat-label">Completed</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="remainingTests">0</div>
+                <div class="stat-label">Remaining</div>
+            </div>
+        </div>
+
+        <div class="credentials">
+            <h3>🔑 Test Credentials</h3>
+            <div class="cred-item"><strong>Super Admin:</strong> admin@gautam / Gautam@123</div>
+            <div class="cred-item"><strong>Normal User:</strong> user@gautam / Gautam@123</div>
+            <div class="cred-item"><strong>Frontend URL:</strong> http://localhost:3000</div>
+            <div class="cred-item"><strong>Backend URL:</strong> http://localhost:5003</div>
+        </div>
+
+        <!-- Authentication & User Management -->
+        <div class="section">
+            <div class="section-title">1. Authentication & User Management</div>
+            <ul class="checklist">
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Login as Super Admin (admin@gautam / Gautam@123)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Check role badge shows "👑 Super Admin" in sidebar</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Verify "User Management" menu is visible</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Logout and login as Normal User (user@gautam)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Check role badge shows "👤 User"</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Verify "User Management" menu is hidden</li>
+            </ul>
+        </div>
+
+        <!-- User Management (Super Admin) -->
+        <div class="section">
+            <div class="section-title">2. User Management (Super Admin Only)</div>
+            <ul class="checklist">
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Access User Management page as Super Admin</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Click "Add User" button</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Create new user with all details</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Edit existing user details</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Toggle password visibility (👁️ icon)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Delete a user (not yourself)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Verify normal user sees "Access Denied"</li>
+            </ul>
+        </div>
+
+        <!-- COC Dashboard -->
+        <div class="section">
+            <div class="section-title">3. COC Dashboard</div>
+            <ul class="checklist">
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> View all COC documents (should show 511 docs)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Check material stock levels displayed</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Click edit (✏️) icon on "Used" column</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Change used quantity value</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Click save (✓) button</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Verify available quantity updates automatically</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Test cancel (✕) button</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Filter by company (Bhiwani)</li>
+            </ul>
+        </div>
+
+        <!-- Daily Report -->
+        <div class="section">
+            <div class="section-title">4. Daily Report (Production Management)</div>
+            <ul class="checklist">
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Select company from dropdown (4 companies)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> View production days list</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Click on a production day</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Open PDI Details modal</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> View BOM materials table</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Click edit on "Used Qty" column</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Change used quantity</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Verify Gap recalculates (Gap = Required - Used)</li>
+            </ul>
+        </div>
+
+        <!-- COC Selection Modal -->
+        <div class="section">
+            <div class="section-title">5. COC Selection Modal (New UI)</div>
+            <ul class="checklist">
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Create new production day</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Click "Select COC for Materials" button</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Verify purple gradient header (modern design)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Check card-based layout for materials</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Hover over material cards (should lift up)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Select COC documents for materials</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Verify green gradient for selected COC</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Click ✓ to confirm or ✕ to cancel</li>
+            </ul>
+        </div>
+
+        <!-- Role-Based Access Control -->
+        <div class="section">
+            <div class="section-title">6. Role-Based Access Control</div>
+            <ul class="checklist">
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> <strong>Super Admin:</strong> See Delete buttons in BulkFTRGenerator</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> <strong>Super Admin:</strong> See Clear All in BulkFTRGenerator</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> <strong>Super Admin:</strong> See Delete in PDIFTRGenerator</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> <strong>Super Admin:</strong> See Delete in GraphManager</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> <strong>Super Admin:</strong> See Clear All in DailyReport</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> <strong>Normal User:</strong> All delete buttons hidden</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> <strong>Normal User:</strong> Can only view and edit</li>
+            </ul>
+        </div>
+
+        <!-- FTR Generation -->
+        <div class="section">
+            <div class="section-title">7. FTR Generation</div>
+            <ul class="checklist">
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Upload single FTR document</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Upload bulk FTR documents</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Generate PDF report</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Download generated report</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> View upload history</li>
+            </ul>
+        </div>
+
+        <!-- IPQC & Other Features -->
+        <div class="section">
+            <div class="section-title">8. IPQC & Additional Features</div>
+            <ul class="checklist">
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Enter IPQC test data</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Generate IPQC report</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Test Graph Manager (upload IV curves)</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> Create Peel Test report</li>
+                <li class="checklist-item"><input type="checkbox" onchange="updateProgress()"> View all data tables and lists</li>
+            </ul>
+        </div>
+
+        <div class="footer">
+            <p><strong>Testing Date:</strong> December 19, 2025</p>
+            <p><strong>Backend Status:</strong> ✅ 100% Operational (22/22 tests passed)</p>
+            <p><strong>Total COC Documents:</strong> 511 | <strong>Materials Tracked:</strong> 9</p>
+            <p style="margin-top: 15px;">💡 <em>Check all items to verify complete system functionality</em></p>
+        </div>
+    </div>
+
+    <script>
+        function updateProgress() {
+            const checkboxes = document.querySelectorAll('.checklist-item input[type="checkbox"]');
+            const total = checkboxes.length;
+            let completed = 0;
+
+            checkboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    completed++;
+                    checkbox.parentElement.classList.add('completed');
+                } else {
+                    checkbox.parentElement.classList.remove('completed');
+                }
+            });
+
+            const percentage = Math.round((completed / total) * 100);
+            const remaining = total - completed;
+
+            document.getElementById('progressFill').style.width = percentage + '%';
+            document.getElementById('progressFill').textContent = percentage + '%';
+            document.getElementById('totalTests').textContent = total;
+            document.getElementById('completedTests').textContent = completed;
+            document.getElementById('remainingTests').textContent = remaining;
+
+            // Save progress to localStorage
+            const progress = Array.from(checkboxes).map(cb => cb.checked);
+            localStorage.setItem('testProgress', JSON.stringify(progress));
+        }
+
+        // Load saved progress on page load
+        window.addEventListener('load', () => {
+            const savedProgress = localStorage.getItem('testProgress');
+            if (savedProgress) {
+                const progress = JSON.parse(savedProgress);
+                const checkboxes = document.querySelectorAll('.checklist-item input[type="checkbox"]');
+                checkboxes.forEach((checkbox, index) => {
+                    checkbox.checked = progress[index] || false;
+                });
+            }
+            updateProgress();
+        });
+    </script>
+</body>
+</html>
