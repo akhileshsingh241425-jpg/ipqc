@@ -61,6 +61,7 @@ def create_app():
     from app.routes.coc_management_routes import coc_mgmt_bp
     from app.routes.witness_report_routes import witness_report_bp
     from app.routes.calibration_routes import calibration_bp
+    from app.routes.qms_routes import qms_bp
     
     app.register_blueprint(ipqc_bp, url_prefix='/api/ipqc')
     app.register_blueprint(production_bp)
@@ -79,6 +80,7 @@ def create_app():
     app.register_blueprint(coc_mgmt_bp)
     app.register_blueprint(witness_report_bp, url_prefix='/api')
     app.register_blueprint(calibration_bp)
+    app.register_blueprint(qms_bp)
     
     # Serve uploaded files (IPQC PDFs, FTR documents, BOM images)
     @app.route('/uploads/<path:filename>')

@@ -16,6 +16,7 @@ import FTRDashboard from './components/FTRDashboard';
 import COCManagementDashboard from './components/COCManagementDashboard';
 import WitnessReport from './components/WitnessReport';
 import CalibrationDashboard from './components/CalibrationDashboard';
+import QMSDashboard from './components/QMSDashboard';
 import Login from './components/Login';
 import './styles/Navbar.css';
 import './App.css';
@@ -394,6 +395,8 @@ function App() {
         return <COCManagementDashboard />;
       case 'calibration':
         return <CalibrationDashboard />;
+      case 'qms':
+        return <QMSDashboard />;
       default:
         return <IPQCForm />;
     }
@@ -655,6 +658,16 @@ function App() {
             >
               <span className="icon">🔧</span>
               {!sidebarCollapsed && <span className="label">Calibration</span>}
+            </li>
+          )}
+          {hasAccess('qms') && (
+            <li 
+              className={activeSection === 'qms' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('qms')}
+              title="Quality Management System"
+            >
+              <span className="icon">🛡️</span>
+              {!sidebarCollapsed && <span className="label">QMS</span>}
             </li>
           )}
           <li 
