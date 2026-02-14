@@ -7,6 +7,7 @@ import PDIBatchManager from './components/PDIBatchManager';
 import TestReport from './components/TestReport';
 import GraphManager from './components/GraphManager';
 import UserManagement from './components/UserManagement';
+import FTRManagement from './components/FTRManagement';
 import AIAssistant from './components/AIAssistant';
 import FTRDashboard from './components/FTRDashboard';
 import COCManagementDashboard from './components/COCManagementDashboard';
@@ -292,7 +293,7 @@ function App() {
   const roleAccess = {
     super_admin: ['all'], // Full access
     user: ['all'], // Full access for normal users too
-    ftr_only: ['ftr-download', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report'],
+    ftr_only: ['ftr-download', 'ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report'],
     ipqc_only: ['ipqc', 'daily-report', 'pdi-batches'],
     coc_only: ['coc-dashboard', 'coc-management']
   };
@@ -366,6 +367,8 @@ function App() {
 
       case 'ftr-download':
         return <FTRDownload />;
+      case 'ftr-management':
+        return <FTRManagement />;
 
       case 'witness-report':
         return <WitnessReport />;
@@ -519,6 +522,16 @@ function App() {
             >
               <span className="icon">📥</span>
               {!sidebarCollapsed && <span className="label">FTR Download</span>}
+            </li>
+          )}
+          {hasAccess('ftr-management') && (
+            <li 
+              className={activeSection === 'ftr-management' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('ftr-management')}
+              title="FTR Management"
+            >
+              <span className="icon">🏭</span>
+              {!sidebarCollapsed && <span className="label">FTR Management</span>}
             </li>
           )}
 
