@@ -264,9 +264,16 @@ const QMSDashboard = () => {
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
   
+  // Version Control state
+  const [versionHistory, setVersionHistory] = useState([]);
+  const [showVersionModal, setShowVersionModal] = useState(false);
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
+  const [checkinData, setCheckinData] = useState({ commit_message: '', change_type: 'Update', user: '', new_version: '' });
+  const [checkinFile, setCheckinFile] = useState(null);
+  
   // Form state
   const [formData, setFormData] = useState({
-    title: '', category: 'Quality Manual', sub_category: '', description: '',
+    doc_number: '', title: '', category: 'Quality Manual', sub_category: '', description: '',
     version: '1.0', status: 'Draft', department: 'Quality',
     prepared_by: '', reviewed_by: '', approved_by: '',
     effective_date: '', review_date: '', expiry_date: '',
@@ -327,7 +334,7 @@ const QMSDashboard = () => {
 
   const resetForm = () => {
     setFormData({
-      title: '', category: 'Quality Manual', sub_category: '', description: '',
+      doc_number: '', title: '', category: 'Quality Manual', sub_category: '', description: '',
       version: '1.0', status: 'Draft', department: 'Quality',
       prepared_by: '', reviewed_by: '', approved_by: '',
       effective_date: '', review_date: '', expiry_date: '',
@@ -344,7 +351,7 @@ const QMSDashboard = () => {
 
   const openEditModal = (doc) => {
     setFormData({
-      title: doc.title || '', category: doc.category || 'Quality Manual',
+      doc_number: doc.doc_number || '', title: doc.title || '', category: doc.category || 'Quality Manual',
       sub_category: doc.sub_category || '', description: doc.description || '',
       version: doc.version || '1.0', status: doc.status || 'Draft',
       department: doc.department || '', prepared_by: doc.prepared_by || '',
@@ -442,6 +449,128 @@ const QMSDashboard = () => {
     } catch (err) {
       showMessage('Error loading audit log', 'error');
     }
+  };
+
+  // ─── Version Control Functions ──────────────────────────
+  const handleCheckout = async (doc) => {
+    const user = prompt('Your name (for checkout):');
+    if (!user) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/qms/documents/${doc.id}/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMessage(`Document checked out. Downloading for editing...`);
+        // Auto-download the file
+        if (doc.file_name) {
+          window.open(`${API_BASE}/api/qms/documents/${doc.id}/download`, '_blank');
+        }
+        fetchDocuments();
+        if (selectedDoc?.id === doc.id) setSelectedDoc({ ...doc, is_locked: true, checked_out_by: user });
+      } else {
+        showMessage(data.error || 'Checkout failed', 'error');
+      }
+    } catch (err) {
+      showMessage('Error: ' + err.message, 'error');
+    }
+  };
+
+  const handleCancelCheckout = async (doc) => {
+    if (!window.confirm('Cancel checkout? No changes will be saved.')) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/qms/documents/${doc.id}/cancel-checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: doc.checked_out_by || 'System' })
+      });
+      if (res.ok) {
+        showMessage('Checkout cancelled');
+        fetchDocuments();
+        if (selectedDoc?.id === doc.id) setSelectedDoc({ ...doc, is_locked: false, checked_out_by: null });
+      }
+    } catch (err) {
+      showMessage('Error: ' + err.message, 'error');
+    }
+  };
+
+  const openCheckinModal = (doc) => {
+    setSelectedDoc(doc);
+    setCheckinData({ commit_message: '', change_type: 'Update', user: doc.checked_out_by || '', new_version: '' });
+    setCheckinFile(null);
+    setShowCheckinModal(true);
+  };
+
+  const handleCheckin = async (e) => {
+    e.preventDefault();
+    if (!checkinData.commit_message) { showMessage('Commit message is required', 'error'); return; }
+    try {
+      const fd = new FormData();
+      fd.append('commit_message', checkinData.commit_message);
+      fd.append('change_type', checkinData.change_type);
+      fd.append('user', checkinData.user);
+      if (checkinData.new_version) fd.append('new_version', checkinData.new_version);
+      if (checkinFile) fd.append('file', checkinFile);
+
+      const res = await fetch(`${API_BASE}/api/qms/documents/${selectedDoc.id}/checkin`, {
+        method: 'POST',
+        body: fd
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMessage(data.message || 'Document checked in successfully');
+        setShowCheckinModal(false);
+        fetchDocuments();
+        fetchDashboardStats();
+        if (selectedDoc) setSelectedDoc(data.document);
+      } else {
+        showMessage(data.error || 'Check-in failed', 'error');
+      }
+    } catch (err) {
+      showMessage('Error: ' + err.message, 'error');
+    }
+  };
+
+  const viewVersionHistory = async (docId) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/qms/documents/${docId}/versions`);
+      const data = await res.json();
+      setVersionHistory(data.versions || []);
+      setShowVersionModal(true);
+    } catch (err) {
+      showMessage('Error loading version history', 'error');
+    }
+  };
+
+  const handleRevert = async (doc, versionId, versionNum) => {
+    if (!window.confirm(`Revert document to version ${versionNum}? This will create a new version.`)) return;
+    const user = prompt('Your name (for revert):');
+    if (!user) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/qms/documents/${doc.id}/revert/${versionId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showMessage(data.message || 'Document reverted successfully');
+        fetchDocuments();
+        fetchDashboardStats();
+        setShowVersionModal(false);
+        if (selectedDoc) setSelectedDoc(data.document);
+      } else {
+        showMessage(data.error || 'Revert failed', 'error');
+      }
+    } catch (err) {
+      showMessage('Error: ' + err.message, 'error');
+    }
+  };
+
+  const downloadVersion = (docId, versionId) => {
+    window.open(`${API_BASE}/api/qms/documents/${docId}/versions/${versionId}/download`, '_blank');
   };
 
   const viewDocDetail = (doc) => {
@@ -708,9 +837,39 @@ const QMSDashboard = () => {
           <div className="detail-actions-top">
             <button className="qms-btn-secondary" onClick={() => openEditModal(doc)}>{Icons.edit} Edit</button>
             {doc.file_name && <button className="qms-btn-secondary" onClick={() => handleDownload(doc)}>{Icons.download} Download</button>}
+            {/* Version Control Buttons */}
+            {doc.file_name && !doc.is_locked && (
+              <button className="qms-btn-secondary" onClick={() => handleCheckout(doc)} style={{background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7'}}>
+                🔓 Check Out (Edit)
+              </button>
+            )}
+            {doc.is_locked && doc.checked_out_by && (
+              <>
+                <button className="qms-btn-primary" onClick={() => openCheckinModal(doc)} style={{background: '#1565c0'}}>
+                  📥 Check In (Commit)
+                </button>
+                <button className="qms-btn-secondary" onClick={() => handleCancelCheckout(doc)} style={{background: '#fff3e0', color: '#e65100', border: '1px solid #ffcc80'}}>
+                  ✕ Cancel Checkout
+                </button>
+              </>
+            )}
+            <button className="qms-btn-secondary" onClick={() => viewVersionHistory(doc.id)} style={{background: '#e3f2fd', color: '#1565c0', border: '1px solid #90caf9'}}>
+              📋 Version History
+            </button>
             <button className="qms-btn-secondary" onClick={() => viewAuditLog(doc.id)}>{Icons.history} Audit Log</button>
           </div>
         </div>
+        
+        {/* Checkout Warning Banner */}
+        {doc.is_locked && (
+          <div style={{background: '#fff3e0', border: '1px solid #ffcc80', borderRadius: '8px', padding: '12px 16px', margin: '0 0 16px', display: 'flex', alignItems: 'center', gap: '10px'}}>
+            <span style={{fontSize: '20px'}}>🔒</span>
+            <div>
+              <strong>Document Checked Out</strong>
+              <span style={{marginLeft: '8px', color: '#666'}}>by {doc.checked_out_by} • {doc.checked_out_at ? new Date(doc.checked_out_at).toLocaleString() : ''}</span>
+            </div>
+          </div>
+        )}
         
         <div className="detail-main">
           <div className="detail-top">
@@ -721,6 +880,7 @@ const QMSDashboard = () => {
                 <StatusBadge status={doc.status} />
                 <span className="version-badge">Version {doc.version}</span>
                 {doc.is_controlled && <span className="controlled-badge">{Icons.shield} Controlled</span>}
+                {doc.is_locked && <span className="version-badge" style={{background: '#fff3e0', color: '#e65100'}}>🔒 Checked Out</span>}
               </div>
             </div>
           </div>
@@ -811,7 +971,11 @@ const QMSDashboard = () => {
         </div>
         <form onSubmit={handleSubmit} className="modal-form">
           <div className="form-grid">
-            <div className="form-group full-width">
+            <div className="form-group">
+              <label>Document Number *</label>
+              <input type="text" value={formData.doc_number} onChange={e => setFormData({...formData, doc_number: e.target.value})} required placeholder="e.g., GSPL/QMS/SOP/001" />
+            </div>
+            <div className="form-group">
               <label>Document Title *</label>
               <input type="text" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required placeholder="e.g., SOP for Cell Soldering Process" />
             </div>
@@ -951,6 +1115,168 @@ const QMSDashboard = () => {
   );
 
   // ═══════════════════════════════════════════════
+  // Check-In Modal (Git Commit-style)
+  // ═══════════════════════════════════════════════
+  const renderCheckinModal = () => (
+    <div className="qms-modal-overlay" onClick={() => setShowCheckinModal(false)}>
+      <div className="qms-modal qms-modal-sm" onClick={e => e.stopPropagation()} style={{maxWidth: '550px'}}>
+        <div className="modal-header" style={{background: 'linear-gradient(135deg, #1565c0, #1976d2)'}}>
+          <h2>📥 Check In Document</h2>
+          <button className="modal-close" onClick={() => setShowCheckinModal(false)}>{Icons.close}</button>
+        </div>
+        <form onSubmit={handleCheckin} style={{padding: '20px'}}>
+          <div style={{marginBottom: '16px'}}>
+            <label style={{display: 'block', fontWeight: 600, marginBottom: '6px', color: '#333'}}>Commit Message *</label>
+            <textarea
+              rows="3"
+              value={checkinData.commit_message}
+              onChange={e => setCheckinData({...checkinData, commit_message: e.target.value})}
+              required
+              placeholder="Describe what you changed... (e.g., Updated inspection criteria in Section 3.2)"
+              style={{width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box'}}
+            />
+          </div>
+          
+          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px'}}>
+            <div>
+              <label style={{display: 'block', fontWeight: 600, marginBottom: '6px', color: '#333'}}>Change Type</label>
+              <select
+                value={checkinData.change_type}
+                onChange={e => setCheckinData({...checkinData, change_type: e.target.value})}
+                style={{width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px'}}
+              >
+                <option value="Minor Edit">Minor Edit (v1.0 → v1.1)</option>
+                <option value="Update">Update (v1.0 → v1.1)</option>
+                <option value="Major Revision">Major Revision (v1.x → v2.0)</option>
+              </select>
+            </div>
+            <div>
+              <label style={{display: 'block', fontWeight: 600, marginBottom: '6px', color: '#333'}}>Your Name *</label>
+              <input
+                type="text"
+                value={checkinData.user}
+                onChange={e => setCheckinData({...checkinData, user: e.target.value})}
+                required
+                placeholder="Name"
+                style={{width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px'}}
+              />
+            </div>
+          </div>
+
+          <div style={{marginBottom: '16px'}}>
+            <label style={{display: 'block', fontWeight: 600, marginBottom: '6px', color: '#333'}}>New Version (optional)</label>
+            <input
+              type="text"
+              value={checkinData.new_version}
+              onChange={e => setCheckinData({...checkinData, new_version: e.target.value})}
+              placeholder="Auto-calculated if empty (e.g., 1.2)"
+              style={{width: '100%', padding: '10px', border: '2px solid #e0e0e0', borderRadius: '8px'}}
+            />
+          </div>
+
+          <div style={{marginBottom: '20px'}}>
+            <label style={{display: 'block', fontWeight: 600, marginBottom: '6px', color: '#333'}}>Upload Updated File *</label>
+            <div style={{border: '2px dashed #1565c0', borderRadius: '8px', padding: '20px', textAlign: 'center', cursor: 'pointer', background: '#e3f2fd'}}
+              onClick={() => document.getElementById('checkin-file-input').click()}>
+              <input id="checkin-file-input" type="file" style={{display: 'none'}}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.txt,.csv"
+                onChange={e => setCheckinFile(e.target.files[0])} />
+              {checkinFile ? (
+                <div>📄 <strong>{checkinFile.name}</strong> <span style={{color: '#666'}}>({(checkinFile.size / 1024).toFixed(1)} KB)</span></div>
+              ) : (
+                <div>
+                  <span style={{fontSize: '24px'}}>📤</span>
+                  <p style={{margin: '8px 0 0', color: '#1565c0'}}>Click to select the updated document</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{display: 'flex', gap: '10px', justifyContent: 'flex-end'}}>
+            <button type="button" className="qms-btn-secondary" onClick={() => setShowCheckinModal(false)}>Cancel</button>
+            <button type="submit" className="qms-btn-primary" style={{background: '#1565c0'}}>
+              📥 Commit & Check In
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
+  // ═══════════════════════════════════════════════
+  // Version History Modal (Git Log-style)
+  // ═══════════════════════════════════════════════
+  const renderVersionModal = () => (
+    <div className="qms-modal-overlay" onClick={() => setShowVersionModal(false)}>
+      <div className="qms-modal" onClick={e => e.stopPropagation()} style={{maxWidth: '700px'}}>
+        <div className="modal-header" style={{background: 'linear-gradient(135deg, #1565c0, #42a5f5)'}}>
+          <h2>📋 Version History</h2>
+          <button className="modal-close" onClick={() => setShowVersionModal(false)}>{Icons.close}</button>
+        </div>
+        <div style={{padding: '20px', maxHeight: '500px', overflowY: 'auto'}}>
+          {versionHistory.length === 0 ? (
+            <div style={{textAlign: 'center', padding: '40px', color: '#999'}}>
+              <span style={{fontSize: '40px'}}>📄</span>
+              <p>No version history yet. Check in a new version to start tracking changes.</p>
+            </div>
+          ) : (
+            <div style={{position: 'relative'}}>
+              {/* Git-like timeline line */}
+              <div style={{position: 'absolute', left: '18px', top: '0', bottom: '0', width: '3px', background: '#e0e0e0', zIndex: 0}} />
+              
+              {versionHistory.map((ver, idx) => (
+                <div key={ver.id} style={{display: 'flex', gap: '16px', marginBottom: '20px', position: 'relative', zIndex: 1}}>
+                  {/* Commit dot */}
+                  <div style={{
+                    width: '38px', height: '38px', borderRadius: '50%', flexShrink: 0,
+                    background: ver.change_type === 'Revert' ? '#ff9800' : ver.change_type === 'Major Revision' ? '#d32f2f' : ver.change_type === 'Snapshot' ? '#9e9e9e' : '#1565c0',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '14px', fontWeight: 700
+                  }}>
+                    {ver.change_type === 'Revert' ? '↩' : ver.change_type === 'Snapshot' ? '📸' : `v${ver.version_number?.split('.')[0] || ''}`}
+                  </div>
+                  
+                  {/* Commit info */}
+                  <div style={{
+                    flex: 1, background: idx === 0 ? '#e3f2fd' : '#f5f5f5', borderRadius: '10px', padding: '14px 16px',
+                    border: idx === 0 ? '2px solid #90caf9' : '1px solid #e0e0e0'
+                  }}>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px'}}>
+                      <strong style={{color: '#1565c0', fontSize: '15px'}}>v{ver.version_number}</strong>
+                      <span style={{
+                        background: ver.change_type === 'Revert' ? '#fff3e0' : ver.change_type === 'Major Revision' ? '#fce4ec' : ver.change_type === 'Snapshot' ? '#f5f5f5' : '#e8f5e9',
+                        color: ver.change_type === 'Revert' ? '#e65100' : ver.change_type === 'Major Revision' ? '#c62828' : ver.change_type === 'Snapshot' ? '#757575' : '#2e7d32',
+                        padding: '2px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600
+                      }}>{ver.change_type}</span>
+                    </div>
+                    <p style={{margin: '0 0 8px', color: '#333', fontSize: '14px'}}>{ver.commit_message}</p>
+                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#777'}}>
+                      <span>👤 {ver.changed_by} • 📅 {ver.created_at ? new Date(ver.created_at).toLocaleString() : ''}</span>
+                      <div style={{display: 'flex', gap: '8px'}}>
+                        {ver.file_path && (
+                          <button type="button" onClick={() => downloadVersion(selectedDoc?.id, ver.id)}
+                            style={{background: 'none', border: '1px solid #90caf9', borderRadius: '6px', padding: '3px 10px', cursor: 'pointer', color: '#1565c0', fontSize: '12px'}}>
+                            ↓ Download
+                          </button>
+                        )}
+                        {ver.change_type !== 'Snapshot' && idx > 0 && selectedDoc && (
+                          <button type="button" onClick={() => handleRevert(selectedDoc, ver.id, ver.version_number)}
+                            style={{background: 'none', border: '1px solid #ffcc80', borderRadius: '6px', padding: '3px 10px', cursor: 'pointer', color: '#e65100', fontSize: '12px'}}>
+                            ↩ Revert
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ═══════════════════════════════════════════════
   // Audit Log Modal
   // ═══════════════════════════════════════════════
   const renderAuditModal = () => (
@@ -1050,6 +1376,8 @@ const QMSDashboard = () => {
       {/* Modals */}
       {showModal && renderModal()}
       {showAuditModal && renderAuditModal()}
+      {showCheckinModal && renderCheckinModal()}
+      {showVersionModal && renderVersionModal()}
 
       {/* AI Document Assistant */}
       <QMSAssistant isOpen={showAssistant} onClose={() => setShowAssistant(false)} />

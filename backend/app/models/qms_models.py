@@ -31,6 +31,10 @@ class QMSDocument(db.Model):
     access_level = db.Column(db.String(30), default='All')  # All, Management, QA, Production
     extracted_text = db.Column(db.Text)  # Full extracted text content from file
     text_extracted_at = db.Column(db.DateTime)  # When text was last extracted
+    # Version control fields
+    checked_out_by = db.Column(db.String(100))  # Who checked out for editing
+    checked_out_at = db.Column(db.DateTime)  # When checked out
+    is_locked = db.Column(db.Boolean, default=False)  # Lock during checkout
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -63,8 +67,48 @@ class QMSDocument(db.Model):
             'has_extracted_text': bool(self.extracted_text),
             'text_length': len(self.extracted_text) if self.extracted_text else 0,
             'text_extracted_at': self.text_extracted_at.isoformat() if self.text_extracted_at else None,
+            'checked_out_by': self.checked_out_by,
+            'checked_out_at': self.checked_out_at.isoformat() if self.checked_out_at else None,
+            'is_locked': self.is_locked or False,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class QMSDocumentVersion(db.Model):
+    """Stores every version of a document - like Git commits"""
+    __tablename__ = 'qms_document_versions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    document_id = db.Column(db.Integer, db.ForeignKey('qms_documents.id'), nullable=False)
+    version_number = db.Column(db.String(20), nullable=False)  # 1.0, 1.1, 2.0, etc.
+    commit_message = db.Column(db.Text)  # What changed - like git commit message
+    changed_by = db.Column(db.String(100), nullable=False)  # Who made the change
+    change_type = db.Column(db.String(50), default='Update')  # Created, Update, Major Revision, Minor Edit, Revert
+    file_path = db.Column(db.String(500))  # Path to this version's file
+    file_name = db.Column(db.String(300))
+    file_size = db.Column(db.Integer)
+    file_type = db.Column(db.String(50))
+    # Snapshot of document metadata at this version
+    title_snapshot = db.Column(db.String(300))
+    status_snapshot = db.Column(db.String(30))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'document_id': self.document_id,
+            'version_number': self.version_number,
+            'commit_message': self.commit_message,
+            'changed_by': self.changed_by,
+            'change_type': self.change_type,
+            'file_path': self.file_path,
+            'file_name': self.file_name,
+            'file_size': self.file_size,
+            'file_type': self.file_type,
+            'title_snapshot': self.title_snapshot,
+            'status_snapshot': self.status_snapshot,
+            'created_at': self.created_at.isoformat() if self.created_at else None
         }
 
 

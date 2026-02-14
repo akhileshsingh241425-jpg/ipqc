@@ -40,7 +40,7 @@ def create_app():
     db.init_app(app)
     
     # Import ALL models before create_all so tables get created
-    from app.models.qms_models import QMSDocument, QMSPartnerAudit, QMSActionPlan, QMSAuditLog
+    from app.models.qms_models import QMSDocument, QMSPartnerAudit, QMSActionPlan, QMSAuditLog, QMSDocumentVersion
     
     # Create tables
     with app.app_context():

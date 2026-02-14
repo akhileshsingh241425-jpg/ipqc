@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, send_file
 from app.models.database import db
-from app.models.qms_models import QMSDocument, QMSPartnerAudit, QMSActionPlan, QMSAuditLog
+from app.models.qms_models import QMSDocument, QMSPartnerAudit, QMSActionPlan, QMSAuditLog, QMSDocumentVersion
 from datetime import datetime
 from werkzeug.utils import secure_filename
 import os
@@ -441,11 +441,7 @@ def update_document(doc_id):
         
         # Handle new file
         if file and allowed_file(file.filename):
-            # Delete old file if exists
-            if doc.file_path:
-                old_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads', doc.file_path)
-                if os.path.exists(old_path):
-                    os.remove(old_path)
+            # Keep old file for version history (don't delete)
             
             filename = secure_filename(file.filename)
             unique_name = f"{uuid.uuid4().hex}_{filename}"
@@ -618,6 +614,324 @@ def dashboard_stats():
             'departments': departments
         })
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════
+# DOCUMENT VERSION CONTROL ROUTES (Git-like)
+# ═══════════════════════════════════════════════
+
+@qms_bp.route('/documents/<int:doc_id>/checkout', methods=['POST'])
+def checkout_document(doc_id):
+    """Check out a document for editing - locks it and provides Word download"""
+    try:
+        doc = QMSDocument.query.get_or_404(doc_id)
+        data = request.json or {}
+        user = data.get('user', 'Unknown')
+        
+        if doc.is_locked and doc.checked_out_by != user:
+            return jsonify({
+                'error': f'Document is already checked out by {doc.checked_out_by}',
+                'checked_out_by': doc.checked_out_by,
+                'checked_out_at': doc.checked_out_at.isoformat() if doc.checked_out_at else None
+            }), 409
+        
+        # Lock the document
+        doc.is_locked = True
+        doc.checked_out_by = user
+        doc.checked_out_at = datetime.utcnow()
+        db.session.commit()
+        
+        # Log the checkout
+        log = QMSAuditLog(
+            document_id=doc.id,
+            action='Checked Out',
+            performed_by=user,
+            details=f'Document {doc.doc_number} v{doc.version} checked out for editing'
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Document checked out successfully by {user}',
+            'document': doc.to_dict(),
+            'download_url': f'/api/qms/documents/{doc_id}/download'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/documents/<int:doc_id>/checkin', methods=['POST'])
+def checkin_document(doc_id):
+    """Check in a document with new version - like Git commit"""
+    try:
+        doc = QMSDocument.query.get_or_404(doc_id)
+        
+        if request.content_type and 'multipart/form-data' in request.content_type:
+            data = request.form.to_dict()
+            file = request.files.get('file')
+        else:
+            data = request.json or {}
+            file = None
+        
+        user = data.get('user', 'Unknown')
+        commit_message = data.get('commit_message', '')
+        change_type = data.get('change_type', 'Update')
+        new_version = data.get('new_version', '')
+        
+        if not commit_message:
+            return jsonify({'error': 'Commit message is required'}), 400
+        
+        # Save current version as a snapshot before updating
+        version_snapshot = QMSDocumentVersion(
+            document_id=doc.id,
+            version_number=doc.version,
+            commit_message=f'[Auto-snapshot] Before v{new_version or "update"}: {doc.version}',
+            changed_by='System',
+            change_type='Snapshot',
+            file_path=doc.file_path,
+            file_name=doc.file_name,
+            file_size=doc.file_size,
+            file_type=doc.file_type,
+            title_snapshot=doc.title,
+            status_snapshot=doc.status
+        )
+        
+        # Only save snapshot if there's no existing version record for current version
+        existing = QMSDocumentVersion.query.filter_by(
+            document_id=doc.id, version_number=doc.version
+        ).first()
+        if not existing:
+            db.session.add(version_snapshot)
+        
+        # Handle new file upload
+        if file and allowed_file(file.filename):
+            # Keep old file (don't delete - it's our version history)
+            filename = secure_filename(file.filename)
+            unique_name = f"{uuid.uuid4().hex}_{filename}"
+            upload_folder = get_upload_folder()
+            filepath = os.path.join(upload_folder, unique_name)
+            file.save(filepath)
+            
+            doc.file_path = f"qms_documents/{unique_name}"
+            doc.file_name = filename
+            doc.file_size = os.path.getsize(filepath)
+            doc.file_type = filename.rsplit('.', 1)[1].lower()
+            
+            # Auto-extract text
+            try:
+                from app.services.document_search import extract_text_from_file
+                extracted = extract_text_from_file(filepath)
+                if extracted:
+                    doc.extracted_text = extracted
+                    doc.text_extracted_at = datetime.utcnow()
+            except Exception as ex:
+                logger.warning(f'Text extraction failed on checkin: {ex}')
+        
+        # Auto-increment version if not provided
+        if new_version:
+            doc.version = new_version
+        else:
+            try:
+                parts = doc.version.split('.')
+                if change_type in ['Major Revision', 'Major']:
+                    doc.version = f"{int(parts[0]) + 1}.0"
+                else:
+                    doc.version = f"{parts[0]}.{int(parts[1]) + 1}"
+            except (ValueError, IndexError):
+                doc.version = '1.1'
+        
+        # Unlock the document
+        doc.is_locked = False
+        doc.checked_out_by = None
+        doc.checked_out_at = None
+        doc.updated_at = datetime.utcnow()
+        
+        # Create new version record (the commit)
+        new_version_record = QMSDocumentVersion(
+            document_id=doc.id,
+            version_number=doc.version,
+            commit_message=commit_message,
+            changed_by=user,
+            change_type=change_type,
+            file_path=doc.file_path,
+            file_name=doc.file_name,
+            file_size=doc.file_size,
+            file_type=doc.file_type,
+            title_snapshot=doc.title,
+            status_snapshot=doc.status
+        )
+        db.session.add(new_version_record)
+        db.session.commit()
+        
+        # Audit log
+        log = QMSAuditLog(
+            document_id=doc.id,
+            action='Checked In (New Version)',
+            performed_by=user,
+            details=f'Document {doc.doc_number} updated to v{doc.version}. Commit: {commit_message}'
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Document checked in as v{doc.version}',
+            'document': doc.to_dict(),
+            'version': new_version_record.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/documents/<int:doc_id>/cancel-checkout', methods=['POST'])
+def cancel_checkout(doc_id):
+    """Cancel checkout without changes - unlock the document"""
+    try:
+        doc = QMSDocument.query.get_or_404(doc_id)
+        data = request.json or {}
+        user = data.get('user', 'Unknown')
+        
+        doc.is_locked = False
+        doc.checked_out_by = None
+        doc.checked_out_at = None
+        db.session.commit()
+        
+        log = QMSAuditLog(
+            document_id=doc.id,
+            action='Checkout Cancelled',
+            performed_by=user,
+            details=f'Document {doc.doc_number} checkout cancelled, no changes made'
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({'message': 'Checkout cancelled', 'document': doc.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/documents/<int:doc_id>/versions', methods=['GET'])
+def get_versions(doc_id):
+    """Get version history - like Git log"""
+    try:
+        versions = QMSDocumentVersion.query.filter_by(
+            document_id=doc_id
+        ).order_by(QMSDocumentVersion.created_at.desc()).all()
+        
+        return jsonify({
+            'versions': [v.to_dict() for v in versions],
+            'total': len(versions)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/documents/<int:doc_id>/versions/<int:version_id>/download', methods=['GET'])
+def download_version(doc_id, version_id):
+    """Download a specific version's file"""
+    try:
+        version = QMSDocumentVersion.query.get_or_404(version_id)
+        
+        if version.document_id != doc_id:
+            return jsonify({'error': 'Version does not belong to this document'}), 400
+        
+        if not version.file_path:
+            return jsonify({'error': 'No file for this version'}), 404
+        
+        filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'uploads', version.file_path)
+        
+        if not os.path.exists(filepath):
+            return jsonify({'error': 'Version file not found on disk'}), 404
+        
+        download_name = f"v{version.version_number}_{version.file_name}" if version.file_name else f"v{version.version_number}"
+        return send_file(filepath, download_name=download_name, as_attachment=True)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/documents/<int:doc_id>/revert/<int:version_id>', methods=['POST'])
+def revert_to_version(doc_id, version_id):
+    """Revert document to a previous version - like Git revert"""
+    try:
+        doc = QMSDocument.query.get_or_404(doc_id)
+        version = QMSDocumentVersion.query.get_or_404(version_id)
+        data = request.json or {}
+        user = data.get('user', 'Unknown')
+        
+        if version.document_id != doc_id:
+            return jsonify({'error': 'Version does not belong to this document'}), 400
+        
+        if doc.is_locked:
+            return jsonify({'error': f'Document is checked out by {doc.checked_out_by}. Cancel checkout first.'}), 409
+        
+        # Save current state as version before reverting
+        current_snapshot = QMSDocumentVersion(
+            document_id=doc.id,
+            version_number=doc.version,
+            commit_message=f'[Auto-snapshot] Before revert to v{version.version_number}',
+            changed_by='System',
+            change_type='Snapshot',
+            file_path=doc.file_path,
+            file_name=doc.file_name,
+            file_size=doc.file_size,
+            file_type=doc.file_type,
+            title_snapshot=doc.title,
+            status_snapshot=doc.status
+        )
+        db.session.add(current_snapshot)
+        
+        # Revert document to old version
+        old_version = doc.version
+        doc.file_path = version.file_path
+        doc.file_name = version.file_name
+        doc.file_size = version.file_size
+        doc.file_type = version.file_type
+        
+        # Increment version number
+        try:
+            parts = doc.version.split('.')
+            doc.version = f"{int(parts[0]) + 1}.0"
+        except (ValueError, IndexError):
+            doc.version = '2.0'
+        
+        doc.updated_at = datetime.utcnow()
+        
+        # Create revert version record
+        revert_record = QMSDocumentVersion(
+            document_id=doc.id,
+            version_number=doc.version,
+            commit_message=f'Reverted from v{old_version} to v{version.version_number}',
+            changed_by=user,
+            change_type='Revert',
+            file_path=doc.file_path,
+            file_name=doc.file_name,
+            file_size=doc.file_size,
+            file_type=doc.file_type,
+            title_snapshot=doc.title,
+            status_snapshot=doc.status
+        )
+        db.session.add(revert_record)
+        db.session.commit()
+        
+        # Audit log
+        log = QMSAuditLog(
+            document_id=doc.id,
+            action='Reverted',
+            performed_by=user,
+            details=f'Document {doc.doc_number} reverted from v{old_version} to v{version.version_number} (now v{doc.version})'
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({
+            'message': f'Document reverted to v{version.version_number} (new version: v{doc.version})',
+            'document': doc.to_dict()
+        })
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
 
