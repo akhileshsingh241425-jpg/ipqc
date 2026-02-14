@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import QMSAuditTool from './QMSAuditTool';
+import QMSAssistant from './QMSAssistant';
 import '../styles/QMSDashboard.css';
 
 const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
@@ -261,6 +262,7 @@ const QMSDashboard = () => {
   const [modalMode, setModalMode] = useState('create'); // create, edit
   const [auditLogs, setAuditLogs] = useState([]);
   const [showAuditModal, setShowAuditModal] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
   
   // Form state
   const [formData, setFormData] = useState({
@@ -304,13 +306,8 @@ const QMSDashboard = () => {
   }, []);
 
   const fetchCategories = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/qms/categories`);
-      const data = await res.json();
-      if (data && Object.keys(data).length > 0) setCategories(data);
-    } catch {
-      // use defaults
-    }
+    // Always use DEFAULT_CATEGORIES (has department-wise structure)
+    // No backend override needed
   }, []);
 
   useEffect(() => {
@@ -1053,6 +1050,25 @@ const QMSDashboard = () => {
       {/* Modals */}
       {showModal && renderModal()}
       {showAuditModal && renderAuditModal()}
+
+      {/* AI Document Assistant */}
+      <QMSAssistant isOpen={showAssistant} onClose={() => setShowAssistant(false)} />
+
+      {/* Floating Chat Button */}
+      <button
+        className={`qms-fab-chat ${showAssistant ? 'active' : ''}`}
+        onClick={() => setShowAssistant(!showAssistant)}
+        title="QMS Document Assistant"
+      >
+        <span className="fab-icon">
+          {showAssistant ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          ) : (
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14H8a5 5 0 0 0-5 5 3 3 0 0 0 3 3h12a3 3 0 0 0 3-3 5 5 0 0 0-5-5z"/></svg>
+          )}
+        </span>
+        {!showAssistant && <span className="qms-fab-badge">AI</span>}
+      </button>
     </div>
   );
 };
