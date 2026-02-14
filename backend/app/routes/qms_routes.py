@@ -72,6 +72,92 @@ class QMSDocument(db.Model):
         }
 
 
+class QMSPartnerAudit(db.Model):
+    __tablename__ = 'qms_partner_audits'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    audit_name = db.Column(db.String(300), nullable=False)
+    audit_type = db.Column(db.String(50), default='Initial Assessment')  # Initial, Surveillance, Re-audit
+    partner_name = db.Column(db.String(200))
+    partner_location = db.Column(db.String(300))
+    auditor_name = db.Column(db.String(100))
+    auditor_designation = db.Column(db.String(100))
+    audit_date = db.Column(db.String(20))
+    scores_json = db.Column(db.Text)  # JSON: {section_id: {question_id: {score, observation, action, responsible, target_date, action_status}}}
+    total_score = db.Column(db.Float, default=0)
+    max_score = db.Column(db.Float, default=0)
+    percentage = db.Column(db.Float, default=0)
+    overall_rating = db.Column(db.String(30))  # Critical, Needs Improvement, Acceptable, Good, Excellent
+    summary = db.Column(db.Text)
+    status = db.Column(db.String(30), default='In Progress')  # In Progress, Completed, Closed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'audit_name': self.audit_name,
+            'audit_type': self.audit_type,
+            'partner_name': self.partner_name,
+            'partner_location': self.partner_location,
+            'auditor_name': self.auditor_name,
+            'auditor_designation': self.auditor_designation,
+            'audit_date': self.audit_date,
+            'scores_json': self.scores_json,
+            'total_score': self.total_score,
+            'max_score': self.max_score,
+            'percentage': self.percentage,
+            'overall_rating': self.overall_rating,
+            'summary': self.summary,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+
+
+class QMSActionPlan(db.Model):
+    __tablename__ = 'qms_action_plans'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    audit_id = db.Column(db.Integer, db.ForeignKey('qms_partner_audits.id'))
+    section_id = db.Column(db.String(10))
+    question_id = db.Column(db.String(10))
+    question_text = db.Column(db.Text)
+    current_score = db.Column(db.Integer, default=0)
+    target_score = db.Column(db.Integer, default=4)
+    gap_description = db.Column(db.Text)
+    action_plan = db.Column(db.Text)
+    responsible = db.Column(db.String(100))
+    target_date = db.Column(db.String(20))
+    completion_date = db.Column(db.String(20))
+    status = db.Column(db.String(30), default='Open')  # Open, In Progress, Completed, Verified
+    evidence = db.Column(db.Text)
+    remarks = db.Column(db.Text)
+    priority = db.Column(db.String(20), default='Medium')  # Critical, High, Medium, Low
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'audit_id': self.audit_id,
+            'section_id': self.section_id,
+            'question_id': self.question_id,
+            'question_text': self.question_text,
+            'current_score': self.current_score,
+            'target_score': self.target_score,
+            'gap_description': self.gap_description,
+            'action_plan': self.action_plan,
+            'responsible': self.responsible,
+            'target_date': self.target_date,
+            'completion_date': self.completion_date,
+            'status': self.status,
+            'evidence': self.evidence,
+            'remarks': self.remarks,
+            'priority': self.priority,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
 class QMSAuditLog(db.Model):
     __tablename__ = 'qms_audit_log'
     
@@ -564,4 +650,217 @@ def dashboard_stats():
             'departments': departments
         })
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ═══════════════════════════════════════════════
+# PARTNER AUDIT ROUTES
+# ═══════════════════════════════════════════════
+
+@qms_bp.route('/audits', methods=['GET'])
+def get_audits():
+    """Get all partner audits"""
+    try:
+        audits = QMSPartnerAudit.query.order_by(QMSPartnerAudit.updated_at.desc()).all()
+        return jsonify({'audits': [a.to_dict() for a in audits]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/audits', methods=['POST'])
+def create_audit():
+    """Create a new partner audit"""
+    try:
+        data = request.json
+        audit = QMSPartnerAudit(
+            audit_name=data.get('audit_name', ''),
+            audit_type=data.get('audit_type', 'Initial Assessment'),
+            partner_name=data.get('partner_name', ''),
+            partner_location=data.get('partner_location', ''),
+            auditor_name=data.get('auditor_name', ''),
+            auditor_designation=data.get('auditor_designation', ''),
+            audit_date=data.get('audit_date', ''),
+            scores_json=data.get('scores_json', '{}'),
+            total_score=data.get('total_score', 0),
+            max_score=data.get('max_score', 0),
+            percentage=data.get('percentage', 0),
+            overall_rating=data.get('overall_rating', ''),
+            summary=data.get('summary', ''),
+            status=data.get('status', 'In Progress')
+        )
+        db.session.add(audit)
+        db.session.commit()
+        return jsonify({'message': 'Audit created', 'audit': audit.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/audits/<int:audit_id>', methods=['GET'])
+def get_audit(audit_id):
+    """Get a single audit with scores and action plans"""
+    try:
+        audit = QMSPartnerAudit.query.get_or_404(audit_id)
+        actions = QMSActionPlan.query.filter_by(audit_id=audit_id).order_by(QMSActionPlan.priority.desc()).all()
+        return jsonify({
+            'audit': audit.to_dict(),
+            'action_plans': [a.to_dict() for a in actions]
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/audits/<int:audit_id>', methods=['PUT'])
+def update_audit(audit_id):
+    """Update audit scores"""
+    try:
+        audit = QMSPartnerAudit.query.get_or_404(audit_id)
+        data = request.json
+        
+        for field in ['audit_name', 'audit_type', 'partner_name', 'partner_location',
+                      'auditor_name', 'auditor_designation', 'audit_date', 'scores_json',
+                      'summary', 'status', 'overall_rating']:
+            if field in data:
+                setattr(audit, field, data[field])
+        
+        if 'total_score' in data: audit.total_score = data['total_score']
+        if 'max_score' in data: audit.max_score = data['max_score']
+        if 'percentage' in data: audit.percentage = data['percentage']
+        
+        audit.updated_at = datetime.utcnow()
+        db.session.commit()
+        return jsonify({'message': 'Audit updated', 'audit': audit.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/audits/<int:audit_id>', methods=['DELETE'])
+def delete_audit(audit_id):
+    """Delete an audit"""
+    try:
+        audit = QMSPartnerAudit.query.get_or_404(audit_id)
+        QMSActionPlan.query.filter_by(audit_id=audit_id).delete()
+        db.session.delete(audit)
+        db.session.commit()
+        return jsonify({'message': 'Audit deleted'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/audits/<int:audit_id>/action-plans', methods=['GET'])
+def get_action_plans(audit_id):
+    """Get action plans for an audit"""
+    try:
+        actions = QMSActionPlan.query.filter_by(audit_id=audit_id).order_by(QMSActionPlan.id).all()
+        return jsonify({'action_plans': [a.to_dict() for a in actions]})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/audits/<int:audit_id>/action-plans', methods=['POST'])
+def create_action_plan(audit_id):
+    """Create action plan for gap items"""
+    try:
+        data = request.json
+        action = QMSActionPlan(
+            audit_id=audit_id,
+            section_id=data.get('section_id', ''),
+            question_id=data.get('question_id', ''),
+            question_text=data.get('question_text', ''),
+            current_score=data.get('current_score', 0),
+            target_score=data.get('target_score', 4),
+            gap_description=data.get('gap_description', ''),
+            action_plan=data.get('action_plan', ''),
+            responsible=data.get('responsible', ''),
+            target_date=data.get('target_date', ''),
+            status=data.get('status', 'Open'),
+            priority=data.get('priority', 'Medium'),
+            remarks=data.get('remarks', '')
+        )
+        db.session.add(action)
+        db.session.commit()
+        return jsonify({'message': 'Action plan created', 'action_plan': action.to_dict()}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/action-plans/<int:action_id>', methods=['PUT'])
+def update_action_plan(action_id):
+    """Update action plan status"""
+    try:
+        action = QMSActionPlan.query.get_or_404(action_id)
+        data = request.json
+        for field in ['action_plan', 'responsible', 'target_date', 'completion_date',
+                      'status', 'evidence', 'remarks', 'priority']:
+            if field in data:
+                setattr(action, field, data[field])
+        db.session.commit()
+        return jsonify({'message': 'Action plan updated', 'action_plan': action.to_dict()})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/action-plans/<int:action_id>', methods=['DELETE'])
+def delete_action_plan(action_id):
+    """Delete action plan"""
+    try:
+        action = QMSActionPlan.query.get_or_404(action_id)
+        db.session.delete(action)
+        db.session.commit()
+        return jsonify({'message': 'Action plan deleted'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@qms_bp.route('/audits/<int:audit_id>/generate-actions', methods=['POST'])
+def generate_action_plans(audit_id):
+    """Auto-generate action plans for all items scoring below threshold"""
+    try:
+        import json
+        audit = QMSPartnerAudit.query.get_or_404(audit_id)
+        data = request.json
+        threshold = data.get('threshold', 3)  # Generate actions for scores < threshold
+        scores = json.loads(audit.scores_json) if audit.scores_json else {}
+        
+        # Delete existing auto-generated actions
+        QMSActionPlan.query.filter_by(audit_id=audit_id).delete()
+        
+        created = 0
+        for section_id, questions in scores.items():
+            if isinstance(questions, dict):
+                for q_id, q_data in questions.items():
+                    if isinstance(q_data, dict):
+                        score = q_data.get('score', -1)
+                        if score >= 0 and score < threshold:
+                            priority = 'Critical' if score <= 1 else ('High' if score == 2 else 'Medium')
+                            action = QMSActionPlan(
+                                audit_id=audit_id,
+                                section_id=section_id,
+                                question_id=q_id,
+                                question_text=q_data.get('question_text', ''),
+                                current_score=score,
+                                target_score=4,
+                                gap_description=q_data.get('observation', ''),
+                                action_plan=q_data.get('action', ''),
+                                responsible=q_data.get('responsible', ''),
+                                target_date=q_data.get('target_date', ''),
+                                status='Open',
+                                priority=priority
+                            )
+                            db.session.add(action)
+                            created += 1
+        
+        db.session.commit()
+        actions = QMSActionPlan.query.filter_by(audit_id=audit_id).order_by(QMSActionPlan.priority.desc()).all()
+        return jsonify({
+            'message': f'{created} action plans generated',
+            'action_plans': [a.to_dict() for a in actions]
+        })
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500

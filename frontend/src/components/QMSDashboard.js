@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import QMSAuditTool from './QMSAuditTool';
 import '../styles/QMSDashboard.css';
 
 const API_BASE = window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
@@ -842,6 +843,9 @@ const QMSDashboard = () => {
         <button className={activeView === 'documents' || activeView === 'detail' ? 'active' : ''} onClick={() => setActiveView('documents')}>
           {Icons.file} Documents
         </button>
+        <button className={activeView === 'audit' ? 'active' : ''} onClick={() => setActiveView('audit')}>
+          {Icons.award} Partner Audit
+        </button>
       </div>
 
       {/* Messages */}
@@ -857,6 +861,7 @@ const QMSDashboard = () => {
         {activeView === 'dashboard' && renderDashboard()}
         {activeView === 'documents' && renderDocuments()}
         {activeView === 'detail' && renderDocDetail()}
+        {activeView === 'audit' && <QMSAuditTool />}
       </div>
 
       {/* Modals */}
