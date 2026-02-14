@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import IPQCForm from './components/IPQCForm';
 import DailyReport from './components/DailyReport';
-import PeelTestReport from './components/PeelTestReport';
 import FTRDownload from './components/FTRDownload';
 import FTRDeliveredUpload from './components/FTRDeliveredUpload';
 import COCDashboard from './components/COCDashboard';
@@ -297,7 +296,7 @@ function App() {
     super_admin: ['all'], // Full access
     user: ['all'], // Full access for normal users too
     ftr_only: ['ftr-download', 'ftr-delivered', 'ftr-report', 'ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report'],
-    ipqc_only: ['ipqc', 'daily-report', 'pdi-batches', 'peel-test'],
+    ipqc_only: ['ipqc', 'daily-report', 'pdi-batches'],
     coc_only: ['coc-dashboard', 'coc-management']
   };
 
@@ -367,8 +366,7 @@ function App() {
         return <DailyReport />;
       case 'pdi-batches':
         return <PDIBatchManager />;
-      case 'peel-test':
-        return <PeelTestReport />;
+
       case 'ftr-download':
         return <FTRDownload />;
       case 'ftr-delivered':
@@ -520,16 +518,7 @@ function App() {
               {!sidebarCollapsed && <span className="label">IPQC Form</span>}
             </li>
           )}
-          {hasAccess('peel-test') && (
-            <li 
-              className={activeSection === 'peel-test' ? 'active' : ''}
-              onClick={() => handleMenuItemClick('peel-test')}
-              title="Peel Test Report"
-            >
-              <span className="icon">🧪</span>
-              {!sidebarCollapsed && <span className="label">Peel Test Report</span>}
-            </li>
-          )}
+
           {hasAccess('ftr-download') && (
             <li 
               className={activeSection === 'ftr-download' ? 'active' : ''}
