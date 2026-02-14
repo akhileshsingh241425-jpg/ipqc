@@ -313,6 +313,35 @@ const CalibrationDashboard = () => {
     }
   };
 
+  // Download Calibration Report PDF
+  const handleDownloadPDF = async () => {
+    try {
+      setMessage({ type: '', text: '' });
+      const params = new URLSearchParams();
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (locationFilter !== 'all') params.append('location', locationFilter);
+
+      const response = await fetch(getApiUrl(`calibration/generate-report?${params}`));
+      
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        setMessage({ type: 'error', text: errData?.message || 'PDF generation failed' });
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Calibration_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      setMessage({ type: 'success', text: '✅ Calibration Report PDF downloaded!' });
+    } catch (error) {
+      setMessage({ type: 'error', text: 'PDF download failed: ' + error.message });
+    }
+  };
+
   // Handle form input
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -564,7 +593,10 @@ const CalibrationDashboard = () => {
             <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} hidden />
           </label>
           <button className="cal-btn cal-btn-secondary" onClick={handleExport}>
-            <span>📥</span> Export
+            <span>📥</span> Export Excel
+          </button>
+          <button className="cal-btn cal-btn-secondary" onClick={handleDownloadPDF} style={{ background: '#e53935', color: 'white', borderColor: '#e53935' }}>
+            <span>📄</span> Download PDF
           </button>
           <button className="cal-btn cal-btn-success" onClick={handleAddNew}>
             <span>➕</span> Add New

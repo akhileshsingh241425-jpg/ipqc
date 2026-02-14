@@ -2,7 +2,7 @@
 Calibration Routes - Manage calibration instruments and upload data
 """
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, send_file
 from app.models.calibration_data import CalibrationInstrument, CalibrationHistory
 from app.models.database import db
 from datetime import datetime, date
@@ -13,6 +13,7 @@ import os
 import uuid
 import base64
 import requests
+from io import BytesIO
 import time
 
 calibration_bp = Blueprint('calibration', __name__, url_prefix='/api/calibration')
@@ -972,3 +973,223 @@ def get_instrument_history(instrument_id):
             'success': False,
             'message': str(e)
         }), 500
+
+
+@calibration_bp.route('/generate-report', methods=['GET'])
+def generate_calibration_report_pdf():
+    """Generate a PDF calibration report for all instruments or filtered by status/location"""
+    try:
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm, inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
+        # Get filter parameters
+        status_filter = request.args.get('status', None)
+        location_filter = request.args.get('location', None)
+
+        query = CalibrationInstrument.query
+
+        if status_filter and status_filter != 'all':
+            query = query.filter(CalibrationInstrument.status == status_filter)
+        if location_filter and location_filter != 'all':
+            query = query.filter(CalibrationInstrument.location == location_filter)
+
+        instruments = query.order_by(CalibrationInstrument.sr_no).all()
+
+        # Update statuses
+        for inst in instruments:
+            inst.update_status()
+        db.session.commit()
+
+        # Build PDF
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=landscape(A4),
+            topMargin=15*mm,
+            bottomMargin=15*mm,
+            leftMargin=10*mm,
+            rightMargin=10*mm
+        )
+
+        styles = getSampleStyleSheet()
+
+        # Custom styles
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Title'],
+            fontSize=18,
+            spaceAfter=4*mm,
+            textColor=colors.HexColor('#1a237e'),
+            alignment=TA_CENTER
+        )
+        subtitle_style = ParagraphStyle(
+            'Subtitle',
+            parent=styles['Normal'],
+            fontSize=10,
+            textColor=colors.HexColor('#555555'),
+            alignment=TA_CENTER,
+            spaceAfter=6*mm
+        )
+        cell_style = ParagraphStyle(
+            'CellStyle',
+            parent=styles['Normal'],
+            fontSize=7,
+            leading=9,
+            alignment=TA_LEFT
+        )
+        cell_center = ParagraphStyle(
+            'CellCenter',
+            parent=styles['Normal'],
+            fontSize=7,
+            leading=9,
+            alignment=TA_CENTER
+        )
+
+        elements = []
+
+        # Title
+        elements.append(Paragraph("GREENSTAR SOLAR PVT. LTD.", title_style))
+        elements.append(Paragraph("CALIBRATION INSTRUMENT REPORT", ParagraphStyle(
+            'ReportTitle', parent=styles['Normal'], fontSize=13, alignment=TA_CENTER,
+            textColor=colors.HexColor('#333'), spaceAfter=2*mm, fontName='Helvetica-Bold'
+        )))
+        
+        report_date = datetime.now().strftime('%d-%b-%Y %I:%M %p')
+        filter_text = "All Instruments"
+        if status_filter and status_filter != 'all':
+            filter_text = f"Status: {status_filter.upper()}"
+        if location_filter and location_filter != 'all':
+            filter_text += f" | Location: {location_filter}"
+        elements.append(Paragraph(f"Generated: {report_date} | {filter_text} | Total: {len(instruments)}", subtitle_style))
+
+        # --- Summary stats ---
+        valid_count = sum(1 for i in instruments if i.status == 'valid')
+        due_soon_count = sum(1 for i in instruments if i.status == 'due_soon')
+        overdue_count = sum(1 for i in instruments if i.status == 'overdue')
+
+        summary_data = [[
+            Paragraph('<b>Total Instruments</b>', cell_center),
+            Paragraph('<b>✅ Valid</b>', cell_center),
+            Paragraph('<b>⚠️ Due Soon</b>', cell_center),
+            Paragraph('<b>❌ Overdue</b>', cell_center),
+        ], [
+            Paragraph(f'<b>{len(instruments)}</b>', cell_center),
+            Paragraph(f'<b>{valid_count}</b>', cell_center),
+            Paragraph(f'<b>{due_soon_count}</b>', cell_center),
+            Paragraph(f'<b>{overdue_count}</b>', cell_center),
+        ]]
+
+        summary_table = Table(summary_data, colWidths=[60*mm, 60*mm, 60*mm, 60*mm])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e8eaf6')),
+            ('BACKGROUND', (1, 1), (1, 1), colors.HexColor('#e8f5e9')),
+            ('BACKGROUND', (2, 1), (2, 1), colors.HexColor('#fff3e0')),
+            ('BACKGROUND', (3, 1), (3, 1), colors.HexColor('#fce4ec')),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#bdbdbd')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(summary_table)
+        elements.append(Spacer(1, 6*mm))
+
+        # --- Main table ---
+        header = [
+            Paragraph('<b>Sr.</b>', cell_center),
+            Paragraph('<b>Instrument ID</b>', cell_center),
+            Paragraph('<b>Machine Name</b>', cell_center),
+            Paragraph('<b>Make</b>', cell_center),
+            Paragraph('<b>Range/Capacity</b>', cell_center),
+            Paragraph('<b>Location</b>', cell_center),
+            Paragraph('<b>Cal. Date</b>', cell_center),
+            Paragraph('<b>Due Date</b>', cell_center),
+            Paragraph('<b>Status</b>', cell_center),
+            Paragraph('<b>Days</b>', cell_center),
+            Paragraph('<b>Certificate No.</b>', cell_center),
+            Paragraph('<b>Agency</b>', cell_center),
+        ]
+
+        data = [header]
+
+        for idx, inst in enumerate(instruments, 1):
+            cal_date = inst.date_of_calibration.strftime('%d-%b-%Y') if inst.date_of_calibration else '-'
+            due_date = inst.due_date.strftime('%d-%b-%Y') if inst.due_date else '-'
+            days = inst.get_days_until_due()
+            days_str = f"{days}d" if days is not None and days >= 0 else (f"{abs(days)}d overdue" if days is not None else '-')
+
+            status_text = '✅ Valid' if inst.status == 'valid' else ('⚠️ Due Soon' if inst.status == 'due_soon' else ('❌ Overdue' if inst.status == 'overdue' else '❓'))
+
+            row = [
+                Paragraph(str(inst.sr_no or idx), cell_center),
+                Paragraph(str(inst.instrument_id or '-'), cell_style),
+                Paragraph(str(inst.machine_name or '-'), cell_style),
+                Paragraph(str(inst.make or '-'), cell_style),
+                Paragraph(str(inst.range_capacity or '-'), cell_style),
+                Paragraph(str(inst.location or '-'), cell_center),
+                Paragraph(cal_date, cell_center),
+                Paragraph(due_date, cell_center),
+                Paragraph(status_text, cell_center),
+                Paragraph(days_str, cell_center),
+                Paragraph(str(inst.certificate_no or '-'), cell_style),
+                Paragraph(str(inst.calibration_agency or '-')[:30], cell_style),
+            ]
+            data.append(row)
+
+        col_widths = [10*mm, 28*mm, 32*mm, 22*mm, 22*mm, 22*mm, 22*mm, 22*mm, 18*mm, 16*mm, 26*mm, 30*mm]
+
+        main_table = Table(data, colWidths=col_widths, repeatRows=1)
+        
+        # Table styling
+        table_style = [
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a237e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTSIZE', (0, 0), (-1, -1), 7),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#ccc')),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+        ]
+
+        # Color rows by status
+        for i, inst in enumerate(instruments, 1):
+            if inst.status == 'overdue':
+                table_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#ffebee')))
+            elif inst.status == 'due_soon':
+                table_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#fff8e1')))
+
+        main_table.setStyle(TableStyle(table_style))
+        elements.append(main_table)
+
+        # Footer
+        elements.append(Spacer(1, 8*mm))
+        elements.append(Paragraph(
+            f"This report is auto-generated by GSPL Calibration Management System | Printed on: {report_date}",
+            ParagraphStyle('Footer', parent=styles['Normal'], fontSize=7, textColor=colors.grey, alignment=TA_CENTER)
+        ))
+
+        doc.build(elements)
+        buffer.seek(0)
+
+        filename = f'Calibration_Report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.pdf'
+        return send_file(
+            buffer,
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except ImportError:
+        return jsonify({
+            'success': False,
+            'message': 'reportlab not installed. Run: pip install reportlab'
+        }), 500
+    except Exception as e:
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
