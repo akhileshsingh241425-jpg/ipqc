@@ -1,16 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import IPQCForm from './components/IPQCForm';
 import DailyReport from './components/DailyReport';
-import FTRDownload from './components/FTRDownload';
 import COCDashboard from './components/COCDashboard';
-import PDIBatchManager from './components/PDIBatchManager';
 import TestReport from './components/TestReport';
 import GraphManager from './components/GraphManager';
 import UserManagement from './components/UserManagement';
 import FTRManagement from './components/FTRManagement';
 import AIAssistant from './components/AIAssistant';
 import FTRDashboard from './components/FTRDashboard';
-import COCManagementDashboard from './components/COCManagementDashboard';
 import WitnessReport from './components/WitnessReport';
 import CalibrationDashboard from './components/CalibrationDashboard';
 import QMSDashboard from './components/QMSDashboard';
@@ -293,9 +290,9 @@ function App() {
   const roleAccess = {
     super_admin: ['all'], // Full access
     user: ['all'], // Full access for normal users too
-    ftr_only: ['ftr-download', 'ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report'],
-    ipqc_only: ['ipqc', 'daily-report', 'pdi-batches'],
-    coc_only: ['coc-dashboard', 'coc-management']
+    ftr_only: ['ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report'],
+    ipqc_only: ['ipqc', 'daily-report'],
+    coc_only: ['coc-dashboard']
   };
 
   // Check if user has access to a section
@@ -306,7 +303,7 @@ function App() {
 
   // Get default section based on role
   const getDefaultSection = () => {
-    if (userRole === 'ftr_only') return 'ftr-download';
+    if (userRole === 'ftr_only') return 'ftr-management';
     if (userRole === 'ipqc_only') return 'ipqc';
     if (userRole === 'coc_only') return 'coc-dashboard';
     return 'ipqc';
@@ -362,11 +359,7 @@ function App() {
         return <IPQCForm />;
       case 'daily-report':
         return <DailyReport />;
-      case 'pdi-batches':
-        return <PDIBatchManager />;
 
-      case 'ftr-download':
-        return <FTRDownload />;
       case 'ftr-management':
         return <FTRManagement />;
 
@@ -384,8 +377,6 @@ function App() {
         return <UserManagement />;
       case 'coc-dashboard':
         return <COCDashboard />;
-      case 'coc-management':
-        return <COCManagementDashboard />;
       case 'calibration':
         return <CalibrationDashboard />;
       case 'qms':
@@ -493,16 +484,6 @@ function App() {
               {!sidebarCollapsed && <span className="label">Daily Report</span>}
             </li>
           )}
-          {hasAccess('pdi-batches') && (
-            <li 
-              className={activeSection === 'pdi-batches' ? 'active' : ''}
-              onClick={() => handleMenuItemClick('pdi-batches')}
-              title="PDI Batch Manager"
-            >
-              <span className="icon">🔢</span>
-              {!sidebarCollapsed && <span className="label">PDI Batches</span>}
-            </li>
-          )}
           {hasAccess('ipqc') && (
             <li 
               className={activeSection === 'ipqc' ? 'active' : ''}
@@ -514,16 +495,6 @@ function App() {
             </li>
           )}
 
-          {hasAccess('ftr-download') && (
-            <li 
-              className={activeSection === 'ftr-download' ? 'active' : ''}
-              onClick={() => handleMenuItemClick('ftr-download')}
-              title="FTR Download"
-            >
-              <span className="icon">📥</span>
-              {!sidebarCollapsed && <span className="label">FTR Download</span>}
-            </li>
-          )}
           {hasAccess('ftr-management') && (
             <li 
               className={activeSection === 'ftr-management' ? 'active' : ''}
@@ -603,16 +574,6 @@ function App() {
             >
               <span className="icon">📋</span>
               {!sidebarCollapsed && <span className="label">COC Dashboard</span>}
-            </li>
-          )}
-          {hasAccess('coc-management') && (
-            <li 
-              className={activeSection === 'coc-management' ? 'active' : ''}
-              onClick={() => handleMenuItemClick('coc-management')}
-              title="COC Usage Tracking & FIFO Management"
-            >
-              <span className="icon">📦</span>
-              {!sidebarCollapsed && <span className="label">COC Management</span>}
             </li>
           )}
           {hasAccess('calibration') && (
