@@ -402,6 +402,20 @@
   font-weight: 500;
 }
 
+.sub-tag.dept-tag {
+  background: #ede9fe;
+  color: #6d28d9;
+  border-color: #ddd6fe;
+  font-weight: 600;
+}
+
+.sub-tag.total-tag {
+  background: #ecfdf5;
+  color: #059669;
+  border-color: #a7f3d0;
+  font-weight: 600;
+}
+
 /* Activity */
 .qms-activity-list {
   background: var(--qms-surface);
