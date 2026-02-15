@@ -24,6 +24,8 @@ const AIAssistant = () => {
   const [pdiNumber, setPdiNumber] = useState('');
   const [pdiStatusLoading, setPdiStatusLoading] = useState(false);
   const [pdiList, setPdiList] = useState([]); // PDI dropdown list
+  const [palletNumber, setPalletNumber] = useState('');
+  const [palletSearchLoading, setPalletSearchLoading] = useState(false);
   const fileInputRef = useRef(null);
   const binningFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -638,6 +640,81 @@ const AIAssistant = () => {
     }
   };
 
+  // Pallet Module Excel Export
+  const handlePalletModuleExport = async () => {
+    if (!palletNumber.trim()) {
+      alert('Please enter a pallet number');
+      return;
+    }
+
+    if (!selectedCompany) {
+      alert('Please select a company first');
+      return;
+    }
+
+    setPalletSearchLoading(true);
+
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: `📦 Searching modules for Pallet ${palletNumber} in ${selectedCompany}...`
+    }]);
+
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.post(`${API_BASE_URL}/api/ai/pallet-modules`, {
+        pallet_number: palletNumber.trim(),
+        company: selectedCompany
+      });
+
+      if (response.data.success) {
+        const { total_modules, excel_base64, message, modules } = response.data;
+        const excelFilename = `Pallet_${palletNumber}_${selectedCompany.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+        // Build result message
+        let resultMessage = `📦 **Pallet ${palletNumber} - ${selectedCompany}**\n\n`;
+        resultMessage += message + '\n\n';
+
+        if (modules && modules.length > 0) {
+          resultMessage += `**Sample Modules (first 10):**\n`;
+          modules.slice(0, 10).forEach((m, i) => {
+            resultMessage += `${i + 1}. ${m.barcode} | ${m.binning || 'N/A'} | ${m.status || 'N/A'}\n`;
+          });
+          if (modules.length > 10) {
+            resultMessage += `\n... and ${modules.length - 10} more. Download Excel for full list.`;
+          }
+        }
+
+        // Auto download Excel if available
+        if (excel_base64) {
+          downloadExcelFromBase64(excel_base64, excelFilename);
+        }
+
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: resultMessage,
+          hasExcel: !!excel_base64,
+          excelData: excel_base64,
+          excelFilename: excelFilename
+        }]);
+      } else {
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `❌ Error: ${response.data.error}`,
+          isError: true
+        }]);
+      }
+    } catch (error) {
+      console.error('Pallet module export error:', error);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `❌ Pallet search failed: ${error.response?.data?.error || error.message}`,
+        isError: true
+      }]);
+    } finally {
+      setPalletSearchLoading(false);
+    }
+  };
+
   // PDI Dispatch Status Check
   const handlePdiDispatchStatus = async () => {
     if (!pdiNumber.trim()) {
@@ -931,6 +1008,21 @@ const AIAssistant = () => {
                   <button className="btn-check" onClick={handlePdiDispatchStatus} disabled={pdiStatusLoading || !pdiNumber.trim()}>
                     {pdiStatusLoading ? '⏳ Checking...' : '✓ Check'}
                   </button>
+                </div>
+                <div className="check-item">
+                  <p className="check-title">📦 Pallet Module Excel</p>
+                  <input 
+                    type="text" 
+                    value={palletNumber} 
+                    onChange={(e) => setPalletNumber(e.target.value)} 
+                    placeholder="Enter Pallet No"
+                    disabled={!selectedCompany}
+                    style={{ width: '100%', padding: '6px', fontSize: '11px', marginBottom: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                  />
+                  <button className="btn-check" onClick={handlePalletModuleExport} disabled={palletSearchLoading || !palletNumber.trim() || !selectedCompany} style={{ backgroundColor: '#9b59b6' }}>
+                    {palletSearchLoading ? '⏳ Searching...' : '📥 Download Excel'}
+                  </button>
+                  {!selectedCompany && <p className="hint" style={{ fontSize: '10px', color: '#e74c3c', marginTop: '4px' }}>⚠️ Select company first</p>}
                 </div>
                 <div className="check-item">
                   <p className="check-title">🤖 Auto Scheduler</p>

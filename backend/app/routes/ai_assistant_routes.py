@@ -5316,6 +5316,202 @@ def scheduler_control():
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@ai_assistant_bp.route('/ai/pallet-modules', methods=['POST', 'OPTIONS'])
+def get_pallet_modules_excel():
+    """
+    Get all modules in a specific pallet and return Excel file
+    Request body: { pallet_number: "123", company: "Rays Power" }
+    Returns: { success: true, total_modules: 10, modules: [...], excel_base64: "..." }
+    """
+    if request.method == 'OPTIONS':
+        return jsonify({'success': True}), 200
+    
+    import re
+    import base64
+    
+    try:
+        data = request.json
+        pallet_number = str(data.get('pallet_number', '')).strip()
+        company = data.get('company', '')
+        
+        if not pallet_number:
+            return jsonify({'success': False, 'error': 'Pallet number is required'}), 400
+        
+        if not company:
+            return jsonify({'success': False, 'error': 'Company is required'}), 400
+        
+        # Get MRP party name
+        mrp_party_name = get_mrp_party_name(company)
+        
+        # Fetch data from MRP API
+        mrp_result = get_all_mrp_data(company)
+        
+        if not mrp_result.get('success'):
+            return jsonify({
+                'success': False, 
+                'error': f"Failed to fetch MRP data: {mrp_result.get('error', 'Unknown error')}"
+            }), 500
+        
+        all_barcodes = mrp_result.get('data', [])
+        
+        if not all_barcodes:
+            return jsonify({
+                'success': False,
+                'error': f"No data found for {company} in MRP"
+            }), 404
+        
+        # Filter by pallet number
+        pallet_barcodes = [b for b in all_barcodes if str(b.get('pallet_no', '')).strip() == pallet_number]
+        
+        if not pallet_barcodes:
+            return jsonify({
+                'success': False,
+                'error': f"No modules found in Pallet {pallet_number} for {company}"
+            }), 404
+        
+        # Get company_id for Master FTR lookup
+        company_result = db.session.execute(text(
+            "SELECT id FROM companies WHERE company_name LIKE :name"
+        ), {'name': f'%{company.split()[0]}%'})
+        company_row = company_result.fetchone()
+        company_id = company_row[0] if company_row else None
+        
+        # Fetch binning from Master FTR database
+        binning_lookup = {}
+        if company_id:
+            all_serials = [b.get('barcode') for b in pallet_barcodes if b.get('barcode')]
+            if all_serials:
+                binning_result = db.session.execute(text("""
+                    SELECT serial_number, binning, class_status, pmax
+                    FROM ftr_master_serials 
+                    WHERE company_id = :cid 
+                    AND serial_number IN :serials
+                """), {'cid': company_id, 'serials': tuple(all_serials)})
+                binning_lookup = {row[0]: {'binning': row[1], 'class_status': row[2], 'pmax': row[3]} for row in binning_result.fetchall()}
+        
+        # Process each barcode
+        modules = []
+        for b in pallet_barcodes:
+            barcode = b.get('barcode', '')
+            ro = b.get('running_order', '') or ''
+            
+            # Extract binning from running_order (fallback)
+            bin_match = re.search(r'i-?(\d+)', ro, re.IGNORECASE)
+            binning_from_ro = f"I{bin_match.group(1)}" if bin_match else ''
+            
+            # Get binning from Master FTR (preferred)
+            ftr_data = binning_lookup.get(barcode, {})
+            binning = ftr_data.get('binning') or binning_from_ro or 'N/A'
+            pmax = ftr_data.get('pmax', '')
+            class_status = ftr_data.get('class_status', '')
+            
+            # Determine status
+            status = 'Dispatched' if b.get('dispatch_party') else 'Packed'
+            
+            modules.append({
+                'barcode': barcode,
+                'running_order': ro,
+                'binning': binning,
+                'pmax': pmax,
+                'class_status': class_status,
+                'status': status,
+                'dispatch_party': b.get('dispatch_party', ''),
+                'dispatch_date': b.get('dispatch_date', ''),
+                'pack_date': b.get('date', '')
+            })
+        
+        # Sort by barcode
+        modules.sort(key=lambda x: x['barcode'])
+        
+        # Generate Excel
+        excel_base64 = None
+        if EXCEL_AVAILABLE:
+            try:
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = f"Pallet {pallet_number}"
+                
+                # Styles
+                header_font = Font(bold=True, color='FFFFFF', size=11)
+                header_fill = PatternFill(start_color='9b59b6', end_color='9b59b6', fill_type='solid')
+                border = Border(
+                    left=Side(style='thin'),
+                    right=Side(style='thin'),
+                    top=Side(style='thin'),
+                    bottom=Side(style='thin')
+                )
+                center_align = Alignment(horizontal='center', vertical='center')
+                
+                # Title Row
+                ws.merge_cells('A1:I1')
+                title_cell = ws['A1']
+                title_cell.value = f"📦 Pallet {pallet_number} - {company} (Total: {len(modules)} modules)"
+                title_cell.font = Font(bold=True, size=14, color='FFFFFF')
+                title_cell.fill = PatternFill(start_color='8e44ad', end_color='8e44ad', fill_type='solid')
+                title_cell.alignment = center_align
+                
+                # Headers
+                headers = ['Sr. No', 'Barcode/Serial', 'Binning', 'Pmax', 'Class Status', 'Status', 'R-O', 'Dispatch Party', 'Pack Date']
+                for col, header in enumerate(headers, 1):
+                    cell = ws.cell(row=2, column=col, value=header)
+                    cell.font = header_font
+                    cell.fill = header_fill
+                    cell.border = border
+                    cell.alignment = center_align
+                
+                # Data Rows
+                for idx, module in enumerate(modules, 1):
+                    row_num = idx + 2
+                    ws.cell(row=row_num, column=1, value=idx).border = border
+                    ws.cell(row=row_num, column=2, value=module['barcode']).border = border
+                    ws.cell(row=row_num, column=3, value=module['binning']).border = border
+                    ws.cell(row=row_num, column=4, value=module.get('pmax', '')).border = border
+                    ws.cell(row=row_num, column=5, value=module.get('class_status', '')).border = border
+                    ws.cell(row=row_num, column=6, value=module['status']).border = border
+                    ws.cell(row=row_num, column=7, value=module['running_order']).border = border
+                    ws.cell(row=row_num, column=8, value=module.get('dispatch_party', '')).border = border
+                    ws.cell(row=row_num, column=9, value=module.get('pack_date', '')).border = border
+                
+                # Adjust column widths
+                column_widths = [8, 25, 10, 10, 12, 12, 20, 20, 12]
+                for i, width in enumerate(column_widths, 1):
+                    ws.column_dimensions[openpyxl.utils.get_column_letter(i)].width = width
+                
+                # Save to BytesIO
+                excel_buffer = io.BytesIO()
+                wb.save(excel_buffer)
+                excel_buffer.seek(0)
+                excel_base64 = base64.b64encode(excel_buffer.read()).decode('utf-8')
+                
+            except Exception as excel_error:
+                print(f"Excel generation error: {excel_error}")
+        
+        # Binning summary
+        binning_counts = {}
+        for m in modules:
+            b = m.get('binning', 'N/A')
+            binning_counts[b] = binning_counts.get(b, 0) + 1
+        
+        binning_summary = ", ".join([f"{k}: {v}" for k, v in sorted(binning_counts.items())])
+        
+        return jsonify({
+            'success': True,
+            'pallet_number': pallet_number,
+            'company': company,
+            'total_modules': len(modules),
+            'message': f"✅ Found {len(modules)} modules in Pallet {pallet_number}\n📊 Binning: {binning_summary}",
+            'modules': modules,
+            'binning_breakdown': binning_counts,
+            'excel_base64': excel_base64
+        })
+        
+    except Exception as e:
+        print(f"Pallet modules error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @ai_assistant_bp.route('/ai/scheduler-status', methods=['GET', 'OPTIONS'])
 def scheduler_status():
     """Get current scheduler status"""
