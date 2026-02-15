@@ -24,10 +24,10 @@ const AIAssistant = () => {
   const [pdiNumber, setPdiNumber] = useState('');
   const [pdiStatusLoading, setPdiStatusLoading] = useState(false);
   const [pdiList, setPdiList] = useState([]); // PDI dropdown list
-  const [palletNumber, setPalletNumber] = useState('');
   const [palletSearchLoading, setPalletSearchLoading] = useState(false);
   const fileInputRef = useRef(null);
   const binningFileInputRef = useRef(null);
+  const palletFileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
@@ -640,12 +640,9 @@ const AIAssistant = () => {
     }
   };
 
-  // Pallet Module Excel Export
-  const handlePalletModuleExport = async () => {
-    if (!palletNumber.trim()) {
-      alert('Please enter a pallet number');
-      return;
-    }
+  // Pallet Module Excel Export - Upload Excel with pallet numbers
+  const handlePalletModuleExport = async (file) => {
+    if (!file) return;
 
     if (!selectedCompany) {
       alert('Please select a company first');
@@ -656,31 +653,34 @@ const AIAssistant = () => {
 
     setMessages(prev => [...prev, {
       role: 'user',
-      content: `📦 Searching modules for Pallet ${palletNumber} in ${selectedCompany}...`
+      content: `📦 Uploading ${file.name} to get modules for ${selectedCompany}...`
     }]);
 
     try {
       const API_BASE_URL = getAPIBaseURL();
-      const response = await axios.post(`${API_BASE_URL}/api/ai/pallet-modules`, {
-        pallet_number: palletNumber.trim(),
-        company: selectedCompany
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('company', selectedCompany);
+
+      const response = await axios.post(`${API_BASE_URL}/api/ai/pallet-modules-excel`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       });
 
       if (response.data.success) {
-        const { total_modules, excel_base64, message, modules } = response.data;
-        const excelFilename = `Pallet_${palletNumber}_${selectedCompany.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const { total_modules, total_pallets, excel_base64, message, pallet_summary } = response.data;
+        const excelFilename = `Pallets_${selectedCompany.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
         // Build result message
-        let resultMessage = `📦 **Pallet ${palletNumber} - ${selectedCompany}**\n\n`;
+        let resultMessage = `📦 **${selectedCompany} - Pallet Modules Report**\n\n`;
         resultMessage += message + '\n\n';
 
-        if (modules && modules.length > 0) {
-          resultMessage += `**Sample Modules (first 10):**\n`;
-          modules.slice(0, 10).forEach((m, i) => {
-            resultMessage += `${i + 1}. ${m.barcode} | ${m.binning || 'N/A'} | ${m.status || 'N/A'}\n`;
+        if (pallet_summary && pallet_summary.length > 0) {
+          resultMessage += `**Pallet Summary:**\n`;
+          pallet_summary.slice(0, 15).forEach((p, i) => {
+            resultMessage += `${i + 1}. Pallet ${p.pallet_no}: ${p.module_count} modules | ${p.binning_summary}\n`;
           });
-          if (modules.length > 10) {
-            resultMessage += `\n... and ${modules.length - 10} more. Download Excel for full list.`;
+          if (pallet_summary.length > 15) {
+            resultMessage += `\n... and ${pallet_summary.length - 15} more pallets. Download Excel for full details.`;
           }
         }
 
@@ -712,6 +712,7 @@ const AIAssistant = () => {
       }]);
     } finally {
       setPalletSearchLoading(false);
+      if (palletFileInputRef.current) palletFileInputRef.current.value = '';
     }
   };
 
@@ -1011,16 +1012,16 @@ const AIAssistant = () => {
                 </div>
                 <div className="check-item">
                   <p className="check-title">📦 Pallet Module Excel</p>
+                  <p className="hint" style={{ fontSize: '10px', color: '#7f8c8d', marginBottom: '6px' }}>Upload Excel with pallet numbers</p>
                   <input 
-                    type="text" 
-                    value={palletNumber} 
-                    onChange={(e) => setPalletNumber(e.target.value)} 
-                    placeholder="Enter Pallet No"
-                    disabled={!selectedCompany}
-                    style={{ width: '100%', padding: '6px', fontSize: '11px', marginBottom: '8px', borderRadius: '4px', border: '1px solid #ddd' }}
+                    type="file" 
+                    ref={palletFileInputRef}
+                    accept=".xlsx,.xls,.csv"
+                    onChange={(e) => handlePalletModuleExport(e.target.files[0])} 
+                    style={{ display: 'none' }}
                   />
-                  <button className="btn-check" onClick={handlePalletModuleExport} disabled={palletSearchLoading || !palletNumber.trim() || !selectedCompany} style={{ backgroundColor: '#9b59b6' }}>
-                    {palletSearchLoading ? '⏳ Searching...' : '📥 Download Excel'}
+                  <button className="btn-check" onClick={() => palletFileInputRef.current?.click()} disabled={palletSearchLoading || !selectedCompany} style={{ backgroundColor: '#9b59b6' }}>
+                    {palletSearchLoading ? '⏳ Processing...' : '📤 Upload Pallet Excel'}
                   </button>
                   {!selectedCompany && <p className="hint" style={{ fontSize: '10px', color: '#e74c3c', marginTop: '4px' }}>⚠️ Select company first</p>}
                 </div>
