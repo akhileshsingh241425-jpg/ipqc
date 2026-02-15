@@ -15,19 +15,19 @@
 
 .user-management-header h2 {
   font-size: 28px;
-  color: #2c3e50;
+  color: #0f172a;
   margin: 0;
 }
 
 .user-management-header .subtitle {
-  color: #7f8c8d;
+  color: #64748b;
   font-size: 14px;
   margin: 5px 0 0 0;
 }
 
 .btn-add-user {
   padding: 12px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0ea5e9;
   color: white;
   border: none;
   border-radius: 8px;
@@ -35,12 +35,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.15);
 }
 
 .btn-add-user:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.15);
 }
 
 .users-table-section {
@@ -52,7 +52,7 @@
 
 .users-table-section h3 {
   font-size: 18px;
-  color: #2c3e50;
+  color: #0f172a;
   margin: 0 0 20px 0;
 }
 
@@ -67,7 +67,7 @@
 }
 
 .users-table thead {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0f172a;
   color: white;
 }
 
@@ -96,7 +96,7 @@
 
 .username-badge {
   background: #e3f2fd;
-  color: #1976d2;
+  color: #0284c7;
   padding: 6px 12px;
   border-radius: 6px;
   font-weight: 600;
@@ -114,12 +114,12 @@
 }
 
 .role-badge.admin {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0f172a;
   color: white;
 }
 
 .role-badge.user {
-  background: linear-gradient(135deg, #34c759 0%, #28a745 100%);
+  background: #10b981;
   color: white;
 }
 
@@ -163,22 +163,22 @@
 }
 
 .btn-edit {
-  background: #2196f3;
+  background: #0ea5e9;
   color: white;
 }
 
 .btn-edit:hover {
-  background: #1976d2;
+  background: #0284c7;
   transform: scale(1.05);
 }
 
 .btn-delete {
-  background: #f44336;
+  background: #ef4444;
   color: white;
 }
 
 .btn-delete:hover {
-  background: #d32f2f;
+  background: #dc2626;
   transform: scale(1.05);
 }
 
@@ -204,28 +204,28 @@
 
 .modal-content {
   background: white;
-  border-radius: 16px;
+  border-radius: 10px;
   padding: 30px;
   width: 90%;
   max-width: 500px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.15);
   animation: slideUp 0.3s ease;
 }
 
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    
   }
 }
 
 .modal-content h3 {
   font-size: 22px;
-  color: #2c3e50;
+  color: #0f172a;
   margin: 0 0 25px 0;
 }
 
@@ -237,7 +237,7 @@
   display: block;
   font-size: 14px;
   font-weight: 600;
-  color: #2c3e50;
+  color: #0f172a;
   margin-bottom: 8px;
 }
 
@@ -255,8 +255,8 @@
 
 .form-group input:focus,
 .form-group select:focus {
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
 }
 
 .form-group small {
@@ -284,13 +284,13 @@
 }
 
 .btn-save {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0ea5e9;
   color: white;
 }
 
 .btn-save:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.15);
 }
 
 .btn-cancel {
@@ -310,13 +310,13 @@
 
 .access-denied h2 {
   font-size: 32px;
-  color: #e74c3c;
+  color: #ef4444;
   margin-bottom: 15px;
 }
 
 .access-denied p {
   font-size: 16px;
-  color: #7f8c8d;
+  color: #64748b;
 }
 
 /* Responsive */

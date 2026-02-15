@@ -393,20 +393,6 @@ function App() {
         <button 
           className="toggle-btn mobile-toggle"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          style={{
-            position: 'fixed',
-            left: '10px',
-            top: '10px',
-            zIndex: 1001,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            padding: '12px 14px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 15px rgba(0, 0, 0, 0.3)',
-            border: 'none',
-            color: 'white',
-            fontSize: '18px',
-            cursor: 'pointer'
-          }}
         >
           {mobileMenuOpen ? '✕' : '☰'}
         </button>
@@ -417,60 +403,35 @@ function App() {
         <div 
           className="sidebar-overlay active"
           onClick={() => setMobileMenuOpen(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            background: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 999
-          }}
         />
       )}
       
       <div className={`sidebar ${sidebarCollapsed ? 'collapsed' : ''} ${isMobile && mobileMenuOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
-          <h2>{!sidebarCollapsed && 'PDI IPQC'}</h2>
+          <h2>{!sidebarCollapsed && 'Gautam Solar'}</h2>
           {!isMobile && (
             <button 
               className="toggle-btn" 
               onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
             >
-              {sidebarCollapsed ? '☰' : '✕'}
+              {sidebarCollapsed ? '≡' : '✕'}
             </button>
           )}
         </div>
 
         {/* User Role Badge */}
         <div className={`user-role-badge ${sidebarCollapsed ? 'collapsed' : ''}`}>
-          {userRole === 'super_admin' ? (
-            <>
-              <span className="role-icon">👑</span>
-              {!sidebarCollapsed && <span className="role-text">Super Admin</span>}
-            </>
-          ) : userRole === 'ftr_only' ? (
-            <>
-              <span className="role-icon">⚡</span>
-              {!sidebarCollapsed && <span className="role-text">FTR Access</span>}
-            </>
-          ) : userRole === 'ipqc_only' ? (
-            <>
-              <span className="role-icon">📝</span>
-              {!sidebarCollapsed && <span className="role-text">IPQC Access</span>}
-            </>
-          ) : userRole === 'coc_only' ? (
-            <>
-              <span className="role-icon">📦</span>
-              {!sidebarCollapsed && <span className="role-text">COC Access</span>}
-            </>
-          ) : (
-            <>
-              <span className="role-icon">👤</span>
-              {!sidebarCollapsed && <span className="role-text">User</span>}
-            </>
+          <span className="role-icon">
+            {userRole === 'super_admin' ? 'SA' : userRole === 'ftr_only' ? 'FT' : userRole === 'ipqc_only' ? 'QC' : 'U'}
+          </span>
+          {!sidebarCollapsed && (
+            <div>
+              <span className="role-text">
+                {userRole === 'super_admin' ? 'Administrator' : userRole === 'ftr_only' ? 'FTR Access' : userRole === 'ipqc_only' ? 'IPQC Access' : 'User'}
+              </span>
+              <div className="user-name">{localStorage.getItem('userName') || 'User'}</div>
+            </div>
           )}
-          {!sidebarCollapsed && <div className="user-name">{localStorage.getItem('userName') || 'User'}</div>}
         </div>
 
         <ul className="sidebar-menu">
@@ -480,7 +441,7 @@ function App() {
               onClick={() => handleMenuItemClick('daily-report')}
               title="Daily Report"
             >
-              <span className="icon">📊</span>
+              <span className="icon material-symbols-outlined">summarize</span>
               {!sidebarCollapsed && <span className="label">Daily Report</span>}
             </li>
           )}
@@ -490,7 +451,7 @@ function App() {
               onClick={() => handleMenuItemClick('ipqc')}
               title="IPQC Form"
             >
-              <span className="icon">📝</span>
+              <span className="icon material-symbols-outlined">fact_check</span>
               {!sidebarCollapsed && <span className="label">IPQC Form</span>}
             </li>
           )}
@@ -501,7 +462,7 @@ function App() {
               onClick={() => handleMenuItemClick('ftr-management')}
               title="FTR Management"
             >
-              <span className="icon">🏭</span>
+              <span className="icon material-symbols-outlined">precision_manufacturing</span>
               {!sidebarCollapsed && <span className="label">FTR Management</span>}
             </li>
           )}
@@ -512,7 +473,7 @@ function App() {
               onClick={() => handleMenuItemClick('witness-report')}
               title="Witness Report"
             >
-              <span className="icon">📋</span>
+              <span className="icon material-symbols-outlined">assignment</span>
               {!sidebarCollapsed && <span className="label">Witness Report</span>}
             </li>
           )}
@@ -520,9 +481,9 @@ function App() {
             <li 
               className={activeSection === 'ai-assistant' ? 'active' : ''}
               onClick={() => handleMenuItemClick('ai-assistant')}
-              title="AI FTR Assistant"
+              title="AI Assistant"
             >
-              <span className="icon">🤖</span>
+              <span className="icon material-symbols-outlined">smart_toy</span>
               {!sidebarCollapsed && <span className="label">AI Assistant</span>}
             </li>
           )}
@@ -530,9 +491,9 @@ function App() {
             <li 
               className={activeSection === 'ftr-dashboard' ? 'active' : ''}
               onClick={() => handleMenuItemClick('ftr-dashboard')}
-              title="FTR Analytics Dashboard"
+              title="FTR Analytics"
             >
-              <span className="icon">📊</span>
+              <span className="icon material-symbols-outlined">analytics</span>
               {!sidebarCollapsed && <span className="label">FTR Dashboard</span>}
             </li>
           )}
@@ -542,7 +503,7 @@ function App() {
               onClick={() => handleMenuItemClick('test-report')}
               title="Production Test Report"
             >
-              <span className="icon">🔬</span>
+              <span className="icon material-symbols-outlined">science</span>
               {!sidebarCollapsed && <span className="label">Production Test</span>}
             </li>
           )}
@@ -552,7 +513,7 @@ function App() {
               onClick={() => handleMenuItemClick('graph-manager')}
               title="I-V Graph Manager"
             >
-              <span className="icon">📊</span>
+              <span className="icon material-symbols-outlined">show_chart</span>
               {!sidebarCollapsed && <span className="label">Graph Manager</span>}
             </li>
           )}
@@ -562,7 +523,7 @@ function App() {
               onClick={() => handleMenuItemClick('user-management')}
               title="User Management"
             >
-              <span className="icon">👥</span>
+              <span className="icon material-symbols-outlined">group</span>
               {!sidebarCollapsed && <span className="label">User Management</span>}
             </li>
           )}
@@ -570,9 +531,9 @@ function App() {
             <li 
               className={activeSection === 'coc-dashboard' ? 'active' : ''}
               onClick={() => handleMenuItemClick('coc-dashboard')}
-              title="COC & Raw Material Dashboard"
+              title="COC Dashboard"
             >
-              <span className="icon">📋</span>
+              <span className="icon material-symbols-outlined">inventory_2</span>
               {!sidebarCollapsed && <span className="label">COC Dashboard</span>}
             </li>
           )}
@@ -582,7 +543,7 @@ function App() {
               onClick={() => handleMenuItemClick('calibration')}
               title="Calibration Management"
             >
-              <span className="icon">🔧</span>
+              <span className="icon material-symbols-outlined">build</span>
               {!sidebarCollapsed && <span className="label">Calibration</span>}
             </li>
           )}
@@ -592,7 +553,7 @@ function App() {
               onClick={() => handleMenuItemClick('qms')}
               title="Quality Management System"
             >
-              <span className="icon">🛡️</span>
+              <span className="icon material-symbols-outlined">verified</span>
               {!sidebarCollapsed && <span className="label">QMS</span>}
             </li>
           )}
@@ -601,7 +562,7 @@ function App() {
             onClick={handleLogout}
             title="Logout"
           >
-            <span className="icon">🚪</span>
+            <span className="icon material-symbols-outlined">logout</span>
             {!sidebarCollapsed && <span className="label">Logout</span>}
           </li>
         </ul>

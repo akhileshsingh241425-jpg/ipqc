@@ -3,9 +3,9 @@
 .ftr-dashboard {
   min-height: 100vh;
   width: 100%;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+  background: #f8fafc;
   padding: 20px;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   box-sizing: border-box;
   overflow-x: hidden;
 }
@@ -22,14 +22,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ed 100%);
+  background: #f8fafc;
 }
 
 .loading-spinner {
   width: 50px;
   height: 50px;
   border: 4px solid #e0e0e0;
-  border-top: 4px solid #667eea;
+  border-top: 4px solid #0ea5e9;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -97,7 +97,7 @@
 
 .ftr-dashboard .btn-refresh {
   padding: 8px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0ea5e9;
   border: none;
   color: white;
   border-radius: 8px;
@@ -107,8 +107,8 @@
 }
 
 .ftr-dashboard .btn-refresh:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.15);
 }
 
 /* Summary Cards Row */
@@ -136,8 +136,8 @@
 }
 
 .ftr-dashboard .summary-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+  
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .ftr-dashboard .summary-card::before {
@@ -149,12 +149,12 @@
   height: 100%;
 }
 
-.ftr-dashboard .summary-card.total::before { background: linear-gradient(180deg, #667eea, #764ba2); }
+.ftr-dashboard .summary-card.total::before { background: linear-gradient(180deg, #0ea5e9, #0284c7); }
 .ftr-dashboard .summary-card.assigned::before { background: linear-gradient(180deg, #11998e, #38ef7d); }
-.ftr-dashboard .summary-card.packed::before { background: linear-gradient(180deg, #27ae60, #2ecc71); }
-.ftr-dashboard .summary-card.dispatched::before { background: linear-gradient(180deg, #3498db, #2980b9); }
-.ftr-dashboard .summary-card.pending::before { background: linear-gradient(180deg, #f39c12, #e67e22); }
-.ftr-dashboard .summary-card.available::before { background: linear-gradient(180deg, #9b59b6, #8e44ad); }
+.ftr-dashboard .summary-card.packed::before { background: linear-gradient(180deg, #10b981, #34d399); }
+.ftr-dashboard .summary-card.dispatched::before { background: linear-gradient(180deg, #0ea5e9, #0284c7); }
+.ftr-dashboard .summary-card.pending::before { background: linear-gradient(180deg, #f59e0b, #d97706); }
+.ftr-dashboard .summary-card.available::before { background: linear-gradient(180deg, #64748b, #475569); }
 
 .ftr-dashboard .card-icon {
   font-size: 32px;
@@ -245,8 +245,8 @@
 }
 
 .ftr-dashboard .progress-fill.assigned { background: linear-gradient(90deg, #11998e, #38ef7d); }
-.ftr-dashboard .progress-fill.packed { background: linear-gradient(90deg, #27ae60, #2ecc71); }
-.ftr-dashboard .progress-fill.dispatched { background: linear-gradient(90deg, #3498db, #2980b9); }
+.ftr-dashboard .progress-fill.packed { background: linear-gradient(90deg, #10b981, #34d399); }
+.ftr-dashboard .progress-fill.dispatched { background: linear-gradient(90deg, #0ea5e9, #0284c7); }
 
 /* Companies Section */
 .ftr-dashboard .companies-section {
@@ -277,13 +277,13 @@
 }
 
 .ftr-dashboard .company-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+  
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .ftr-dashboard .company-card.selected {
-  border-color: #667eea;
-  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.2);
+  border-color: #0ea5e9;
+  box-shadow: 0 8px 25px rgba(14, 165, 233, 0.15);
 }
 
 .ftr-dashboard .company-header {
@@ -303,10 +303,10 @@
 }
 
 .ftr-dashboard .company-wattage {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0ea5e9;
   color: white;
   padding: 4px 12px;
-  border-radius: 15px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 600;
 }
@@ -383,8 +383,8 @@
   transition: width 0.5s;
 }
 
-.ftr-dashboard .mini-fill.green { background: linear-gradient(90deg, #27ae60, #2ecc71); }
-.ftr-dashboard .mini-fill.blue { background: linear-gradient(90deg, #3498db, #2980b9); }
+.ftr-dashboard .mini-fill.green { background: linear-gradient(90deg, #10b981, #34d399); }
+.ftr-dashboard .mini-fill.blue { background: linear-gradient(90deg, #0ea5e9, #0284c7); }
 
 /* PDI Breakdown */
 .ftr-dashboard .pdi-breakdown {
@@ -395,8 +395,8 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0;  }
+  to { opacity: 1;  }
 }
 
 .ftr-dashboard .pdi-breakdown h5 {
@@ -428,7 +428,7 @@
 
 .ftr-dashboard .pdi-count {
   font-weight: 600;
-  color: #667eea;
+  color: #0ea5e9;
 }
 
 .ftr-dashboard .binning-list {
@@ -469,7 +469,7 @@
 }
 
 .ftr-dashboard .alert-card.danger {
-  border-left: 4px solid #e74c3c;
+  border-left: 4px solid #ef4444;
 }
 
 .ftr-dashboard .alert-icon {
@@ -489,7 +489,7 @@
 .ftr-dashboard .alert-value {
   font-size: 28px;
   font-weight: 700;
-  color: #e74c3c;
+  color: #ef4444;
 }
 
 .ftr-dashboard .alert-desc {
@@ -524,7 +524,7 @@
 }
 
 .ftr-dashboard .stats-table th {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #0f172a;
   color: white;
   padding: 12px 15px;
   text-align: left;
@@ -556,23 +556,23 @@
 }
 
 .ftr-dashboard .stats-table .highlight-green {
-  color: #27ae60;
+  color: #10b981;
   font-weight: 600;
 }
 
 .ftr-dashboard .stats-table .highlight-blue {
-  color: #3498db;
+  color: #0ea5e9;
   font-weight: 600;
 }
 
 .ftr-dashboard .stats-table .highlight-orange {
-  color: #e67e22;
+  color: #d97706;
   font-weight: 600;
 }
 
 .ftr-dashboard .stats-table .total-row {
   background: #f8f9ff;
-  border-top: 2px solid #667eea;
+  border-top: 2px solid #0ea5e9;
 }
 
 .ftr-dashboard .stats-table .total-row td {
@@ -586,22 +586,22 @@
   font-size: 11px;
   font-weight: 600;
   background: #f0f4ff;
-  color: #667eea;
+  color: #0ea5e9;
 }
 
 .ftr-dashboard .percent-badge.good {
   background: #e8f8f0;
-  color: #27ae60;
+  color: #10b981;
 }
 
 .ftr-dashboard .percent-badge.medium {
   background: #fef6e8;
-  color: #e67e22;
+  color: #d97706;
 }
 
 .ftr-dashboard .percent-badge.low {
   background: #fee8e8;
-  color: #e74c3c;
+  color: #ef4444;
 }
 
 /* Footer */
