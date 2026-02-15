@@ -5516,7 +5516,8 @@ def get_pallet_modules_excel():
 def get_pallet_modules_from_excel():
     """
     Upload Excel file with pallet numbers and get all modules for those pallets
-    Request: multipart/form-data with 'file' (Excel) and 'company'
+    Request: multipart/form-data with 'file' (Excel), 'company', and 'binning_source'
+    binning_source: 'packing' (MRP running_order) or 'total_ftr' (Master FTR database)
     Excel should have pallet numbers in first column
     Returns: Combined Excel with all modules from all pallets
     """
@@ -5527,11 +5528,14 @@ def get_pallet_modules_from_excel():
     import base64
     
     try:
-        # Get company from form data
+        # Get company and binning source from form data
         company = request.form.get('company', '')
+        binning_source = request.form.get('binning_source', 'total_ftr')  # default to total_ftr
         
         if not company:
             return jsonify({'success': False, 'error': 'Company is required'}), 400
+        
+        print(f"📊 Binning Source: {binning_source}")
         
         # Get uploaded file
         if 'file' not in request.files:
@@ -5586,16 +5590,16 @@ def get_pallet_modules_from_excel():
                 'error': f"No data found for {company} in MRP"
             }), 404
         
-        # Get company_id for Master FTR lookup
+        # Get company_id for Master FTR lookup (only if binning_source is total_ftr)
         company_result = db.session.execute(text(
             "SELECT id FROM companies WHERE company_name LIKE :name"
         ), {'name': f'%{company.split()[0]}%'})
         company_row = company_result.fetchone()
         company_id = company_row[0] if company_row else None
         
-        # Fetch binning from Master FTR database
+        # Fetch binning from Master FTR database (only if source is total_ftr)
         binning_lookup = {}
-        if company_id:
+        if binning_source == 'total_ftr' and company_id:
             all_serials = [b.get('barcode') for b in all_barcodes if b.get('barcode')]
             if all_serials:
                 binning_result = db.session.execute(text("""
@@ -5627,15 +5631,22 @@ def get_pallet_modules_from_excel():
                 barcode = b.get('barcode', '')
                 ro = b.get('running_order', '') or ''
                 
-                # Extract binning from running_order (fallback)
+                # Extract binning from running_order (MRP packing data)
                 bin_match = re.search(r'i-?(\d+)', ro, re.IGNORECASE)
-                binning_from_ro = f"I{bin_match.group(1)}" if bin_match else ''
+                binning_from_ro = f"I{bin_match.group(1)}" if bin_match else 'N/A'
                 
-                # Get binning from Master FTR (preferred)
-                ftr_data = binning_lookup.get(barcode, {})
-                binning = ftr_data.get('binning') or binning_from_ro or 'N/A'
-                pmax = ftr_data.get('pmax', '')
-                class_status = ftr_data.get('class_status', '')
+                # Choose binning based on source
+                if binning_source == 'packing':
+                    # Use binning from MRP running_order
+                    binning = binning_from_ro
+                    pmax = ''
+                    class_status = ''
+                else:
+                    # Use binning from Master FTR database (total_ftr)
+                    ftr_data = binning_lookup.get(barcode, {})
+                    binning = ftr_data.get('binning') or 'Not in FTR'
+                    pmax = ftr_data.get('pmax', '')
+                    class_status = ftr_data.get('class_status', '')
                 
                 # Determine status
                 status = 'Dispatched' if b.get('dispatch_party') else 'Packed'
@@ -5698,9 +5709,10 @@ def get_pallet_modules_from_excel():
                 center_align = Alignment(horizontal='center', vertical='center')
                 
                 # Title Row
+                source_label = "Packing (MRP)" if binning_source == 'packing' else "Total FTR (Master DB)"
                 ws.merge_cells('A1:J1')
                 title_cell = ws['A1']
-                title_cell.value = f"📦 {company} - {len(pallets_found)} Pallets, {len(all_modules)} Modules"
+                title_cell.value = f"📦 {company} - {len(pallets_found)} Pallets, {len(all_modules)} Modules | Binning: {source_label}"
                 title_cell.font = Font(bold=True, size=14, color='FFFFFF')
                 title_cell.fill = PatternFill(start_color='8e44ad', end_color='8e44ad', fill_type='solid')
                 title_cell.alignment = center_align
@@ -5771,7 +5783,8 @@ def get_pallet_modules_from_excel():
                 print(f"Excel generation error: {excel_error}")
         
         # Build message
-        message = f"✅ Found {len(all_modules)} modules in {len(pallets_found)} pallets"
+        source_text = "Packing (MRP)" if binning_source == 'packing' else "Total FTR (Master Database)"
+        message = f"✅ Found {len(all_modules)} modules in {len(pallets_found)} pallets\n📊 Binning Source: {source_text}"
         if pallets_not_found:
             message += f"\n⚠️ {len(pallets_not_found)} pallets not found: {', '.join(pallets_not_found[:5])}"
             if len(pallets_not_found) > 5:
@@ -5780,6 +5793,7 @@ def get_pallet_modules_from_excel():
         return jsonify({
             'success': True,
             'company': company,
+            'binning_source': binning_source,
             'total_modules': len(all_modules),
             'total_pallets': len(pallets_found),
             'pallets_found': pallets_found,

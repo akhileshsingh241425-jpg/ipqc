@@ -25,6 +25,8 @@ const AIAssistant = () => {
   const [pdiStatusLoading, setPdiStatusLoading] = useState(false);
   const [pdiList, setPdiList] = useState([]); // PDI dropdown list
   const [palletSearchLoading, setPalletSearchLoading] = useState(false);
+  const [showBinningSourceModal, setShowBinningSourceModal] = useState(false);
+  const [pendingPalletFile, setPendingPalletFile] = useState(null);
   const fileInputRef = useRef(null);
   const binningFileInputRef = useRef(null);
   const palletFileInputRef = useRef(null);
@@ -640,8 +642,8 @@ const AIAssistant = () => {
     }
   };
 
-  // Pallet Module Excel Export - Upload Excel with pallet numbers
-  const handlePalletModuleExport = async (file) => {
+  // Handle file selection - show binning source modal first
+  const handlePalletFileSelect = (file) => {
     if (!file) return;
 
     if (!selectedCompany) {
@@ -649,11 +651,24 @@ const AIAssistant = () => {
       return;
     }
 
+    // Store file and show modal to ask binning source
+    setPendingPalletFile(file);
+    setShowBinningSourceModal(true);
+  };
+
+  // Pallet Module Excel Export - Upload Excel with pallet numbers
+  const handlePalletModuleExport = async (binningSource) => {
+    const file = pendingPalletFile;
+    if (!file) return;
+
+    setShowBinningSourceModal(false);
     setPalletSearchLoading(true);
+
+    const sourceLabel = binningSource === 'packing' ? 'Packing (MRP)' : 'Total FTR (Master Database)';
 
     setMessages(prev => [...prev, {
       role: 'user',
-      content: `📦 Uploading ${file.name} to get modules for ${selectedCompany}...`
+      content: `📦 Uploading ${file.name} for ${selectedCompany}...\n📊 Binning Source: ${sourceLabel}`
     }]);
 
     try {
@@ -661,6 +676,7 @@ const AIAssistant = () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('company', selectedCompany);
+      formData.append('binning_source', binningSource);
 
       const response = await axios.post(`${API_BASE_URL}/api/ai/pallet-modules-excel`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -712,6 +728,7 @@ const AIAssistant = () => {
       }]);
     } finally {
       setPalletSearchLoading(false);
+      setPendingPalletFile(null);
       if (palletFileInputRef.current) palletFileInputRef.current.value = '';
     }
   };
@@ -1017,7 +1034,7 @@ const AIAssistant = () => {
                     type="file" 
                     ref={palletFileInputRef}
                     accept=".xlsx,.xls,.csv"
-                    onChange={(e) => handlePalletModuleExport(e.target.files[0])} 
+                    onChange={(e) => handlePalletFileSelect(e.target.files[0])} 
                     style={{ display: 'none' }}
                   />
                   <button className="btn-check" onClick={() => palletFileInputRef.current?.click()} disabled={palletSearchLoading || !selectedCompany} style={{ backgroundColor: '#9b59b6' }}>
@@ -1146,6 +1163,58 @@ const AIAssistant = () => {
           </div>
         </div>
       </div>
+
+      {/* Binning Source Selection Modal */}
+      {showBinningSourceModal && (
+        <div className="modal-overlay" onClick={() => { setShowBinningSourceModal(false); setPendingPalletFile(null); if (palletFileInputRef.current) palletFileInputRef.current.value = ''; }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+            <h2>📊 Binning Data Source</h2>
+            <p style={{ marginBottom: '20px', color: '#7f8c8d' }}>Binning data kahan se check karna hai?</p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button 
+                className="btn-save" 
+                onClick={() => handlePalletModuleExport('packing')}
+                style={{ 
+                  padding: '15px 20px', 
+                  fontSize: '14px', 
+                  backgroundColor: '#3498db',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                📦 Packing (MRP Data)
+                <span style={{ fontSize: '11px', opacity: 0.8 }}>- Running Order se binning</span>
+              </button>
+              
+              <button 
+                className="btn-save" 
+                onClick={() => handlePalletModuleExport('total_ftr')}
+                style={{ 
+                  padding: '15px 20px', 
+                  fontSize: '14px', 
+                  backgroundColor: '#9b59b6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}
+              >
+                📊 Total FTR (Master Database)
+                <span style={{ fontSize: '11px', opacity: 0.8 }}>- Uploaded FTR se binning</span>
+              </button>
+            </div>
+
+            <div className="modal-actions" style={{ marginTop: '20px' }}>
+              <button className="btn-cancel" onClick={() => { setShowBinningSourceModal(false); setPendingPalletFile(null); if (palletFileInputRef.current) palletFileInputRef.current.value = ''; }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* API Key Modal */}
       {showApiKeyModal && (
