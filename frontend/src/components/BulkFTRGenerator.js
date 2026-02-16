@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import html2pdf from 'html2pdf.js';
 import axios from 'axios';
 import FTRTemplate from './FTRTemplate';
-import { getStoredGraphs, getRandomGraphForPower } from './GraphManager';
+import { getStoredGraphs } from './GraphManager'; // getRandomGraphForPower removed - using local cache function
 import '../styles/BulkFTR.css';
 
 const BulkFTRGenerator = () => {
@@ -204,8 +204,8 @@ const BulkFTRGenerator = () => {
               }
             });
             
-            // Timeout fallback after 800ms (optimized from 3s)
-            setTimeout(resolve, 800);
+            // Timeout fallback after 400ms (graphs are base64, load fast)
+            setTimeout(resolve, 400);
           });
         };
         
@@ -215,14 +215,14 @@ const BulkFTRGenerator = () => {
           
           const opt = {
             margin: 0,
-            image: { type: 'jpeg', quality: 0.98 },
+            image: { type: 'jpeg', quality: 0.95 },
             html2canvas: { 
               scale: 2,
               useCORS: true,
               allowTaint: true,
               backgroundColor: '#ffffff',
               logging: false,
-              imageTimeout: 800
+              imageTimeout: 400
             },
             jsPDF: { 
               orientation: 'portrait', 
@@ -311,6 +311,23 @@ const BulkFTRGenerator = () => {
       return;
     }
 
+    // LOCAL helper function to get random graph WITHOUT making API call (uses pre-fetched storedGraphs)
+    const getRandomGraphFromCache = (power, moduleType = 'monofacial') => {
+      const keyWithType = `${power}_${moduleType}`;
+      let powerGraphs = storedGraphs[keyWithType];
+      if (!powerGraphs) powerGraphs = storedGraphs[power];
+      if (!powerGraphs) {
+        const matchingKey = Object.keys(storedGraphs).find(k => k.startsWith(power));
+        if (matchingKey) powerGraphs = storedGraphs[matchingKey];
+      }
+      if (!powerGraphs) return null;
+      if (typeof powerGraphs === 'string') return powerGraphs;
+      if (Array.isArray(powerGraphs) && powerGraphs.length > 0) {
+        return powerGraphs[Math.floor(Math.random() * powerGraphs.length)];
+      }
+      return null;
+    };
+
     setIsGenerating(true);
     setProgress(0);
 
@@ -343,8 +360,8 @@ const BulkFTRGenerator = () => {
 
     const pdfDataArray = [];
     
-    // Process reports in batches of 5 for faster generation
-    const BATCH_SIZE = 5;
+    // Process reports in batches of 8 for faster generation (graphs are cached so no API delay)
+    const BATCH_SIZE = 8;
     const totalBatches = Math.ceil(excelData.length / BATCH_SIZE);
 
     for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
@@ -383,8 +400,8 @@ const BulkFTRGenerator = () => {
         }
       };
 
-        // Get random graph for selected wattage and module type (already returns base64)
-        const graphImage = await getRandomGraphForPower(selectedWattage, modType);
+        // Get random graph from CACHED graphs (NO API call - much faster!)
+        const graphImage = getRandomGraphFromCache(selectedWattage, modType);
         
         if (!graphImage) {
           console.warn(`Warning: Could not load graph image for ${testData.serialNumber}`);
@@ -474,7 +491,7 @@ const BulkFTRGenerator = () => {
               const blob = await Packer.toBlob(doc);
               saveAs(blob, `FTR_${item.serialNumber.replace(/\//g, '_')}.docx`);
               setProgress(87 + Math.round(((i + 1) / pdfDataArray.length) * 10));
-              await new Promise(r => setTimeout(r, 300));
+              await new Promise(r => setTimeout(r, 150));
             }
             downloadSuccess = true;
           } else {
@@ -532,10 +549,10 @@ const BulkFTRGenerator = () => {
             setTimeout(() => {
               document.body.removeChild(link);
               window.URL.revokeObjectURL(url);
-            }, 500);
+            }, 200);
             
             setProgress(87 + Math.round(((i + 1) / pdfDataArray.length) * 10));
-            await new Promise(r => setTimeout(r, 400));
+            await new Promise(r => setTimeout(r, 150));
           }
           downloadSuccess = true;
         } else {
@@ -586,7 +603,7 @@ const BulkFTRGenerator = () => {
               link.click();
               document.body.removeChild(link);
               window.URL.revokeObjectURL(url);
-              await new Promise(r => setTimeout(r, 300));
+              await new Promise(r => setTimeout(r, 150));
             }
             downloadSuccess = true;
           }
