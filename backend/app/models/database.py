@@ -16,6 +16,7 @@ class Company(db.Model):
     cells_received_mw = db.Column(db.Float, nullable=True)
     current_running_order = db.Column(db.String(200), nullable=True)  # Current running order number
     cell_efficiency_received = db.Column(db.Text, nullable=True)  # JSON: efficiency grade wise received cells
+    iqc_data = db.Column(db.Text, nullable=True)  # JSON: IQC tracker data (pdiOffers, bomOverrides, cocMapping)
     created_date = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relationships
@@ -31,6 +32,14 @@ class Company(db.Model):
             except:
                 cell_eff_received = {}
         
+        # Parse IQC data JSON
+        iqc_data = {}
+        if self.iqc_data:
+            try:
+                iqc_data = json.loads(self.iqc_data)
+            except:
+                iqc_data = {}
+        
         return {
             'id': self.id,
             'companyName': self.company_name,
@@ -41,6 +50,7 @@ class Company(db.Model):
             'cellsReceivedQty': self.cells_received_qty,
             'cellsReceivedMW': self.cells_received_mw,
             'cellEfficiencyReceived': cell_eff_received,  # Efficiency grade wise received cells
+            'iqcData': iqc_data,  # IQC tracker data
             'createdDate': self.created_date.strftime('%Y-%m-%d') if self.created_date else None,
             'productionRecords': [pr.to_dict() for pr in self.production_records],
             'rejectedModules': [rm.to_dict() for rm in self.rejected_modules]

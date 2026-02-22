@@ -286,6 +286,36 @@ def delete_company(company_id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+# Get IQC data for a company
+@company_bp.route('/api/companies/<int:company_id>/iqc-data', methods=['GET'])
+def get_iqc_data(company_id):
+    try:
+        company = Company.query.get_or_404(company_id)
+        import json
+        iqc_data = {}
+        if company.iqc_data:
+            try:
+                iqc_data = json.loads(company.iqc_data)
+            except:
+                iqc_data = {}
+        return jsonify({'success': True, 'data': iqc_data}), 200
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# Save IQC data for a company
+@company_bp.route('/api/companies/<int:company_id>/iqc-data', methods=['PUT'])
+def save_iqc_data(company_id):
+    try:
+        company = Company.query.get_or_404(company_id)
+        data = request.get_json()
+        import json
+        company.iqc_data = json.dumps(data)
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'IQC data saved'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # Add production record
 @company_bp.route('/api/companies/<int:company_id>/production', methods=['POST'])
 def add_production_record(company_id):
