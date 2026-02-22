@@ -5,6 +5,7 @@ import { companyService } from '../services/apiService';
 import COCSelectionModal from './COCSelectionModal';
 import PasswordModal from './PasswordModal';
 import PDIDashboard from './PDIDashboard';
+import IQCTracker from './IQCTracker';
 import '../styles/DailyReport.css';
 
 // Smart API URL helper
@@ -2975,6 +2976,29 @@ function DailyReport() {
             <span style={{ fontSize: '22px' }}>📦</span>
             PDI Tracking
           </button>
+
+          {/* IQC COC Tracker Tab */}
+          <button
+            onClick={() => setProductionTab('iqcTracker')}
+            style={{
+              flex: 1,
+              padding: '18px 30px',
+              fontSize: '16px',
+              fontWeight: '700',
+              border: 'none',
+              backgroundColor: productionTab === 'iqcTracker' ? '#1a237e' : 'transparent',
+              color: productionTab === 'iqcTracker' ? 'white' : '#555',
+              cursor: 'pointer',
+              transition: 'all 0.3s',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px'
+            }}
+          >
+            <span style={{ fontSize: '22px' }}>📋</span>
+            IQC - COC
+          </button>
         </div>
 
         {/* ========== TAB CONTENT ========== */}
@@ -5459,6 +5483,23 @@ function DailyReport() {
             <PDIDashboard 
               companyId={selectedCompany?.id} 
               companyName={selectedCompany?.companyName}
+            />
+          </div>
+        )}
+
+        {/* ========== IQC COC TRACKER TAB ========== */}
+        {productionTab === 'iqcTracker' && (
+          <div style={{
+            padding: '25px',
+            backgroundColor: '#fff',
+            borderRadius: '0 0 12px 12px',
+            border: '2px solid #1a237e',
+            borderTop: 'none'
+          }}>
+            <IQCTracker 
+              companyName={selectedCompany?.companyName}
+              companyId={selectedCompany?.id}
+              productionRecords={selectedCompany?.productionRecords || []}
             />
           </div>
         )}

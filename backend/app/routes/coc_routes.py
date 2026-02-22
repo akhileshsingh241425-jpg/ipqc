@@ -231,7 +231,15 @@ def get_assigned_coc_records():
                 'pdi_original': pdi_no,
                 'lot_batch_no': record.get('lot_batch_no'),
                 'invoice_no': record.get('invoice_no'),
+                'invoice_date': record.get('invoice_date') or record.get('entry_date') or '',
+                'invoice_qty': record.get('invoice_qty') or record.get('coc_qty') or 0,
+                'brand': record.get('brand') or record.get('store_name') or '',
+                'coc_qty': record.get('coc_qty') or 0,
+                'consumed_qty': record.get('consumed_qty') or 0,
                 'remaining_qty': remaining_qty,
+                'product_type': record.get('product_type') or '',
+                'coc_document_url': record.get('coc_document_url') or '',
+                'iqc_document_url': record.get('iqc_document_url') or '',
                 'is_exhausted': remaining_qty <= 0
             })
         
