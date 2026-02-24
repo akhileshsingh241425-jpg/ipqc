@@ -62,7 +62,16 @@ def get_company_ftr(company_id):
             """))
             conn.commit()
         
-        # Get TOTAL master FTR count (ALL records for this company, excluding rejected)
+        # Get TOTAL master FTR count (ALL records including rejected)
+        result = db.session.execute(text("""
+            SELECT COUNT(*) as count 
+            FROM ftr_master_serials 
+            WHERE company_id = :company_id
+        """), {'company_id': company_id})
+        total_all = result.fetchone()
+        total_all_count = total_all[0] if total_all else 0
+        
+        # Get OK count (excluding rejected)
         result = db.session.execute(text("""
             SELECT COUNT(*) as count 
             FROM ftr_master_serials 
@@ -123,6 +132,7 @@ def get_company_ftr(company_id):
         
         return jsonify({
             'success': True,
+            'total_all_count': total_all_count,
             'master_count': master_count,
             'available_count': available_count,
             'rejected_count': rejected_count,
@@ -154,6 +164,9 @@ def upload_master_ftr():
         upload_date = datetime.now()
         ok_count = 0
         rejected_count = 0
+        new_inserted = 0
+        updated = 0
+        skipped = 0
         
         for sn in serial_numbers:
             # Handle both simple string and object with details
@@ -169,6 +182,7 @@ def upload_master_ftr():
                 class_status = 'OK'
             
             if not serial:
+                skipped += 1
                 continue
                 
             # Normalize class_status
@@ -180,30 +194,66 @@ def upload_master_ftr():
                 class_status = 'OK'
                 ok_count += 1
             
-            db.session.execute(text("""
-                INSERT INTO ftr_master_serials 
-                (company_id, serial_number, pmax, binning, class_status, status, upload_date, file_name)
-                VALUES (:company_id, :serial_number, :pmax, :binning, :class_status, 'available', :upload_date, :file_name)
-                ON DUPLICATE KEY UPDATE 
-                pmax = VALUES(pmax), binning = VALUES(binning), class_status = VALUES(class_status)
-            """), {
-                'company_id': company_id,
-                'serial_number': serial,
-                'pmax': pmax,
-                'binning': binning,
-                'class_status': class_status,
-                'upload_date': upload_date,
-                'file_name': file_name
-            })
+            # Check if serial already exists
+            existing = db.session.execute(text("""
+                SELECT id FROM ftr_master_serials 
+                WHERE company_id = :company_id AND serial_number = :serial_number
+            """), {'company_id': company_id, 'serial_number': serial}).fetchone()
+            
+            if existing:
+                db.session.execute(text("""
+                    UPDATE ftr_master_serials 
+                    SET pmax = :pmax, binning = :binning, class_status = :class_status
+                    WHERE company_id = :company_id AND serial_number = :serial_number
+                """), {
+                    'company_id': company_id,
+                    'serial_number': serial,
+                    'pmax': pmax,
+                    'binning': binning,
+                    'class_status': class_status
+                })
+                updated += 1
+            else:
+                db.session.execute(text("""
+                    INSERT INTO ftr_master_serials 
+                    (company_id, serial_number, pmax, binning, class_status, status, upload_date, file_name)
+                    VALUES (:company_id, :serial_number, :pmax, :binning, :class_status, 'available', :upload_date, :file_name)
+                """), {
+                    'company_id': company_id,
+                    'serial_number': serial,
+                    'pmax': pmax,
+                    'binning': binning,
+                    'class_status': class_status,
+                    'upload_date': upload_date,
+                    'file_name': file_name
+                })
+                new_inserted += 1
         
         db.session.commit()
         
+        # Get actual total in database now
+        db_total_result = db.session.execute(text("""
+            SELECT COUNT(*) FROM ftr_master_serials WHERE company_id = :company_id
+        """), {'company_id': company_id}).fetchone()
+        db_total = db_total_result[0] if db_total_result else 0
+        
+        db_ok_result = db.session.execute(text("""
+            SELECT COUNT(*) FROM ftr_master_serials 
+            WHERE company_id = :company_id AND (class_status = 'OK' OR class_status IS NULL)
+        """), {'company_id': company_id}).fetchone()
+        db_ok_total = db_ok_result[0] if db_ok_result else 0
+        
         return jsonify({
             'success': True,
-            'message': f'{len(serial_numbers)} serial numbers uploaded ({ok_count} OK, {rejected_count} Rejected)',
+            'message': f'{new_inserted} new inserted, {updated} updated ({ok_count} OK, {rejected_count} Rejected)',
             'count': len(serial_numbers),
             'ok_count': ok_count,
-            'rejected_count': rejected_count
+            'rejected_count': rejected_count,
+            'new_inserted': new_inserted,
+            'updated': updated,
+            'skipped': skipped,
+            'db_total': db_total,
+            'db_ok_total': db_ok_total
         })
         
     except Exception as e:
@@ -350,39 +400,41 @@ def assign_serials_excel():
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
         
         assigned_count = 0
+        already_assigned_count = 0
+        not_found_count = 0
         assigned_date = datetime.now()
         
         for sn in serial_numbers:
-            # Check if serial exists in master and is available
+            # Check if serial exists in master table at all
             result = db.session.execute(text("""
-                SELECT id FROM ftr_master_serials 
+                SELECT id, status FROM ftr_master_serials 
                 WHERE company_id = :company_id 
-                AND serial_number = :serial_number 
-                AND status = 'available'
+                AND serial_number = :serial_number
             """), {'company_id': company_id, 'serial_number': sn})
             
             serial_row = result.fetchone()
             if serial_row:
-                # Update to assigned
-                db.session.execute(text("""
-                    UPDATE ftr_master_serials 
-                    SET status = 'assigned', pdi_number = :pdi_number, assigned_date = :assigned_date
-                    WHERE id = :id
-                """), {'pdi_number': pdi_number, 'assigned_date': assigned_date, 'id': serial_row[0]})
-                assigned_count += 1
+                if serial_row[1] == 'available':
+                    # Update to assigned
+                    db.session.execute(text("""
+                        UPDATE ftr_master_serials 
+                        SET status = 'assigned', pdi_number = :pdi_number, assigned_date = :assigned_date
+                        WHERE id = :id
+                    """), {'pdi_number': pdi_number, 'assigned_date': assigned_date, 'id': serial_row[0]})
+                    assigned_count += 1
+                else:
+                    already_assigned_count += 1
+            else:
+                not_found_count += 1
         
         db.session.commit()
-        
-        if assigned_count == 0:
-            return jsonify({
-                'success': False,
-                'message': 'No matching available serial numbers found'
-            }), 400
         
         return jsonify({
             'success': True,
             'message': f'{assigned_count} barcodes assigned to {pdi_number}',
-            'assigned_count': assigned_count
+            'assigned_count': assigned_count,
+            'already_assigned': already_assigned_count,
+            'not_found': not_found_count
         })
         
     except Exception as e:

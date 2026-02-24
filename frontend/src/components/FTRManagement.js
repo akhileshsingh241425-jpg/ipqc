@@ -135,9 +135,10 @@ const FTRManagement = () => {
           const classCol = headerLower.findIndex(h => h === 'class' || h === 'status' || h === 'class_status' || h === 'result');
           
           // Extract serial numbers with details
-          const serialNumbers = [];
+          const allSerials = [];
           let okCount = 0;
           let rejectedCount = 0;
+          let emptyRowCount = 0;
           
           for (let i = 1; i < jsonData.length; i++) {
             const row = jsonData[i];
@@ -150,22 +151,42 @@ const FTRManagement = () => {
               if (isRejected) rejectedCount++;
               else okCount++;
               
-              serialNumbers.push({
+              allSerials.push({
                 serial_number: String(serialNum).trim(),
                 pmax: pmaxCol >= 0 ? parseFloat(row[pmaxCol]) || null : null,
                 binning: binningCol >= 0 ? String(row[binningCol] || '').trim() : null,
                 class_status: isRejected ? 'REJECTED' : 'OK'
               });
+            } else {
+              emptyRowCount++;
             }
           }
           
-          if (serialNumbers.length === 0) {
+          if (allSerials.length === 0) {
             alert('❌ No serial numbers found in Excel file');
             return;
           }
           
+          // Deduplicate - keep last occurrence (latest data for that serial)
+          const serialMap = new Map();
+          for (const sn of allSerials) {
+            serialMap.set(sn.serial_number, sn);
+          }
+          const serialNumbers = Array.from(serialMap.values());
+          const duplicateCount = allSerials.length - serialNumbers.length;
+          
+          // Recalculate OK/Rejected after dedup
+          const uniqueOkCount = serialNumbers.filter(s => s.class_status === 'OK').length;
+          const uniqueRejectedCount = serialNumbers.filter(s => s.class_status === 'REJECTED').length;
+          
           // Show confirmation with breakdown
-          const confirmMsg = `Upload Summary:\n\n✅ OK: ${okCount}\n❌ Rejected: ${rejectedCount}\n📊 Total: ${serialNumbers.length}\n\nProceed with upload?`;
+          let confirmMsg = `Upload Summary:\n\n📊 Total rows in Excel: ${allSerials.length}`;
+          if (duplicateCount > 0) confirmMsg += `\n🔄 Duplicate serials removed: ${duplicateCount}`;
+          if (emptyRowCount > 0) confirmMsg += `\n⬜ Empty rows skipped: ${emptyRowCount}`;
+          confirmMsg += `\n\n📦 Unique serials to upload: ${serialNumbers.length}`;
+          confirmMsg += `\n✅ OK: ${uniqueOkCount}`;
+          confirmMsg += `\n❌ Rejected: ${uniqueRejectedCount}`;
+          confirmMsg += `\n\nProceed with upload?`;
           if (!window.confirm(confirmMsg)) {
             setUploadingMasterFTR(false);
             return;
@@ -180,7 +201,15 @@ const FTRManagement = () => {
           });
           
           if (response.data.success) {
-            alert(`✅ Master FTR uploaded!\n\n📊 Total: ${response.data.count}\n✅ OK: ${response.data.ok_count}\n❌ Rejected: ${response.data.rejected_count}`);
+            let resultMsg = `✅ Master FTR uploaded!\n`;
+            resultMsg += `\n📊 Unique serials sent: ${serialNumbers.length}`;
+            if (duplicateCount > 0) resultMsg += `\n🔄 Duplicates in file (removed): ${duplicateCount}`;
+            resultMsg += `\n✅ OK: ${response.data.ok_count}`;
+            resultMsg += `\n❌ Rejected: ${response.data.rejected_count}`;
+            if (response.data.new_inserted !== undefined) resultMsg += `\n🆕 New inserted: ${response.data.new_inserted}`;
+            if (response.data.updated !== undefined) resultMsg += `\n🔄 Updated (existing): ${response.data.updated}`;
+            if (response.data.db_total !== undefined) resultMsg += `\n\n📦 Total in database now: ${response.data.db_total}`;
+            alert(resultMsg);
             loadFTRData(selectedCompany.id);
             setShowMasterFTRModal(false);
             setSelectedMasterFile(null);
@@ -472,13 +501,15 @@ const FTRManagement = () => {
           const BATCH_SIZE = 500;
           const totalBatches = Math.ceil(serialNumbers.length / BATCH_SIZE);
           let uploadedCount = 0;
+          let alreadyAssignedCount = 0;
+          let notFoundCount = 0;
           let failedCount = 0;
           
           for (let i = 0; i < totalBatches; i++) {
             const batch = serialNumbers.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE);
             const progress = 30 + Math.floor((i / totalBatches) * 60);
             setPdiUploadProgress(progress);
-            setPdiUploadStatus(`📤 Uploading batch ${i + 1}/${totalBatches} (${uploadedCount}/${serialNumbers.length})...`);
+            setPdiUploadStatus(`📤 Uploading batch ${i + 1}/${totalBatches} (${uploadedCount}/${serialNumbers.length} assigned)...`);
             
             try {
               const response = await axios.post(`${API_BASE_URL}/api/ftr/assign-excel`, {
@@ -488,12 +519,15 @@ const FTRManagement = () => {
               });
               
               if (response.data.success) {
-                uploadedCount += batch.length;
+                uploadedCount += (response.data.assigned_count || 0);
+                alreadyAssignedCount += (response.data.already_assigned || 0);
+                notFoundCount += (response.data.not_found || 0);
               } else {
                 failedCount += batch.length;
               }
             } catch (batchError) {
-              console.error(`Batch ${i + 1} failed:`, batchError);
+              const errorMsg = batchError.response?.data?.message || batchError.message;
+              console.error(`Batch ${i + 1} failed:`, errorMsg);
               failedCount += batch.length;
             }
           }
@@ -505,11 +539,11 @@ const FTRManagement = () => {
             setPdiUploadProgress(100);
             setPdiUploadStatus('🎉 Complete!');
             
-            if (failedCount === 0) {
-              alert(`✅ ${uploadedCount} barcodes assigned to ${selectedPdiForAssign}`);
-            } else {
-              alert(`⚠️ Uploaded: ${uploadedCount}, Failed: ${failedCount}`);
-            }
+            let summaryParts = [`✅ Assigned: ${uploadedCount}`];
+            if (alreadyAssignedCount > 0) summaryParts.push(`⚠️ Already assigned: ${alreadyAssignedCount}`);
+            if (notFoundCount > 0) summaryParts.push(`❌ Not found in master: ${notFoundCount}`);
+            if (failedCount > 0) summaryParts.push(`🔴 Failed: ${failedCount}`);
+            alert(summaryParts.join('\n'));
             
             loadFTRData(selectedCompany.id);
             setShowAssignModal(false);
@@ -603,19 +637,21 @@ const FTRManagement = () => {
   const renderDashboard = () => {
     if (!ftrData) return null;
 
-    const totalMaster = ftrData.master_count || 0;
+    const totalAll = ftrData.total_all_count || ftrData.master_count || 0;
+    const okCount = ftrData.master_count || 0;
+    const rejectedCount = ftrData.rejected_count || 0;
     const totalAssigned = ftrData.total_assigned || 0;
     const totalPacked = ftrData.packed_count || 0;
     // Use backend's available_count if provided, else calculate
-    const available = ftrData.available_count !== undefined ? ftrData.available_count : (totalMaster - totalAssigned);
+    const available = ftrData.available_count !== undefined ? ftrData.available_count : (okCount - totalAssigned);
     const unpackedAssigned = totalAssigned - totalPacked;
 
     return (
       <div className="ftr-dashboard">
         <div className="ftr-stat-card master">
-          <h3>Master FTR</h3>
-          <div className="stat-number">{totalMaster.toLocaleString()}</div>
-          <p>Total Serial Numbers</p>
+          <h3>📦 Total FTR</h3>
+          <div className="stat-number">{totalAll.toLocaleString()}</div>
+          <p>Total Serial Numbers (✅ OK: {okCount.toLocaleString()} | ❌ Rejected: {rejectedCount.toLocaleString()})</p>
         </div>
         
         <div className="ftr-stat-card assigned">
