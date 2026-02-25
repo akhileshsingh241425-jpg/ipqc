@@ -19,6 +19,7 @@ const DispatchTracker = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/companies`);
       const data = await response.json();
+      console.log('Companies loaded:', data.companies || []);
       setCompanies(data.companies || []);
     } catch (err) {
       console.error('Error loading companies:', err);
@@ -30,8 +31,10 @@ const DispatchTracker = () => {
       setLoading(true);
       setError(null);
       
+      console.log('Loading dispatch data for company:', companyId);
       const response = await fetch(`${API_BASE_URL}/api/ftr/pdi-dashboard/${companyId}`);
       const data = await response.json();
+      console.log('Dispatch data received:', data);
       
       if (data.success) {
         setDispatchData(data);
@@ -40,13 +43,19 @@ const DispatchTracker = () => {
       }
     } catch (err) {
       setError('Error connecting to server');
-      console.error(err);
+      console.error('Error loading dispatch data:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCompanySelect = (companyId) => {
+    if (!companyId) {
+      setSelectedCompany(null);
+      setDispatchData(null);
+      return;
+    }
+    
     const company = companies.find(c => c.id === parseInt(companyId));
     if (company) {
       setSelectedCompany(company);
@@ -147,7 +156,7 @@ const DispatchTracker = () => {
             <div className="empty-state">
               <div className="empty-icon">📦</div>
               <h3>Select a Company</h3>
-              <p>Choose a company from the left panel to view dispatch tracking</p>
+              <p>Choose a company from the dropdown above to view dispatch tracking</p>
             </div>
           ) : loading ? (
             <div className="loading-state">
