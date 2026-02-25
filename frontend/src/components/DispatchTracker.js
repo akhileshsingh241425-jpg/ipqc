@@ -9,7 +9,6 @@ const DispatchTracker = () => {
   const [dispatchData, setDispatchData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
 
   // Load companies on mount
   useEffect(() => {
@@ -47,19 +46,47 @@ const DispatchTracker = () => {
     }
   };
 
-  const handleCompanySelect = (company) => {
-    setSelectedCompany(company);
-    loadDispatchData(company.id);
+  const handleCompanySelect = (companyId) => {
+    const company = companies.find(c => c.id === parseInt(companyId));
+    if (company) {
+      setSelectedCompany(company);
+      loadDispatchData(company.id);
+    }
   };
-
-  const filteredCompanies = companies.filter(company =>
-    company.company_name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
 
   const summary = dispatchData?.summary || {};
   const dispatchedItems = dispatchData?.details?.dispatched || [];
   const packedItems = dispatchData?.details?.packed || [];
   const pendingItems = dispatchData?.details?.pending || [];
+
+  // Group by PDI number
+  const groupByPDI = (items) => {
+    const grouped = {};
+    items.forEach(item => {
+      const pdiKey = item.pdi || 'Unknown';
+      if (!grouped[pdiKey]) {
+        grouped[pdiKey] = {
+          pdi: pdiKey,
+          dispatched: 0,
+          vehicle_nos: [],
+          dispatch_dates: []
+        };
+      }
+      grouped[pdiKey].dispatched += 1;
+      if (item.vehicle_no && !grouped[pdiKey].vehicle_nos.includes(item.vehicle_no)) {
+        grouped[pdiKey].vehicle_nos.push(item.vehicle_no);
+      }
+      if (item.dispatch_date && !grouped[pdiKey].dispatch_dates.includes(item.dispatch_date)) {
+        grouped[pdiKey].dispatch_dates.push(item.dispatch_date);
+      }
+    });
+    return Object.values(grouped).sort((a, b) => {
+      // Sort PDI numbers naturally
+      const pdiA = a.pdi.replace('PDI-', '');
+      const pdiB = b.pdi.replace('PDI-', '');
+      return pdiA.localeCompare(pdiB, undefined, { numeric: true });
+    });
+  };
 
   // Group dispatched items by vehicle (pallet proxy)
   const groupByVehicle = (items) => {
@@ -79,6 +106,7 @@ const DispatchTracker = () => {
     return Object.values(grouped);
   };
 
+  const pdiGroups = groupByPDI(dispatchedItems);
   const pallets = groupByVehicle(dispatchedItems);
   const totalPallets = pallets.length;
   const dispatchedModules = dispatchedItems.length;
@@ -90,38 +118,29 @@ const DispatchTracker = () => {
       <div className="dispatch-header">
         <div>
           <h1>🚚 Dispatch Tracking Dashboard</h1>
-          <p>Track pallet-wise dispatch status, remaining stock & delivery details</p>
+          <p>Track PDI-wise and pallet-wise dispatch status</p>
         </div>
       </div>
 
+      {/* Company Dropdown */}
+      <div className="company-dropdown-container">
+        <label htmlFor="company-select">Select Company:</label>
+        <select
+          id="company-select"
+          value={selectedCompany?.id || ''}
+          onChange={(e) => handleCompanySelect(e.target.value)}
+          className="company-dropdown"
+        >
+          <option value="">-- Choose a Company --</option>
+          {companies.map((company) => (
+            <option key={company.id} value={company.id}>
+              {company.company_name} ({company.module_wattage}W • {company.cells_per_module} cells)
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="dispatch-content">
-        {/* Company Selector */}
-        <div className="company-selector-panel">
-          <div className="search-box">
-            <input
-              type="text"
-              placeholder="🔍 Search company..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-
-          <div className="company-list">
-            {filteredCompanies.map((company) => (
-              <div
-                key={company.id}
-                className={`company-card ${selectedCompany?.id === company.id ? 'active' : ''}`}
-                onClick={() => handleCompanySelect(company)}
-              >
-                <div className="company-name">{company.company_name}</div>
-                <div className="company-meta">
-                  {company.module_wattage}W • {company.cells_per_module} cells
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Dispatch Details */}
         <div className="dispatch-details-panel">
           {!selectedCompany ? (
@@ -200,6 +219,53 @@ const DispatchTracker = () => {
                   </div>
                 </div>
               </div>
+
+              {/* PDI-wise Status Table */}
+              {pdiGroups.length > 0 && (
+                <div className="section">
+                  <h3>📋 PDI-wise Dispatch Status</h3>
+                  <div className="pallet-table-container">
+                    <table className="pallet-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>PDI Number</th>
+                          <th>Dispatched Modules</th>
+                          <th>Pallets/Vehicles</th>
+                          <th>Dispatch Dates</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pdiGroups.map((pdi, index) => (
+                          <tr key={index}>
+                            <td>{index + 1}</td>
+                            <td className="pdi-number">
+                              <strong>{pdi.pdi}</strong>
+                            </td>
+                            <td className="module-count">
+                              <span className="badge">{pdi.dispatched}</span> modules
+                            </td>
+                            <td>
+                              {pdi.vehicle_nos.length > 0 
+                                ? pdi.vehicle_nos.join(', ') 
+                                : '—'}
+                            </td>
+                            <td>
+                              {pdi.dispatch_dates.length > 0 
+                                ? pdi.dispatch_dates.join(', ') 
+                                : '—'}
+                            </td>
+                            <td>
+                              <span className="status-badge dispatched">✓ Dispatched</span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Pallet-wise Dispatch Table */}
               {pallets.length > 0 && (
