@@ -98,11 +98,12 @@ const DispatchTracker = () => {
   };
 
   const summary = dispatchData?.summary || {};
-  const pdiGroups = dispatchData?.pdi_groups || [];
-  const vehicleGroups = dispatchData?.vehicle_groups || [];
-  const totalPallets = vehicleGroups.length;
+  const palletGroups = dispatchData?.pallet_groups || [];
+  const dispatchGroups = dispatchData?.dispatch_groups || [];
   const dispatchedModules = summary.dispatched || 0;
-  const remainingModules = (summary.total_assigned || 0) - dispatchedModules;
+  const packedModules = summary.packed || 0;
+  const pendingModules = summary.pending || 0;
+  const totalModules = summary.total_assigned || 0;
 
   return (
     <div className="dispatch-tracker">
@@ -110,7 +111,7 @@ const DispatchTracker = () => {
       <div className="dispatch-header">
         <div>
           <h1>🚚 Dispatch Tracking Dashboard</h1>
-          <p>Track PDI-wise and pallet-wise dispatch status</p>
+          <p>Track packing and dispatch status from MRP</p>
         </div>
       </div>
 
@@ -161,7 +162,7 @@ const DispatchTracker = () => {
           ) : loading ? (
             <div className="loading-state">
               <div className="spinner"></div>
-              <p>Loading dispatch data...</p>
+              <p>Loading dispatch data from MRP...</p>
             </div>
           ) : error ? (
             <div className="error-state">
@@ -190,7 +191,7 @@ const DispatchTracker = () => {
                 <div className="stat-card dispatched">
                   <div className="stat-icon">🚚</div>
                   <div className="stat-content">
-                    <div className="stat-label">Dispatched Modules</div>
+                    <div className="stat-label">Dispatched</div>
                     <div className="stat-value">{dispatchedModules.toLocaleString()}</div>
                     <div className="stat-percent">
                       {summary.dispatched_percent || 0}% of total
@@ -201,20 +202,21 @@ const DispatchTracker = () => {
                 <div className="stat-card pallets">
                   <div className="stat-icon">📦</div>
                   <div className="stat-content">
-                    <div className="stat-label">Total Pallets/Vehicles</div>
-                    <div className="stat-value">{totalPallets}</div>
-                    <div className="stat-sub">Dispatched shipments</div>
+                    <div className="stat-label">Packed (Ready)</div>
+                    <div className="stat-value">{packedModules.toLocaleString()}</div>
+                    <div className="stat-percent">
+                      {summary.packed_percent || 0}% of total
+                    </div>
                   </div>
                 </div>
 
                 <div className="stat-card remaining">
                   <div className="stat-icon">⏳</div>
                   <div className="stat-content">
-                    <div className="stat-label">Remaining Stock</div>
-                    <div className="stat-value">{remainingModules.toLocaleString()}</div>
-                    <div className="stat-sub">
-                      {(summary.packed || 0).toLocaleString()} packed, {' '}
-                      {(summary.pending || 0).toLocaleString()} pending
+                    <div className="stat-label">Pending</div>
+                    <div className="stat-value">{pendingModules.toLocaleString()}</div>
+                    <div className="stat-percent">
+                      {summary.pending_percent || 0}% of total
                     </div>
                   </div>
                 </div>
@@ -222,108 +224,52 @@ const DispatchTracker = () => {
                 <div className="stat-card total">
                   <div className="stat-icon">📋</div>
                   <div className="stat-content">
-                    <div className="stat-label">Total Assigned</div>
-                    <div className="stat-value">{(summary.total_assigned || 0).toLocaleString()}</div>
-                    <div className="stat-sub">All modules in PDI</div>
+                    <div className="stat-label">Total in MRP</div>
+                    <div className="stat-value">{totalModules.toLocaleString()}</div>
+                    <div className="stat-sub">All barcodes assigned</div>
                   </div>
                 </div>
               </div>
 
-              {/* PDI-wise Status Table */}
-              {pdiGroups.length > 0 && (
+              {/* Dispatch Party Groups Table */}
+              {dispatchGroups.length > 0 && (
                 <div className="section">
-                  <h3>📋 PDI-wise Dispatch Status</h3>
+                  <h3>🚚 Dispatched Modules ({dispatchedModules.toLocaleString()})</h3>
                   <div className="pallet-table-container">
                     <table className="pallet-table">
                       <thead>
                         <tr>
                           <th>#</th>
-                          <th>PDI Number</th>
-                          <th>Dispatched</th>
-                          <th>Packed</th>
-                          <th>Pending</th>
-                          <th>Pallets/Vehicles</th>
-                          <th>Dispatch Dates</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pdiGroups.map((pdi, index) => (
-                          <tr key={index}>
-                            <td>{index + 1}</td>
-                            <td className="pdi-number">
-                              <strong>{pdi.pdi}</strong>
-                            </td>
-                            <td className="module-count">
-                              <span className="badge">{pdi.dispatched}</span>
-                            </td>
-                            <td className="module-count">
-                              <span className="badge packed-badge">{pdi.packed || 0}</span>
-                            </td>
-                            <td className="module-count">
-                              <span className="badge pending-badge">{pdi.pending || 0}</span>
-                            </td>
-                            <td>
-                              {pdi.vehicle_nos && pdi.vehicle_nos.length > 0 
-                                ? pdi.vehicle_nos.join(', ') 
-                                : '—'}
-                            </td>
-                            <td>
-                              {pdi.dispatch_dates && pdi.dispatch_dates.length > 0 
-                                ? pdi.dispatch_dates.join(', ') 
-                                : '—'}
-                            </td>
-                            <td>
-                              {pdi.dispatched > 0 
-                                ? <span className="status-badge dispatched">✓ Dispatched</span>
-                                : pdi.packed > 0 
-                                  ? <span className="status-badge packed">📦 Packed</span>
-                                  : <span className="status-badge pending">⏳ Pending</span>
-                              }
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Pallet-wise Dispatch Table */}
-              {vehicleGroups.length > 0 && (
-                <div className="section">
-                  <h3>🚛 Pallet/Vehicle-wise Dispatch Details</h3>
-                  <div className="pallet-table-container">
-                    <table className="pallet-table">
-                      <thead>
-                        <tr>
-                          <th>#</th>
-                          <th>Vehicle Number</th>
-                          <th>Dispatch Date</th>
-                          <th>Party/Customer</th>
-                          <th>Modules Count</th>
+                          <th>Dispatch Party</th>
+                          <th>Modules</th>
+                          <th>Pallets</th>
+                          <th>Pallet Numbers</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {vehicleGroups.map((vehicle, index) => (
+                        {dispatchGroups.map((group, index) => (
                           <tr key={index}>
                             <td>{index + 1}</td>
-                            <td className="vehicle-no">
-                              {vehicle.vehicle_no !== 'Unknown' ? vehicle.vehicle_no : '—'}
-                            </td>
-                            <td>{vehicle.dispatch_date || '—'}</td>
-                            <td>{vehicle.party || '—'}</td>
+                            <td><strong>{group.dispatch_party}</strong></td>
                             <td className="module-count">
-                              <span className="badge">{vehicle.module_count}</span> modules
+                              <span className="badge">{group.module_count.toLocaleString()}</span>
+                            </td>
+                            <td className="module-count">
+                              <span className="badge packed-badge">{group.pallet_count}</span>
+                            </td>
+                            <td>
+                              {group.pallets && group.pallets.length > 0
+                                ? group.pallets.slice(0, 10).join(', ') + (group.pallets.length > 10 ? ` +${group.pallets.length - 10} more` : '')
+                                : '—'}
                             </td>
                             <td>
                               <button 
                                 className="view-details-btn"
                                 onClick={() => {
-                                  const serials = vehicle.serials || [];
+                                  const serials = group.serials || [];
                                   const msg = serials.length > 0 
-                                    ? `Modules in this shipment (showing ${serials.length}):\n\n${serials.join('\n')}`
+                                    ? `Serials dispatched to ${group.dispatch_party} (showing ${serials.length}):\n\n${serials.join('\n')}`
                                     : 'No serial details available';
                                   alert(msg);
                                 }}
@@ -339,24 +285,70 @@ const DispatchTracker = () => {
                 </div>
               )}
 
-              {/* Packed Stock */}
-              {(summary.packed || 0) > 0 && (
+              {/* Packed Pallets Table */}
+              {palletGroups.length > 0 && (
                 <div className="section">
-                  <h3>📦 Packed Stock (Ready for Dispatch)</h3>
-                  <div className="packed-summary">
-                    <div className="packed-count">{(summary.packed || 0).toLocaleString()} modules packed</div>
-                    <p>These modules are packed and ready for dispatch</p>
+                  <h3>📦 Packed Pallets - Ready for Dispatch ({packedModules.toLocaleString()} modules in {palletGroups.length} pallets)</h3>
+                  <div className="pallet-table-container">
+                    <table className="pallet-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Pallet Number</th>
+                          <th>Modules</th>
+                          <th>Status</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {palletGroups.slice(0, 100).map((pallet, index) => (
+                          <tr key={index}>
+                            <td>{index + 1}</td>
+                            <td className="pdi-number">
+                              <strong>{pallet.pallet_no}</strong>
+                            </td>
+                            <td className="module-count">
+                              <span className="badge packed-badge">{pallet.module_count}</span>
+                            </td>
+                            <td>
+                              <span className="status-badge packed">📦 Packed</span>
+                            </td>
+                            <td>
+                              <button 
+                                className="view-details-btn"
+                                onClick={() => {
+                                  const serials = pallet.serials || [];
+                                  const msg = serials.length > 0 
+                                    ? `Serials in Pallet ${pallet.pallet_no} (showing ${serials.length}):\n\n${serials.join('\n')}`
+                                    : 'No serial details available';
+                                  alert(msg);
+                                }}
+                              >
+                                View Serials
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {palletGroups.length > 100 && (
+                          <tr>
+                            <td colSpan="5" style={{textAlign: 'center', fontStyle: 'italic', color: '#666'}}>
+                              Showing 100 of {palletGroups.length} pallets
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
 
-              {/* Pending Production */}
-              {(summary.pending || 0) > 0 && (
+              {/* Pending Summary */}
+              {pendingModules > 0 && (
                 <div className="section">
-                  <h3>⏳ Pending (In Production)</h3>
+                  <h3>⏳ Pending (Not Yet Packed)</h3>
                   <div className="pending-summary">
-                    <div className="pending-count">{(summary.pending || 0).toLocaleString()} modules</div>
-                    <p>These modules are still in production/packing stage</p>
+                    <div className="pending-count">{pendingModules.toLocaleString()} modules</div>
+                    <p>These barcodes are in MRP but not yet packed into pallets</p>
                   </div>
                 </div>
               )}

@@ -783,93 +783,90 @@ def get_dispatch_tracking(company_id):
             })
         total = len(mrp_data)
 
-        # Process data server-side for speed
+        # ====================================================
+        # Process data using SAME logic as ai_assistant_routes
+        # MRP API returns FLAT data:
+        #   barcode, pallet_no, dispatch_party, running_order
+        # Status logic (from ai_assistant_routes.py):
+        #   - has dispatch_party → DISPATCHED
+        #   - has pallet_no but no dispatch_party → PACKED
+        #   - neither → PENDING (not in MRP / not packed yet)
+        # ====================================================
         dispatched = 0
         packed = 0
         pending = 0
-        pdi_map = {}
-        vehicle_map = {}
+        pallet_map = {}   # group by pallet_no
+        dispatch_party_map = {}  # group by dispatch_party
+
+        # Log first item to debug structure
+        if mrp_data:
+            sample = mrp_data[0]
+            print(f"[Dispatch Tracking] Sample record keys: {list(sample.keys())}")
+            print(f"[Dispatch Tracking] Sample record: barcode={sample.get('barcode','?')}, pallet_no={sample.get('pallet_no','?')}, dispatch_party={sample.get('dispatch_party','?')}")
 
         for item in mrp_data:
-            barcode = item.get('barcode_no', '')
-            pdi_number = item.get('pdi_number', 'N/A')
+            barcode = item.get('barcode', '')
+            pallet_no = item.get('pallet_no', '')
+            dispatch_party = item.get('dispatch_party', '')
+            running_order = item.get('running_order', '')
 
-            dispatch_info = item.get('dispatch', {}) or {}
-            packing_info = item.get('packing', {}) or {}
-
-            has_dispatch = bool(dispatch_info.get('dispatch_date'))
-            has_packing = bool(packing_info.get('packing_date'))
-
-            if has_dispatch:
+            if dispatch_party:
+                # DISPATCHED - has dispatch_party
                 dispatched += 1
-                dispatch_date = dispatch_info.get('dispatch_date', '')
-                vehicle_no = dispatch_info.get('vehicle_no', 'Unknown')
-                party = dispatch_info.get('party_name', company_name)
 
-                # Group by PDI
-                if pdi_number not in pdi_map:
-                    pdi_map[pdi_number] = {
-                        'pdi': pdi_number,
-                        'dispatched': 0,
-                        'packed': 0,
-                        'pending': 0,
-                        'vehicle_nos': [],
-                        'dispatch_dates': []
+                # Group by dispatch_party (acts like vehicle/shipment group)
+                if dispatch_party not in dispatch_party_map:
+                    dispatch_party_map[dispatch_party] = {
+                        'dispatch_party': dispatch_party,
+                        'module_count': 0,
+                        'pallets': set(),
+                        'serials': []
                     }
-                pdi_map[pdi_number]['dispatched'] += 1
-                if vehicle_no and vehicle_no not in pdi_map[pdi_number]['vehicle_nos']:
-                    pdi_map[pdi_number]['vehicle_nos'].append(vehicle_no)
-                if dispatch_date and dispatch_date not in pdi_map[pdi_number]['dispatch_dates']:
-                    pdi_map[pdi_number]['dispatch_dates'].append(dispatch_date)
+                dispatch_party_map[dispatch_party]['module_count'] += 1
+                if pallet_no:
+                    dispatch_party_map[dispatch_party]['pallets'].add(pallet_no)
+                if len(dispatch_party_map[dispatch_party]['serials']) < 50:
+                    dispatch_party_map[dispatch_party]['serials'].append(barcode)
 
-                # Group by vehicle
-                if vehicle_no not in vehicle_map:
-                    vehicle_map[vehicle_no] = {
-                        'vehicle_no': vehicle_no,
-                        'dispatch_date': dispatch_date,
-                        'party': party,
+            elif pallet_no:
+                # PACKED - has pallet_no but no dispatch_party
+                packed += 1
+
+                # Group by pallet
+                if pallet_no not in pallet_map:
+                    pallet_map[pallet_no] = {
+                        'pallet_no': pallet_no,
                         'module_count': 0,
                         'serials': []
                     }
-                vehicle_map[vehicle_no]['module_count'] += 1
-                # Only store first 50 serials per vehicle to limit response size
-                if len(vehicle_map[vehicle_no]['serials']) < 50:
-                    vehicle_map[vehicle_no]['serials'].append(barcode)
-
-            elif has_packing:
-                packed += 1
-                # Track packed in PDI groups too
-                if pdi_number not in pdi_map:
-                    pdi_map[pdi_number] = {
-                        'pdi': pdi_number,
-                        'dispatched': 0,
-                        'packed': 0,
-                        'pending': 0,
-                        'vehicle_nos': [],
-                        'dispatch_dates': []
-                    }
-                pdi_map[pdi_number]['packed'] += 1
+                pallet_map[pallet_no]['module_count'] += 1
+                if len(pallet_map[pallet_no]['serials']) < 20:
+                    pallet_map[pallet_no]['serials'].append(barcode)
             else:
+                # PENDING - not packed, not dispatched
                 pending += 1
-                if pdi_number not in pdi_map:
-                    pdi_map[pdi_number] = {
-                        'pdi': pdi_number,
-                        'dispatched': 0,
-                        'packed': 0,
-                        'pending': 0,
-                        'vehicle_nos': [],
-                        'dispatch_dates': []
-                    }
-                pdi_map[pdi_number]['pending'] += 1
 
         # Calculate percentages
         packed_percent = round((packed / total) * 100) if total > 0 else 0
         dispatched_percent = round((dispatched / total) * 100) if total > 0 else 0
         pending_percent = round((pending / total) * 100) if total > 0 else 0
 
-        # Sort PDI groups naturally
-        pdi_groups = sorted(pdi_map.values(), key=lambda x: x['pdi'])
-        vehicle_groups = sorted(vehicle_map.values(), key=lambda x: x.get('dispatch_date', ''), reverse=True)
+        # Build pallet groups (packed pallets)
+        pallet_groups = sorted(pallet_map.values(), key=lambda x: str(x['pallet_no']))
+
+        # Build dispatch groups
+        dispatch_groups = []
+        for dp_name, dp_data in dispatch_party_map.items():
+            dispatch_groups.append({
+                'dispatch_party': dp_name,
+                'module_count': dp_data['module_count'],
+                'pallet_count': len(dp_data['pallets']),
+                'pallets': sorted(list(dp_data['pallets'])),
+                'serials': dp_data['serials']
+            })
+        dispatch_groups.sort(key=lambda x: x['module_count'], reverse=True)
+
+        print(f"[Dispatch Tracking] Result: dispatched={dispatched}, packed={packed}, pending={pending}")
 
         return jsonify({
             "success": True,
@@ -884,8 +881,8 @@ def get_dispatch_tracking(company_id):
                 "dispatched_percent": dispatched_percent,
                 "pending_percent": pending_percent
             },
-            "pdi_groups": pdi_groups,
-            "vehicle_groups": vehicle_groups
+            "pallet_groups": pallet_groups,
+            "dispatch_groups": dispatch_groups
         })
 
     except http_requests.exceptions.Timeout:
