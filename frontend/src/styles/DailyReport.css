@@ -382,7 +382,7 @@
 }
 
 .rejection-table th {
-  background: #0f172a;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   color: white;
   padding: 10px 12px;
   text-align: left;
@@ -588,7 +588,7 @@
 
 .btn-new-company,
 .btn-add-company {
-  background: #0f172a;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   color: white;
   padding: 10px 20px;
   border: none;
@@ -612,9 +612,9 @@
 
 .btn-new-company:hover,
 .btn-add-company:hover {
-  background: #1e293b;
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
   transform: none;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
 }
 
 .empty-state {
@@ -767,7 +767,7 @@
 
 .btn-open {
   flex: 1;
-  background: #0f172a;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
   color: white;
   padding: 11px 20px;
   border: none;
@@ -791,8 +791,8 @@
 }
 
 .btn-open:hover {
-  background: #1e293b;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
+  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
 }
 
 .btn-delete-card {
@@ -993,8 +993,8 @@
 }
 
 .production-table th {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: white;
   padding: 10px 8px;
   text-align: center;
   font-weight: 600;
@@ -1073,8 +1073,8 @@
 }
 
 .rejection-list-table th {
-  background: #0f172a;
-  color: #e2e8f0;
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: white;
   font-weight: 600;
   font-size: 11px;
   text-transform: uppercase;
