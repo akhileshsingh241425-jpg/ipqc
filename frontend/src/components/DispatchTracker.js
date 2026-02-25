@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { companyService } from '../services/apiService';
 import '../styles/DispatchTracker.css';
 
-const API_BASE_URL = window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:5003/api' 
+  : '/api';
 
 const DispatchTracker = () => {
   const [companies, setCompanies] = useState([]);
@@ -9,6 +12,12 @@ const DispatchTracker = () => {
   const [dispatchData, setDispatchData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
+  const [newCompanyData, setNewCompanyData] = useState({
+    company_name: '',
+    module_wattage: '',
+    cells_per_module: ''
+  });
 
   // Load companies on mount
   useEffect(() => {
@@ -17,12 +26,12 @@ const DispatchTracker = () => {
 
   const loadCompanies = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/companies`);
-      const data = await response.json();
-      console.log('Companies loaded:', data.companies || []);
-      setCompanies(data.companies || []);
+      const data = await companyService.getAllCompanies();
+      console.log('Companies loaded:', data);
+      setCompanies(data || []);
     } catch (err) {
       console.error('Error loading companies:', err);
+      setCompanies([]);
     }
   };
 
@@ -32,7 +41,7 @@ const DispatchTracker = () => {
       setError(null);
       
       console.log('Loading dispatch data for company:', companyId);
-      const response = await fetch(`${API_BASE_URL}/api/ftr/pdi-dashboard/${companyId}`);
+      const response = await fetch(`${API_BASE_URL}/ftr/pdi-dashboard/${companyId}`);
       const data = await response.json();
       console.log('Dispatch data received:', data);
       
@@ -44,6 +53,27 @@ const DispatchTracker = () => {
     } catch (err) {
       setError('Error connecting to server');
       console.error('Error loading dispatch data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateCompany = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      await companyService.createCompany(newCompanyData);
+      alert('Company created successfully!');
+      setShowNewCompanyModal(false);
+      setNewCompanyData({
+        company_name: '',
+        module_wattage: '',
+        cells_per_module: ''
+      });
+      await loadCompanies();
+    } catch (err) {
+      console.error('Error creating company:', err);
+      alert('Failed to create company');
     } finally {
       setLoading(false);
     }
@@ -133,7 +163,24 @@ const DispatchTracker = () => {
 
       {/* Company Dropdown */}
       <div className="company-dropdown-container">
-        <label htmlFor="company-select">Select Company:</label>
+        <div className="dropdown-header">
+          <label htmlFor="company-select">Select Company:</label>
+          <div className="dropdown-actions">
+            <button 
+              onClick={loadCompanies} 
+              className="refresh-companies-btn"
+              title="Refresh companies list"
+            >
+              🔄 Refresh
+            </button>
+            <button 
+              onClick={() => setShowNewCompanyModal(true)} 
+              className="add-company-btn"
+            >
+              ➕ Add Company
+            </button>
+          </div>
+        </div>
         <select
           id="company-select"
           value={selectedCompany?.id || ''}
@@ -348,6 +395,76 @@ const DispatchTracker = () => {
           )}
         </div>
       </div>
+
+      {/* New Company Modal */}
+      {showNewCompanyModal && (
+        <div className="modal-overlay" onClick={() => setShowNewCompanyModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>➕ Add New Company</h2>
+              <button 
+                className="close-btn" 
+                onClick={() => setShowNewCompanyModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleCreateCompany}>
+              <div className="form-group">
+                <label>Company Name *</label>
+                <input
+                  type="text"
+                  value={newCompanyData.company_name}
+                  onChange={(e) => setNewCompanyData({
+                    ...newCompanyData,
+                    company_name: e.target.value
+                  })}
+                  placeholder="e.g., Larsen & Toubro"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Module Wattage (W) *</label>
+                <input
+                  type="number"
+                  value={newCompanyData.module_wattage}
+                  onChange={(e) => setNewCompanyData({
+                    ...newCompanyData,
+                    module_wattage: e.target.value
+                  })}
+                  placeholder="e.g., 630"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Cells per Module *</label>
+                <input
+                  type="number"
+                  value={newCompanyData.cells_per_module}
+                  onChange={(e) => setNewCompanyData({
+                    ...newCompanyData,
+                    cells_per_module: e.target.value
+                  })}
+                  placeholder="e.g., 66"
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button 
+                  type="button" 
+                  onClick={() => setShowNewCompanyModal(false)}
+                  className="cancel-btn"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="submit-btn" disabled={loading}>
+                  {loading ? 'Creating...' : 'Create Company'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
