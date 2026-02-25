@@ -14,9 +14,9 @@ const DispatchTracker = () => {
   const [error, setError] = useState(null);
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
   const [newCompanyData, setNewCompanyData] = useState({
-    company_name: '',
-    module_wattage: '',
-    cells_per_module: ''
+    companyName: '',
+    moduleWattage: '',
+    cellsPerModule: ''
   });
 
   // Load companies on mount
@@ -66,9 +66,9 @@ const DispatchTracker = () => {
       alert('Company created successfully!');
       setShowNewCompanyModal(false);
       setNewCompanyData({
-        company_name: '',
-        module_wattage: '',
-        cells_per_module: ''
+        companyName: '',
+        moduleWattage: '',
+        cellsPerModule: ''
       });
       await loadCompanies();
     } catch (err) {
@@ -190,7 +190,7 @@ const DispatchTracker = () => {
           <option value="">-- Choose a Company --</option>
           {companies.map((company) => (
             <option key={company.id} value={company.id}>
-              {company.company_name} ({company.module_wattage}W • {company.cells_per_module} cells)
+              {company.companyName} ({company.moduleWattage}W • {company.cellsPerModule} cells)
             </option>
           ))}
         </select>
@@ -223,7 +223,7 @@ const DispatchTracker = () => {
             <>
               {/* Company Header */}
               <div className="company-header">
-                <h2>{selectedCompany.company_name}</h2>
+                <h2>{selectedCompany.companyName}</h2>
                 <button 
                   onClick={() => loadDispatchData(selectedCompany.id)}
                   className="refresh-btn"
@@ -414,10 +414,10 @@ const DispatchTracker = () => {
                 <label>Company Name *</label>
                 <input
                   type="text"
-                  value={newCompanyData.company_name}
+                  value={newCompanyData.companyName}
                   onChange={(e) => setNewCompanyData({
                     ...newCompanyData,
-                    company_name: e.target.value
+                    companyName: e.target.value
                   })}
                   placeholder="e.g., Larsen & Toubro"
                   required
@@ -427,10 +427,10 @@ const DispatchTracker = () => {
                 <label>Module Wattage (W) *</label>
                 <input
                   type="number"
-                  value={newCompanyData.module_wattage}
+                  value={newCompanyData.moduleWattage}
                   onChange={(e) => setNewCompanyData({
                     ...newCompanyData,
-                    module_wattage: e.target.value
+                    moduleWattage: e.target.value
                   })}
                   placeholder="e.g., 630"
                   required
@@ -440,10 +440,10 @@ const DispatchTracker = () => {
                 <label>Cells per Module *</label>
                 <input
                   type="number"
-                  value={newCompanyData.cells_per_module}
+                  value={newCompanyData.cellsPerModule}
                   onChange={(e) => setNewCompanyData({
                     ...newCompanyData,
-                    cells_per_module: e.target.value
+                    cellsPerModule: e.target.value
                   })}
                   placeholder="e.g., 66"
                   required

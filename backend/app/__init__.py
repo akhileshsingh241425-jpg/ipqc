@@ -62,6 +62,7 @@ def create_app():
     from app.routes.order_routes import orders_bp
     from app.routes.pdi_routes import pdi_bp
     from app.routes.coc_new_routes import coc_new_bp
+    from app.routes.ftr_routes import ftr_bp
     from app.routes.ftr_management_routes import ftr_management_bp
     from app.routes.ftr_upload_routes import ftr_upload_bp
     from app.routes.ai_assistant_routes import ai_assistant_bp
@@ -81,6 +82,7 @@ def create_app():
     app.register_blueprint(orders_bp)
     app.register_blueprint(pdi_bp)
     app.register_blueprint(coc_new_bp)
+    app.register_blueprint(ftr_bp)
     app.register_blueprint(ftr_management_bp, url_prefix='/api')
     app.register_blueprint(ftr_upload_bp)
     app.register_blueprint(ai_assistant_bp, url_prefix='/api')
