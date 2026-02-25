@@ -11,6 +11,7 @@ import FTRDashboard from './components/FTRDashboard';
 import WitnessReport from './components/WitnessReport';
 import CalibrationDashboard from './components/CalibrationDashboard';
 import QMSDashboard from './components/QMSDashboard';
+import DispatchTracker from './components/DispatchTracker';
 import Login from './components/Login';
 import './styles/Navbar.css';
 import './App.css';
@@ -290,8 +291,8 @@ function App() {
   const roleAccess = {
     super_admin: ['all'], // Full access
     user: ['all'], // Full access for normal users too
-    ftr_only: ['ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report'],
-    ipqc_only: ['ipqc', 'daily-report'],
+    ftr_only: ['ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report', 'dispatch-tracker'],
+    ipqc_only: ['ipqc', 'daily-report', 'dispatch-tracker'],
     coc_only: ['coc-dashboard']
   };
 
@@ -359,7 +360,8 @@ function App() {
         return <IPQCForm />;
       case 'daily-report':
         return <DailyReport />;
-
+      case 'dispatch-tracker':
+        return <DispatchTracker />;
       case 'ftr-management':
         return <FTRManagement />;
 
@@ -443,6 +445,16 @@ function App() {
             >
               <span className="icon material-symbols-outlined">summarize</span>
               {!sidebarCollapsed && <span className="label">Daily Report</span>}
+            </li>
+          )}
+          {hasAccess('dispatch-tracker') && (
+            <li 
+              className={activeSection === 'dispatch-tracker' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('dispatch-tracker')}
+              title="Dispatch Tracking"
+            >
+              <span className="icon material-symbols-outlined">local_shipping</span>
+              {!sidebarCollapsed && <span className="label">Dispatch Tracker</span>}
             </li>
           )}
           {hasAccess('ipqc') && (
