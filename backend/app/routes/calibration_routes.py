@@ -65,6 +65,20 @@ def parse_date(date_str):
     return None
 
 
+def parse_int_or_none(value):
+    """Convert value to int or return None for blanks/invalid values."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        if value.strip() == "":
+            return None
+        value = value.strip()
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
 @calibration_bp.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -505,7 +519,7 @@ def create_instrument():
             }), 400
         
         instrument = CalibrationInstrument(
-            sr_no=data.get('sr_no'),
+            sr_no=parse_int_or_none(data.get('sr_no')),
             instrument_id=data['instrument_id'],
             machine_name=data['machine_name'],
             make=data.get('make'),
@@ -571,7 +585,7 @@ def update_instrument(instrument_id):
         
         # Update fields
         if 'sr_no' in data:
-            instrument.sr_no = data['sr_no']
+            instrument.sr_no = parse_int_or_none(data.get('sr_no'))
         if 'instrument_id' in data:
             instrument.instrument_id = data['instrument_id']
         if 'machine_name' in data:
