@@ -367,6 +367,38 @@ def get_pdi_dashboard(company_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
+        # Check if table exists
+        cursor.execute("""
+            SELECT COUNT(*) as count 
+            FROM information_schema.tables 
+            WHERE table_schema = %s AND table_name = 'pdi_serial_numbers'
+        """, (Config.MYSQL_DB,))
+        
+        table_check = cursor.fetchone()
+        if not table_check or table_check['count'] == 0:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "success": True,
+                "summary": {
+                    "total_assigned": 0,
+                    "total_tracked": 0,
+                    "packed": 0,
+                    "dispatched": 0,
+                    "pending": 0,
+                    "unknown": 0,
+                    "packed_percent": 0,
+                    "dispatched_percent": 0,
+                    "pending_percent": 0
+                },
+                "details": {
+                    "packed": [],
+                    "dispatched": [],
+                    "pending": []
+                },
+                "message": "No PDI data available yet. Please assign serial numbers first."
+            }), 200
+        
         # Get all PDI numbers and their serial counts for this company
         cursor.execute("""
             SELECT 
@@ -393,6 +425,33 @@ def get_pdi_dashboard(company_id):
         
         cursor.close()
         conn.close()
+        
+        # If no serials assigned yet, return empty data
+        if not all_serials or len(all_serials) == 0:
+            return jsonify({
+                "success": True,
+                "summary": {
+                    "total_assigned": 0,
+                    "total_tracked": 0,
+                    "packed": 0,
+                    "dispatched": 0,
+                    "pending": 0,
+                    "unknown": 0,
+                    "packed_percent": 0,
+                    "dispatched_percent": 0,
+                    "pending_percent": 0
+                },
+                "details": {
+                    "packed": [],
+                    "dispatched": [],
+                    "pending": []
+                },
+                "pdi_wise": [],
+                "recent_dispatched": [],
+                "recent_packed": [],
+                "recent_pending": [],
+                "message": "No serial numbers assigned to this company yet."
+            }), 200
         
         # Now track each serial using external API
         BARCODE_TRACKING_API = 'https://umanmrp.in/api/get_barcode_tracking.php'
@@ -480,6 +539,11 @@ def get_pdi_dashboard(company_id):
                 "packed_percent": round((packed_count / tracked_total * 100), 1) if tracked_total > 0 else 0,
                 "dispatched_percent": round((dispatched_count / tracked_total * 100), 1) if tracked_total > 0 else 0,
                 "pending_percent": round((pending_count / tracked_total * 100), 1) if tracked_total > 0 else 0
+            },
+            "details": {
+                "packed": packed_serials,
+                "dispatched": dispatched_serials,
+                "pending": pending_serials
             },
             "pdi_wise": pdi_summary,
             "recent_dispatched": dispatched_serials[:20],
