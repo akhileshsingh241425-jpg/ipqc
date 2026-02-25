@@ -40,103 +40,22 @@ const DispatchTracker = () => {
       setLoading(true);
       setError(null);
       
-      console.log('Loading dispatch data for company:', company.companyName);
+      console.log('Loading dispatch data for company:', company.companyName, 'ID:', company.id);
       
-      // Use external MRP API to get barcode tracking data
-      const response = await fetch('https://umanmrp.in/api/get_barcode_tracking.php', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          party_name: company.companyName
-        })
-      });
+      // Use backend proxy to avoid CORS and get proper company name mapping
+      const response = await fetch(`${API_BASE_URL}/ftr/dispatch-tracking/${company.id}`);
       
       const result = await response.json();
-      console.log('MRP API response:', result);
+      console.log('Dispatch API response:', result);
       
-      if (result.success && result.data) {
-        const mrpData = result.data;
-        
-        // Process data to extract dispatch, packing, production info
-        const processedData = {
-          summary: {
-            total_assigned: mrpData.length,
-            packed: 0,
-            dispatched: 0,
-            pending: 0,
-            packed_percent: 0,
-            dispatched_percent: 0,
-            pending_percent: 0
-          },
-          details: {
-            packed: [],
-            dispatched: [],
-            pending: []
-          }
-        };
-        
-        // Process each barcode
-        mrpData.forEach(item => {
-          const barcodeData = {
-            serial: item.barcode_no,
-            pdi: item.pdi_number || 'N/A',
-          };
-          
-          // Check dispatch status
-          if (item.dispatch && item.dispatch.dispatch_date) {
-            processedData.summary.dispatched++;
-            processedData.details.dispatched.push({
-              ...barcodeData,
-              dispatch_date: item.dispatch.dispatch_date,
-              vehicle_no: item.dispatch.vehicle_no || '',
-              party: item.dispatch.party_name || company.companyName
-            });
-          }
-          // Check packing status
-          else if (item.packing && item.packing.packing_date) {
-            processedData.summary.packed++;
-            processedData.details.packed.push({
-              ...barcodeData,
-              packing_date: item.packing.packing_date,
-              box_no: item.packing.box_no || ''
-            });
-          }
-          // Otherwise it's pending
-          else {
-            processedData.summary.pending++;
-            processedData.details.pending.push(barcodeData);
-          }
-        });
-        
-        // Calculate percentages
-        const total = processedData.summary.total_assigned;
-        if (total > 0) {
-          processedData.summary.packed_percent = Math.round((processedData.summary.packed / total) * 100);
-          processedData.summary.dispatched_percent = Math.round((processedData.summary.dispatched / total) * 100);
-          processedData.summary.pending_percent = Math.round((processedData.summary.pending / total) * 100);
-        }
-        
-        setDispatchData({ success: true, ...processedData });
+      if (result.success) {
+        setDispatchData(result);
       } else {
-        setError('No data found for this company');
-        setDispatchData({
-          success: true,
-          summary: {
-            total_assigned: 0,
-            packed: 0,
-            dispatched: 0,
-            pending: 0,
-            packed_percent: 0,
-            dispatched_percent: 0,
-            pending_percent: 0
-          },
-          details: { packed: [], dispatched: [], pending: [] }
-        });
+        setError(result.error || 'No data found for this company');
+        setDispatchData(null);
       }
     } catch (err) {
-      setError('Error connecting to MRP system');
+      setError('Error connecting to server. Please try again.');
       console.error('Error loading dispatch data:', err);
     } finally {
       setLoading(false);
@@ -179,61 +98,10 @@ const DispatchTracker = () => {
   };
 
   const summary = dispatchData?.summary || {};
-  const dispatchedItems = dispatchData?.details?.dispatched || [];
-  const packedItems = dispatchData?.details?.packed || [];
-  const pendingItems = dispatchData?.details?.pending || [];
-
-  // Group by PDI number
-  const groupByPDI = (items) => {
-    const grouped = {};
-    items.forEach(item => {
-      const pdiKey = item.pdi || 'Unknown';
-      if (!grouped[pdiKey]) {
-        grouped[pdiKey] = {
-          pdi: pdiKey,
-          dispatched: 0,
-          vehicle_nos: [],
-          dispatch_dates: []
-        };
-      }
-      grouped[pdiKey].dispatched += 1;
-      if (item.vehicle_no && !grouped[pdiKey].vehicle_nos.includes(item.vehicle_no)) {
-        grouped[pdiKey].vehicle_nos.push(item.vehicle_no);
-      }
-      if (item.dispatch_date && !grouped[pdiKey].dispatch_dates.includes(item.dispatch_date)) {
-        grouped[pdiKey].dispatch_dates.push(item.dispatch_date);
-      }
-    });
-    return Object.values(grouped).sort((a, b) => {
-      // Sort PDI numbers naturally
-      const pdiA = a.pdi.replace('PDI-', '');
-      const pdiB = b.pdi.replace('PDI-', '');
-      return pdiA.localeCompare(pdiB, undefined, { numeric: true });
-    });
-  };
-
-  // Group dispatched items by vehicle (pallet proxy)
-  const groupByVehicle = (items) => {
-    const grouped = {};
-    items.forEach(item => {
-      const vehicleKey = item.vehicle_no || 'Unknown';
-      if (!grouped[vehicleKey]) {
-        grouped[vehicleKey] = {
-          vehicle_no: vehicleKey,
-          dispatch_date: item.dispatch_date,
-          party: item.party,
-          modules: []
-        };
-      }
-      grouped[vehicleKey].modules.push(item);
-    });
-    return Object.values(grouped);
-  };
-
-  const pdiGroups = groupByPDI(dispatchedItems);
-  const pallets = groupByVehicle(dispatchedItems);
-  const totalPallets = pallets.length;
-  const dispatchedModules = dispatchedItems.length;
+  const pdiGroups = dispatchData?.pdi_groups || [];
+  const vehicleGroups = dispatchData?.vehicle_groups || [];
+  const totalPallets = vehicleGroups.length;
+  const dispatchedModules = summary.dispatched || 0;
   const remainingModules = (summary.total_assigned || 0) - dispatchedModules;
 
   return (
@@ -371,7 +239,9 @@ const DispatchTracker = () => {
                         <tr>
                           <th>#</th>
                           <th>PDI Number</th>
-                          <th>Dispatched Modules</th>
+                          <th>Dispatched</th>
+                          <th>Packed</th>
+                          <th>Pending</th>
                           <th>Pallets/Vehicles</th>
                           <th>Dispatch Dates</th>
                           <th>Status</th>
@@ -385,20 +255,31 @@ const DispatchTracker = () => {
                               <strong>{pdi.pdi}</strong>
                             </td>
                             <td className="module-count">
-                              <span className="badge">{pdi.dispatched}</span> modules
+                              <span className="badge">{pdi.dispatched}</span>
+                            </td>
+                            <td className="module-count">
+                              <span className="badge packed-badge">{pdi.packed || 0}</span>
+                            </td>
+                            <td className="module-count">
+                              <span className="badge pending-badge">{pdi.pending || 0}</span>
                             </td>
                             <td>
-                              {pdi.vehicle_nos.length > 0 
+                              {pdi.vehicle_nos && pdi.vehicle_nos.length > 0 
                                 ? pdi.vehicle_nos.join(', ') 
                                 : '—'}
                             </td>
                             <td>
-                              {pdi.dispatch_dates.length > 0 
+                              {pdi.dispatch_dates && pdi.dispatch_dates.length > 0 
                                 ? pdi.dispatch_dates.join(', ') 
                                 : '—'}
                             </td>
                             <td>
-                              <span className="status-badge dispatched">✓ Dispatched</span>
+                              {pdi.dispatched > 0 
+                                ? <span className="status-badge dispatched">✓ Dispatched</span>
+                                : pdi.packed > 0 
+                                  ? <span className="status-badge packed">📦 Packed</span>
+                                  : <span className="status-badge pending">⏳ Pending</span>
+                              }
                             </td>
                           </tr>
                         ))}
@@ -409,7 +290,7 @@ const DispatchTracker = () => {
               )}
 
               {/* Pallet-wise Dispatch Table */}
-              {pallets.length > 0 && (
+              {vehicleGroups.length > 0 && (
                 <div className="section">
                   <h3>🚛 Pallet/Vehicle-wise Dispatch Details</h3>
                   <div className="pallet-table-container">
@@ -425,23 +306,26 @@ const DispatchTracker = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {pallets.map((pallet, index) => (
+                        {vehicleGroups.map((vehicle, index) => (
                           <tr key={index}>
                             <td>{index + 1}</td>
                             <td className="vehicle-no">
-                              {pallet.vehicle_no !== 'Unknown' ? pallet.vehicle_no : '—'}
+                              {vehicle.vehicle_no !== 'Unknown' ? vehicle.vehicle_no : '—'}
                             </td>
-                            <td>{pallet.dispatch_date || '—'}</td>
-                            <td>{pallet.party || '—'}</td>
+                            <td>{vehicle.dispatch_date || '—'}</td>
+                            <td>{vehicle.party || '—'}</td>
                             <td className="module-count">
-                              <span className="badge">{pallet.modules.length}</span> modules
+                              <span className="badge">{vehicle.module_count}</span> modules
                             </td>
                             <td>
                               <button 
                                 className="view-details-btn"
                                 onClick={() => {
-                                  // Show modal with all serial numbers in this pallet
-                                  alert(`Modules in this shipment:\n\n${pallet.modules.map(m => m.serial).join('\n')}`);
+                                  const serials = vehicle.serials || [];
+                                  const msg = serials.length > 0 
+                                    ? `Modules in this shipment (showing ${serials.length}):\n\n${serials.join('\n')}`
+                                    : 'No serial details available';
+                                  alert(msg);
                                 }}
                               >
                                 View Serials
@@ -456,22 +340,22 @@ const DispatchTracker = () => {
               )}
 
               {/* Packed Stock */}
-              {packedItems.length > 0 && (
+              {(summary.packed || 0) > 0 && (
                 <div className="section">
                   <h3>📦 Packed Stock (Ready for Dispatch)</h3>
                   <div className="packed-summary">
-                    <div className="packed-count">{packedItems.length} modules packed</div>
+                    <div className="packed-count">{(summary.packed || 0).toLocaleString()} modules packed</div>
                     <p>These modules are packed and ready for dispatch</p>
                   </div>
                 </div>
               )}
 
               {/* Pending Production */}
-              {pendingItems.length > 0 && (
+              {(summary.pending || 0) > 0 && (
                 <div className="section">
                   <h3>⏳ Pending (In Production)</h3>
                   <div className="pending-summary">
-                    <div className="pending-count">{pendingItems.length} modules</div>
+                    <div className="pending-count">{(summary.pending || 0).toLocaleString()} modules</div>
                     <p>These modules are still in production/packing stage</p>
                   </div>
                 </div>

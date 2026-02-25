@@ -7,6 +7,7 @@ from app.services.ftr_pdf_generator import create_ftr_report
 from config import Config
 import os
 import pymysql
+import requests as http_requests
 from datetime import datetime
 
 ftr_bp = Blueprint('ftr', __name__, url_prefix='/api/ftr')
@@ -639,6 +640,212 @@ def get_pdi_dashboard_quick(company_id):
         
     except Exception as e:
         print(f"Error getting quick PDI dashboard: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# ===== COMPANY NAME MAPPING (Local → MRP) =====
+COMPANY_NAME_MAP = {
+    "rays power": "RAYS POWER INFRA PRIVATE LIMITED",
+    "larsen & toubro": "LARSEN & TOUBRO LIMITED, CONSTRUCTION",
+    "larsen and toubro": "LARSEN & TOUBRO LIMITED, CONSTRUCTION",
+    "l&t": "LARSEN & TOUBRO LIMITED, CONSTRUCTION",
+    "sterling and wilson": "STERLING AND WILSON RENEWABLE ENERGY LIMITED",
+    "sterlin and wilson": "STERLING AND WILSON RENEWABLE ENERGY LIMITED",
+    "sterling & wilson": "STERLING AND WILSON RENEWABLE ENERGY LIMITED",
+    "tata power": "TATA POWER SOLAR SYSTEMS LIMITED",
+    "adani": "ADANI GREEN ENERGY LIMITED",
+    "waaree": "WAAREE ENERGIES LIMITED",
+    "vikram solar": "VIKRAM SOLAR LIMITED",
+}
+
+
+def get_mrp_party_name(local_name):
+    """Map local company name to MRP full party name"""
+    lower_name = local_name.strip().lower()
+    # Direct match
+    if lower_name in COMPANY_NAME_MAP:
+        return COMPANY_NAME_MAP[lower_name]
+    # Partial match
+    for key, value in COMPANY_NAME_MAP.items():
+        if key in lower_name or lower_name in key:
+            return value
+    # If no match found, return as-is (uppercase, as MRP expects)
+    return local_name.upper()
+
+
+@ftr_bp.route('/dispatch-tracking/<int:company_id>', methods=['GET'])
+def get_dispatch_tracking(company_id):
+    """
+    Proxy endpoint to fetch dispatch tracking data from MRP API.
+    Solves CORS issues and adds company name mapping.
+    """
+    try:
+        # Get company from database
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
+        company = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if not company:
+            return jsonify({"success": False, "error": "Company not found"}), 404
+
+        company_name = company.get('company_name') or company.get('companyName', '')
+        mrp_party_name = get_mrp_party_name(company_name)
+
+        print(f"[Dispatch Tracking] Company: {company_name} → MRP: {mrp_party_name}")
+
+        # Call MRP API from backend (no CORS issues)
+        mrp_response = http_requests.post(
+            'https://umanmrp.in/api/get_barcode_tracking.php',
+            json={"party_name": mrp_party_name},
+            timeout=60
+        )
+
+        mrp_result = mrp_response.json()
+
+        if not mrp_result.get('success') or not mrp_result.get('data'):
+            return jsonify({
+                "success": True,
+                "company_name": company_name,
+                "mrp_party_name": mrp_party_name,
+                "summary": {
+                    "total_assigned": 0,
+                    "packed": 0,
+                    "dispatched": 0,
+                    "pending": 0,
+                    "packed_percent": 0,
+                    "dispatched_percent": 0,
+                    "pending_percent": 0
+                },
+                "pdi_groups": [],
+                "vehicle_groups": [],
+                "message": "No data found in MRP system"
+            })
+
+        mrp_data = mrp_result['data']
+        total = len(mrp_data)
+
+        # Process data server-side for speed
+        dispatched = 0
+        packed = 0
+        pending = 0
+        pdi_map = {}
+        vehicle_map = {}
+
+        for item in mrp_data:
+            barcode = item.get('barcode_no', '')
+            pdi_number = item.get('pdi_number', 'N/A')
+
+            dispatch_info = item.get('dispatch', {}) or {}
+            packing_info = item.get('packing', {}) or {}
+
+            has_dispatch = bool(dispatch_info.get('dispatch_date'))
+            has_packing = bool(packing_info.get('packing_date'))
+
+            if has_dispatch:
+                dispatched += 1
+                dispatch_date = dispatch_info.get('dispatch_date', '')
+                vehicle_no = dispatch_info.get('vehicle_no', 'Unknown')
+                party = dispatch_info.get('party_name', company_name)
+
+                # Group by PDI
+                if pdi_number not in pdi_map:
+                    pdi_map[pdi_number] = {
+                        'pdi': pdi_number,
+                        'dispatched': 0,
+                        'packed': 0,
+                        'pending': 0,
+                        'vehicle_nos': [],
+                        'dispatch_dates': []
+                    }
+                pdi_map[pdi_number]['dispatched'] += 1
+                if vehicle_no and vehicle_no not in pdi_map[pdi_number]['vehicle_nos']:
+                    pdi_map[pdi_number]['vehicle_nos'].append(vehicle_no)
+                if dispatch_date and dispatch_date not in pdi_map[pdi_number]['dispatch_dates']:
+                    pdi_map[pdi_number]['dispatch_dates'].append(dispatch_date)
+
+                # Group by vehicle
+                if vehicle_no not in vehicle_map:
+                    vehicle_map[vehicle_no] = {
+                        'vehicle_no': vehicle_no,
+                        'dispatch_date': dispatch_date,
+                        'party': party,
+                        'module_count': 0,
+                        'serials': []
+                    }
+                vehicle_map[vehicle_no]['module_count'] += 1
+                # Only store first 50 serials per vehicle to limit response size
+                if len(vehicle_map[vehicle_no]['serials']) < 50:
+                    vehicle_map[vehicle_no]['serials'].append(barcode)
+
+            elif has_packing:
+                packed += 1
+                # Track packed in PDI groups too
+                if pdi_number not in pdi_map:
+                    pdi_map[pdi_number] = {
+                        'pdi': pdi_number,
+                        'dispatched': 0,
+                        'packed': 0,
+                        'pending': 0,
+                        'vehicle_nos': [],
+                        'dispatch_dates': []
+                    }
+                pdi_map[pdi_number]['packed'] += 1
+            else:
+                pending += 1
+                if pdi_number not in pdi_map:
+                    pdi_map[pdi_number] = {
+                        'pdi': pdi_number,
+                        'dispatched': 0,
+                        'packed': 0,
+                        'pending': 0,
+                        'vehicle_nos': [],
+                        'dispatch_dates': []
+                    }
+                pdi_map[pdi_number]['pending'] += 1
+
+        # Calculate percentages
+        packed_percent = round((packed / total) * 100) if total > 0 else 0
+        dispatched_percent = round((dispatched / total) * 100) if total > 0 else 0
+        pending_percent = round((pending / total) * 100) if total > 0 else 0
+
+        # Sort PDI groups naturally
+        pdi_groups = sorted(pdi_map.values(), key=lambda x: x['pdi'])
+        vehicle_groups = sorted(vehicle_map.values(), key=lambda x: x.get('dispatch_date', ''), reverse=True)
+
+        return jsonify({
+            "success": True,
+            "company_name": company_name,
+            "mrp_party_name": mrp_party_name,
+            "summary": {
+                "total_assigned": total,
+                "packed": packed,
+                "dispatched": dispatched,
+                "pending": pending,
+                "packed_percent": packed_percent,
+                "dispatched_percent": dispatched_percent,
+                "pending_percent": pending_percent
+            },
+            "pdi_groups": pdi_groups,
+            "vehicle_groups": vehicle_groups
+        })
+
+    except http_requests.exceptions.Timeout:
+        print(f"[Dispatch Tracking] MRP API timeout for company_id={company_id}")
+        return jsonify({
+            "success": False,
+            "error": "MRP API timed out. Please try again."
+        }), 504
+
+    except Exception as e:
+        print(f"[Dispatch Tracking] Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
             "error": str(e)

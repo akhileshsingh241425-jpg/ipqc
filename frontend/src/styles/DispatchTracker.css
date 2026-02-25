@@ -390,6 +390,14 @@
   font-weight: 700;
 }
 
+.badge.packed-badge {
+  background: #f59e0b;
+}
+
+.badge.pending-badge {
+  background: #ef4444;
+}
+
 .status-badge {
   padding: 6px 14px;
   border-radius: 20px;
