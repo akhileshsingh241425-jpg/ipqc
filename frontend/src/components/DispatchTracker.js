@@ -35,23 +35,108 @@ const DispatchTracker = () => {
     }
   };
 
-  const loadDispatchData = async (companyId) => {
+  const loadDispatchData = async (company) => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('Loading dispatch data for company:', companyId);
-      const response = await fetch(`${API_BASE_URL}/ftr/pdi-dashboard/${companyId}`);
-      const data = await response.json();
-      console.log('Dispatch data received:', data);
+      console.log('Loading dispatch data for company:', company.companyName);
       
-      if (data.success) {
-        setDispatchData(data);
+      // Use external MRP API to get barcode tracking data
+      const response = await fetch('https://umanmrp.in/api/get_barcode_tracking.php', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          party_name: company.companyName
+        })
+      });
+      
+      const result = await response.json();
+      console.log('MRP API response:', result);
+      
+      if (result.success && result.data) {
+        const mrpData = result.data;
+        
+        // Process data to extract dispatch, packing, production info
+        const processedData = {
+          summary: {
+            total_assigned: mrpData.length,
+            packed: 0,
+            dispatched: 0,
+            pending: 0,
+            packed_percent: 0,
+            dispatched_percent: 0,
+            pending_percent: 0
+          },
+          details: {
+            packed: [],
+            dispatched: [],
+            pending: []
+          }
+        };
+        
+        // Process each barcode
+        mrpData.forEach(item => {
+          const barcodeData = {
+            serial: item.barcode_no,
+            pdi: item.pdi_number || 'N/A',
+          };
+          
+          // Check dispatch status
+          if (item.dispatch && item.dispatch.dispatch_date) {
+            processedData.summary.dispatched++;
+            processedData.details.dispatched.push({
+              ...barcodeData,
+              dispatch_date: item.dispatch.dispatch_date,
+              vehicle_no: item.dispatch.vehicle_no || '',
+              party: item.dispatch.party_name || company.companyName
+            });
+          }
+          // Check packing status
+          else if (item.packing && item.packing.packing_date) {
+            processedData.summary.packed++;
+            processedData.details.packed.push({
+              ...barcodeData,
+              packing_date: item.packing.packing_date,
+              box_no: item.packing.box_no || ''
+            });
+          }
+          // Otherwise it's pending
+          else {
+            processedData.summary.pending++;
+            processedData.details.pending.push(barcodeData);
+          }
+        });
+        
+        // Calculate percentages
+        const total = processedData.summary.total_assigned;
+        if (total > 0) {
+          processedData.summary.packed_percent = Math.round((processedData.summary.packed / total) * 100);
+          processedData.summary.dispatched_percent = Math.round((processedData.summary.dispatched / total) * 100);
+          processedData.summary.pending_percent = Math.round((processedData.summary.pending / total) * 100);
+        }
+        
+        setDispatchData({ success: true, ...processedData });
       } else {
-        setError(data.error || 'Failed to load dispatch data');
+        setError('No data found for this company');
+        setDispatchData({
+          success: true,
+          summary: {
+            total_assigned: 0,
+            packed: 0,
+            dispatched: 0,
+            pending: 0,
+            packed_percent: 0,
+            dispatched_percent: 0,
+            pending_percent: 0
+          },
+          details: { packed: [], dispatched: [], pending: [] }
+        });
       }
     } catch (err) {
-      setError('Error connecting to server');
+      setError('Error connecting to MRP system');
       console.error('Error loading dispatch data:', err);
     } finally {
       setLoading(false);
@@ -89,7 +174,7 @@ const DispatchTracker = () => {
     const company = companies.find(c => c.id === parseInt(companyId));
     if (company) {
       setSelectedCompany(company);
-      loadDispatchData(company.id);
+      loadDispatchData(company);
     }
   };
 
@@ -215,7 +300,7 @@ const DispatchTracker = () => {
               <div className="error-icon">❌</div>
               <h3>Error Loading Data</h3>
               <p>{error}</p>
-              <button onClick={() => loadDispatchData(selectedCompany.id)}>
+              <button onClick={() => loadDispatchData(selectedCompany)}>
                 Retry
               </button>
             </div>
@@ -225,7 +310,7 @@ const DispatchTracker = () => {
               <div className="company-header">
                 <h2>{selectedCompany.companyName}</h2>
                 <button 
-                  onClick={() => loadDispatchData(selectedCompany.id)}
+                  onClick={() => loadDispatchData(selectedCompany)}
                   className="refresh-btn"
                 >
                   🔄 Refresh
