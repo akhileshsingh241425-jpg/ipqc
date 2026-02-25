@@ -4,6 +4,7 @@ FTR (Field Test Report) Routes
 
 from flask import Blueprint, request, jsonify, send_file
 from app.services.ftr_pdf_generator import create_ftr_report
+from config import Config
 import os
 import pymysql
 from datetime import datetime
@@ -12,12 +13,12 @@ ftr_bp = Blueprint('ftr', __name__, url_prefix='/api/ftr')
 
 
 def get_db_connection():
-    """Get database connection"""
+    """Get database connection using Config"""
     return pymysql.connect(
-        host=os.getenv('MYSQL_HOST', 'localhost'),
-        user=os.getenv('MYSQL_USER', 'root'),
-        password=os.getenv('MYSQL_PASSWORD', 'root'),
-        database=os.getenv('MYSQL_DB', 'pdi_database'),
+        host=Config.MYSQL_HOST,
+        user=Config.MYSQL_USER,
+        password=Config.MYSQL_PASSWORD,
+        database=Config.MYSQL_DB,
         cursorclass=pymysql.cursors.DictCursor
     )
 
