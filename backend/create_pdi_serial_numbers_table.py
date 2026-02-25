@@ -1,15 +1,17 @@
 import pymysql
+import sys
 import os
-from dotenv import load_dotenv
 
-load_dotenv()
+# Add parent directory to path to import config
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from config import Config
 
 try:
     conn = pymysql.connect(
-        host=os.getenv('MYSQL_HOST', 'localhost'),
-        user=os.getenv('MYSQL_USER', 'root'),
-        password=os.getenv('MYSQL_PASSWORD', 'root'),
-        database=os.getenv('MYSQL_DB', 'pdi_database')
+        host=Config.MYSQL_HOST,
+        user=Config.MYSQL_USER,
+        password=Config.MYSQL_PASSWORD,
+        database=Config.MYSQL_DB
     )
     cursor = conn.cursor()
     

@@ -367,7 +367,7 @@ def get_pdi_dashboard(company_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Check if table exists
+        # Check if table exists FIRST
         cursor.execute("""
             SELECT COUNT(*) as count 
             FROM information_schema.tables 
@@ -376,6 +376,25 @@ def get_pdi_dashboard(company_id):
         
         table_check = cursor.fetchone()
         if not table_check or table_check['count'] == 0:
+            # Table doesn't exist, create it
+            print("Creating pdi_serial_numbers table...")
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS pdi_serial_numbers (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    pdi_number VARCHAR(50) NOT NULL,
+                    serial_number VARCHAR(100) NOT NULL,
+                    company_id INT,
+                    production_record_id INT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_pdi (pdi_number),
+                    INDEX idx_serial (serial_number),
+                    INDEX idx_company (company_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+            """)
+            conn.commit()
+            print("✅ pdi_serial_numbers table created successfully")
+            
+            # Return empty data since table was just created
             cursor.close()
             conn.close()
             return jsonify({
@@ -396,7 +415,7 @@ def get_pdi_dashboard(company_id):
                     "dispatched": [],
                     "pending": []
                 },
-                "message": "No PDI data available yet. Please assign serial numbers first."
+                "message": "PDI tracking initialized. No serial numbers assigned yet."
             }), 200
         
         # Get all PDI numbers and their serial counts for this company
