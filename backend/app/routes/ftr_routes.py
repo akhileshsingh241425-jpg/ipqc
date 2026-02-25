@@ -646,34 +646,93 @@ def get_pdi_dashboard_quick(company_id):
         }), 500
 
 
-# ===== COMPANY NAME MAPPING (Local → MRP) =====
+# ===== COMPANY NAME MAPPING (Local → MRP) - Copied from ai_assistant_routes =====
 COMPANY_NAME_MAP = {
-    "rays power": "RAYS POWER INFRA PRIVATE LIMITED",
-    "larsen & toubro": "LARSEN & TOUBRO LIMITED, CONSTRUCTION",
-    "larsen and toubro": "LARSEN & TOUBRO LIMITED, CONSTRUCTION",
-    "l&t": "LARSEN & TOUBRO LIMITED, CONSTRUCTION",
-    "sterling and wilson": "STERLING AND WILSON RENEWABLE ENERGY LIMITED",
-    "sterlin and wilson": "STERLING AND WILSON RENEWABLE ENERGY LIMITED",
-    "sterling & wilson": "STERLING AND WILSON RENEWABLE ENERGY LIMITED",
-    "tata power": "TATA POWER SOLAR SYSTEMS LIMITED",
-    "adani": "ADANI GREEN ENERGY LIMITED",
-    "waaree": "WAAREE ENERGIES LIMITED",
-    "vikram solar": "VIKRAM SOLAR LIMITED",
+    'Rays Power': 'RAYS POWER INFRA PRIVATE LIMITED',
+    'rays power': 'RAYS POWER INFRA PRIVATE LIMITED',
+    'RAYS POWER': 'RAYS POWER INFRA PRIVATE LIMITED',
+    
+    'Larsen & Toubro': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
+    'larsen & toubro': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
+    'LARSEN & TOUBRO': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
+    'L&T': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
+    'l&t': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
+    
+    'Sterlin and Wilson': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    'sterlin and wilson': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    'STERLIN AND WILSON': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    'Sterling and Wilson': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    'sterling and wilson': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    'S&W': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    's&w': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+    
+    'KPI Green Energy': 'KPI GREEN ENERGY LIMITED',
+    'KPI GREEN ENERGY': 'KPI GREEN ENERGY LIMITED',
+    'kpi green energy': 'KPI GREEN ENERGY LIMITED',
+    'KPI': 'KPI GREEN ENERGY LIMITED',
+}
+
+# Party IDs for dispatch history API
+PARTY_IDS = {
+    'rays power': '931db2c5-b016-4914-b378-69e9f22562a7',
+    'larsen & toubro': 'a005562f-568a-46e9-bf2e-700affb171e8',
+    'l&t': 'a005562f-568a-46e9-bf2e-700affb171e8',
+    'sterlin and wilson': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'sterling and wilson': '141b81a0-2bab-4790-b825-3c8734d41484',
+    's&w': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'kpi green energy': 'kpi-green-energy-party-id',
 }
 
 
-def get_mrp_party_name(local_name):
+def get_mrp_party_name_ftr(local_name):
     """Map local company name to MRP full party name"""
+    if local_name in COMPANY_NAME_MAP:
+        return COMPANY_NAME_MAP[local_name]
     lower_name = local_name.strip().lower()
-    # Direct match
-    if lower_name in COMPANY_NAME_MAP:
-        return COMPANY_NAME_MAP[lower_name]
-    # Partial match
     for key, value in COMPANY_NAME_MAP.items():
-        if key in lower_name or lower_name in key:
+        if key.lower() == lower_name:
             return value
-    # If no match found, return as-is (uppercase, as MRP expects)
-    return local_name.upper()
+    return local_name
+
+
+def fetch_mrp_barcode_data(company_name):
+    """
+    Fetch barcode tracking data from MRP API - same logic as ai_assistant_routes.
+    For Sterling and Wilson, fetches from TWO party names.
+    Returns combined data list.
+    """
+    mrp_party_name = get_mrp_party_name_ftr(company_name)
+    lower_name = company_name.lower()
+    
+    # Check if Sterling and Wilson - need dual fetch
+    is_sterling = 'sterling' in mrp_party_name.lower() or 'sterlin' in lower_name or 's&w' in lower_name
+    
+    party_names = [mrp_party_name]
+    if is_sterling:
+        party_names = ['STERLING AND WILSON RENEWABLE ENERGY LIMITED', 'S&W']
+    
+    all_data = []
+    for party_name in party_names:
+        try:
+            response = http_requests.post(
+                'https://umanmrp.in/api/get_barcode_tracking.php',
+                json={'party_name': party_name},
+                timeout=60
+            )
+            if response.status_code == 200:
+                data = response.json()
+                # MRP API returns 'status': 'success', NOT 'success': true
+                if data.get('status') == 'success':
+                    party_data = data.get('data', [])
+                    all_data.extend(party_data)
+                    print(f"  ✅ Fetched {len(party_data)} records from party: {party_name}")
+                else:
+                    print(f"  ⚠️ API returned status: {data.get('status')} for {party_name}")
+        except Exception as e:
+            print(f"  ⚠️ Error fetching from {party_name}: {str(e)}")
+            continue
+    
+    return all_data, mrp_party_name
 
 
 @ftr_bp.route('/dispatch-tracking/<int:company_id>', methods=['GET'])
@@ -681,6 +740,7 @@ def get_dispatch_tracking(company_id):
     """
     Proxy endpoint to fetch dispatch tracking data from MRP API.
     Solves CORS issues and adds company name mapping.
+    Uses same logic as ai_assistant_routes.py get_all_mrp_data().
     """
     try:
         # Get company from database
@@ -695,20 +755,15 @@ def get_dispatch_tracking(company_id):
             return jsonify({"success": False, "error": "Company not found"}), 404
 
         company_name = company.get('company_name') or company.get('companyName', '')
-        mrp_party_name = get_mrp_party_name(company_name)
+        
+        print(f"\n[Dispatch Tracking] Company ID: {company_id}, Name: {company_name}")
 
-        print(f"[Dispatch Tracking] Company: {company_name} → MRP: {mrp_party_name}")
+        # Fetch data using same method as AI assistant
+        mrp_data, mrp_party_name = fetch_mrp_barcode_data(company_name)
 
-        # Call MRP API from backend (no CORS issues)
-        mrp_response = http_requests.post(
-            'https://umanmrp.in/api/get_barcode_tracking.php',
-            json={"party_name": mrp_party_name},
-            timeout=60
-        )
+        print(f"[Dispatch Tracking] Total records fetched: {len(mrp_data)}")
 
-        mrp_result = mrp_response.json()
-
-        if not mrp_result.get('success') or not mrp_result.get('data'):
+        if not mrp_data:
             return jsonify({
                 "success": True,
                 "company_name": company_name,
@@ -726,8 +781,6 @@ def get_dispatch_tracking(company_id):
                 "vehicle_groups": [],
                 "message": "No data found in MRP system"
             })
-
-        mrp_data = mrp_result['data']
         total = len(mrp_data)
 
         # Process data server-side for speed
