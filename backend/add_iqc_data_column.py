@@ -8,10 +8,10 @@ from config import Config
 def add_iqc_data_column():
     """Add iqc_data TEXT column to companies table"""
     connection = pymysql.connect(
-        host=Config.DB_HOST,
-        user=Config.DB_USER,
-        password=Config.DB_PASSWORD,
-        database=Config.DB_NAME,
+        host=Config.MYSQL_HOST,
+        user=Config.MYSQL_USER,
+        password=Config.MYSQL_PASSWORD,
+        database=Config.MYSQL_DB,
         charset='utf8mb4',
         cursorclass=pymysql.cursors.DictCursor
     )
@@ -25,7 +25,7 @@ def add_iqc_data_column():
                 WHERE TABLE_SCHEMA = %s 
                 AND TABLE_NAME = 'companies' 
                 AND COLUMN_NAME = 'iqc_data'
-            """, (Config.DB_NAME,))
+            """, (Config.MYSQL_DB,))
             
             result = cursor.fetchone()
             
