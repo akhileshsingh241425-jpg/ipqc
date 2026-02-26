@@ -353,7 +353,7 @@ def assign_pdi_serials():
         }), 500
 
 
-@ftr_bp.route('/pdi-dashboard/<int:company_id>', methods=['GET'])
+@ftr_bp.route('/pdi-dashboard/<company_id>', methods=['GET'])
 def get_pdi_dashboard(company_id):
     """
     Get PDI Dashboard data - shows barcode tracking status
@@ -581,7 +581,7 @@ def get_pdi_dashboard(company_id):
         }), 500
 
 
-@ftr_bp.route('/pdi-dashboard-quick/<int:company_id>', methods=['GET'])
+@ftr_bp.route('/pdi-dashboard-quick/<company_id>', methods=['GET'])
 def get_pdi_dashboard_quick(company_id):
     """
     Quick PDI Dashboard - just database counts without external API calls
@@ -648,9 +648,9 @@ def get_pdi_dashboard_quick(company_id):
 
 # ===== COMPANY NAME MAPPING (Local → MRP) - Copied from ai_assistant_routes =====
 COMPANY_NAME_MAP = {
-    'Rays Power': 'RAYS POWER INFRA PRIVATE LIMITED',
-    'rays power': 'RAYS POWER INFRA PRIVATE LIMITED',
-    'RAYS POWER': 'RAYS POWER INFRA PRIVATE LIMITED',
+    'Rays Power': 'RAYS POWER INFRA LIMITED',
+    'rays power': 'RAYS POWER INFRA LIMITED',
+    'RAYS POWER': 'RAYS POWER INFRA LIMITED',
     
     'Larsen & Toubro': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
     'larsen & toubro': 'LARSEN & TOUBRO LIMITED, CONSTRUCTION',
@@ -735,7 +735,7 @@ def fetch_mrp_barcode_data(company_name):
     return all_data, mrp_party_name
 
 
-@ftr_bp.route('/dispatch-tracking/<int:company_id>', methods=['GET'])
+@ftr_bp.route('/dispatch-tracking/<company_id>', methods=['GET'])
 def get_dispatch_tracking(company_id):
     """
     Proxy endpoint to fetch dispatch tracking data from MRP API.
@@ -902,7 +902,7 @@ def get_dispatch_tracking(company_id):
         }), 500
 
 
-@ftr_bp.route('/dispatch-tracking-pdi/<int:company_id>', methods=['GET'])
+@ftr_bp.route('/dispatch-tracking-pdi/<company_id>', methods=['GET'])
 def get_dispatch_tracking_pdi_wise(company_id):
     """
     PDI-wise dispatch tracking — cross-references ftr_master_serials with MRP data.
@@ -978,14 +978,18 @@ def get_dispatch_tracking_pdi_wise(company_id):
         for b in mrp_data:
             barcode = b.get('barcode', '')
             if barcode:
-                dispatch_party = b.get('dispatch_party', '') or ''
-                pallet_no = b.get('pallet_no', '') or ''
-                dispatch_party = dispatch_party.strip()
-                pallet_no = pallet_no.strip()
+                mrp_status = (b.get('status', '') or '').strip().lower()
+                dispatch_party = b.get('dispatch_party') or ''
+                if isinstance(dispatch_party, str):
+                    dispatch_party = dispatch_party.strip()
+                pallet_no = b.get('pallet_no', '')
+                if pallet_no is None:
+                    pallet_no = ''
+                pallet_no = str(pallet_no).strip()
                 
-                if dispatch_party:
+                if mrp_status == 'dispatched' or (dispatch_party and dispatch_party != ''):
                     status = 'Dispatched'
-                elif pallet_no:
+                elif mrp_status == 'packed' or (pallet_no and pallet_no != ''):
                     status = 'Packed'
                 else:
                     status = 'Pending'
@@ -1109,7 +1113,7 @@ def get_dispatch_tracking_pdi_wise(company_id):
 # ============================================================
 # PDI Production Status — kitne ban gaye, kitne pending
 # ============================================================
-@ftr_bp.route('/pdi-production-status/<int:company_id>', methods=['GET'])
+@ftr_bp.route('/pdi-production-status/<company_id>', methods=['GET'])
 def get_pdi_production_status(company_id):
     """
     Returns PDI-wise production status for a company:
@@ -1248,17 +1252,33 @@ def get_pdi_production_status(company_id):
             for b in mrp_data:
                 barcode = b.get('barcode', '')
                 if barcode:
-                    dispatch_party = (b.get('dispatch_party', '') or '').strip()
-                    pallet_no = (b.get('pallet_no', '') or '').strip()
-                    if dispatch_party:
+                    # MRP now returns 'status' field directly: "dispatched" / "packed"
+                    mrp_status = (b.get('status', '') or '').strip().lower()
+                    dispatch_party = b.get('dispatch_party') or ''
+                    if isinstance(dispatch_party, str):
+                        dispatch_party = dispatch_party.strip()
+                    pallet_no = b.get('pallet_no', '')
+                    if pallet_no is None:
+                        pallet_no = ''
+                    pallet_no = str(pallet_no).strip()
+                    packed_party = b.get('packed_party') or ''
+                    running_order = b.get('running_order') or ''
+                    mrp_date = b.get('date') or ''
+
+                    # Use MRP status field first, fallback to dispatch_party/pallet_no
+                    if mrp_status == 'dispatched' or (dispatch_party and dispatch_party != ''):
                         status = 'Dispatched'
-                    elif pallet_no:
+                    elif mrp_status == 'packed' or (pallet_no and pallet_no != ''):
                         status = 'Packed'
                     else:
                         status = 'Pending'
+
                     mrp_lookup[barcode] = {
                         'pallet_no': pallet_no,
                         'dispatch_party': dispatch_party,
+                        'packed_party': packed_party,
+                        'running_order': running_order,
+                        'date': mrp_date,
                         'status': status
                     }
             print(f"[PDI Production] MRP lookup built: {len(mrp_lookup)} barcodes")
@@ -1309,11 +1329,30 @@ def get_pdi_production_status(company_id):
             dispatched_serials = []
             packed_serials = []
             pending_serials = []
+            
+            # Pallet-wise grouping
+            pallet_groups = {}  # pallet_no -> {serials:[], status:'Dispatched'/'Packed', dispatch_party:'', date:''}
 
             serials = pdi_serials_map.get(pdi, [])
             for serial in serials:
                 if serial in mrp_lookup:
                     info = mrp_lookup[serial]
+                    pallet_key = info['pallet_no'] or 'No Pallet'
+                    
+                    # Group by pallet
+                    if pallet_key not in pallet_groups:
+                        pallet_groups[pallet_key] = {
+                            'pallet_no': pallet_key,
+                            'status': info['status'],
+                            'dispatch_party': info['dispatch_party'],
+                            'date': info['date'],
+                            'running_order': info['running_order'],
+                            'serials': [],
+                            'count': 0
+                        }
+                    pallet_groups[pallet_key]['serials'].append(serial)
+                    pallet_groups[pallet_key]['count'] += 1
+                    
                     if info['status'] == 'Dispatched':
                         dispatched += 1
                         dp = info['dispatch_party']
@@ -1322,14 +1361,16 @@ def get_pdi_production_status(company_id):
                             dispatched_serials.append({
                                 'serial': serial,
                                 'pallet_no': info['pallet_no'],
-                                'dispatch_party': info['dispatch_party']
+                                'dispatch_party': info['dispatch_party'],
+                                'date': info['date']
                             })
                     elif info['status'] == 'Packed':
                         packed += 1
                         if len(packed_serials) < 500:
                             packed_serials.append({
                                 'serial': serial,
-                                'pallet_no': info['pallet_no']
+                                'pallet_no': info['pallet_no'],
+                                'date': info['date']
                             })
                     else:
                         disp_pending += 1
@@ -1339,6 +1380,13 @@ def get_pdi_production_status(company_id):
                     disp_pending += 1
                     if len(pending_serials) < 200:
                         pending_serials.append({'serial': serial})
+
+            # Build pallet list sorted by pallet_no
+            pallet_list = sorted(pallet_groups.values(), key=lambda x: str(x['pallet_no']))
+            # Limit serials per pallet to 50 for response size
+            for p in pallet_list:
+                if len(p['serials']) > 50:
+                    p['serials'] = p['serials'][:50]
 
             grand_dispatched += dispatched
             grand_packed += packed
@@ -1362,7 +1410,8 @@ def get_pdi_production_status(company_id):
                 'dispatch_parties': [{'party': k, 'count': v} for k, v in sorted(dispatch_parties.items(), key=lambda x: x[1], reverse=True)],
                 'dispatched_serials': dispatched_serials,
                 'packed_serials': packed_serials,
-                'pending_serials': pending_serials
+                'pending_serials': pending_serials,
+                'pallet_groups': pallet_list
             })
 
         grand_pending = max(0, grand_planned - grand_produced) if grand_planned > 0 else 0

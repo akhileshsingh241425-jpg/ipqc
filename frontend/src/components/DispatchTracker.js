@@ -12,8 +12,10 @@ const DispatchTracker = () => {
   const [productionData, setProductionData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [expandedPdi, setExpandedPdi] = useState(null);
+  const [serialModal, setSerialModal] = useState(null);
+  const [activeTab, setActiveTab] = useState('summary');
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
-  const [serialModal, setSerialModal] = useState(null); // {title, serials, type}
   const [newCompanyData, setNewCompanyData] = useState({
     companyName: '',
     moduleWattage: '',
@@ -38,12 +40,11 @@ const DispatchTracker = () => {
     try {
       setLoading(true);
       setError(null);
+      setExpandedPdi(null);
       
-      // Single API call — production + dispatch combined
       const res = await fetch(`${API_BASE_URL}/ftr/pdi-production-status/${company.id}`);
       const result = await res.json();
       console.log('PDI Production + Dispatch Status:', result);
-      console.log('MRP lookup size:', result.mrp_lookup_size, 'MRP error:', result.mrp_error);
       
       if (result.success) {
         setProductionData(result);
@@ -56,6 +57,19 @@ const DispatchTracker = () => {
       console.error('Error loading production data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCompanySelect = (companyId) => {
+    if (!companyId) {
+      setSelectedCompany(null);
+      setProductionData(null);
+      return;
+    }
+    const company = companies.find(c => String(c.id) === String(companyId));
+    if (company) {
+      setSelectedCompany(company);
+      loadProductionData(company);
     }
   };
 
@@ -76,17 +90,8 @@ const DispatchTracker = () => {
     }
   };
 
-  const handleCompanySelect = (companyId) => {
-    if (!companyId) {
-      setSelectedCompany(null);
-      setProductionData(null);
-      return;
-    }
-    const company = companies.find(c => c.id === parseInt(companyId));
-    if (company) {
-      setSelectedCompany(company);
-      loadProductionData(company);
-    }
+  const togglePdiExpand = (pdiNumber) => {
+    setExpandedPdi(expandedPdi === pdiNumber ? null : pdiNumber);
   };
 
   const summary = productionData?.summary || {};
@@ -104,8 +109,8 @@ const DispatchTracker = () => {
       {/* Header */}
       <div className="dispatch-header">
         <div>
-          <h1>🏭 PDI Production & Dispatch Dashboard</h1>
-          <p>PDI-wise production, packing &amp; dispatch status</p>
+          <h1>📊 PDI Production & Dispatch Report</h1>
+          <p>Complete PDI-wise production, packing, pallet &amp; dispatch status</p>
         </div>
       </div>
 
@@ -137,14 +142,14 @@ const DispatchTracker = () => {
         <div className="dispatch-details-panel">
           {!selectedCompany ? (
             <div className="empty-state">
-              <div className="empty-icon">🏭</div>
+              <div className="empty-icon">📊</div>
               <h3>Select a Company</h3>
-              <p>Choose a company to view PDI-wise production status</p>
+              <p>Choose a company to view complete PDI-wise dispatch report</p>
             </div>
           ) : loading ? (
             <div className="loading-state">
               <div className="spinner"></div>
-              <p>Loading production data...</p>
+              <p>Loading production &amp; dispatch data from MRP...</p>
             </div>
           ) : error ? (
             <div className="error-state">
@@ -164,6 +169,9 @@ const DispatchTracker = () => {
                       Order: {productionData.order_number}
                     </span>
                   )}
+                  <span style={{fontSize: '12px', color: '#94a3b8', background: '#f8fafc', padding: '4px 8px', borderRadius: '6px'}}>
+                    MRP Records: {(productionData?.mrp_lookup_size || 0).toLocaleString()}
+                  </span>
                   <button onClick={() => loadProductionData(selectedCompany)} className="refresh-btn">🔄 Refresh</button>
                 </div>
               </div>
@@ -176,69 +184,139 @@ const DispatchTracker = () => {
               )}
               {productionData?.mrp_lookup_size === 0 && !productionData?.mrp_error && (
                 <div style={{background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', fontSize: '13px', color: '#92400e'}}>
-                  ⚠️ MRP returned 0 records for this company — Company name may not match MRP
+                  ⚠️ MRP returned 0 records — Company name may not match MRP party name
                 </div>
               )}
 
               {/* Summary Cards */}
               <div className="summary-grid">
-                <div className="stat-card dispatched">
-                  <div className="stat-icon">✅</div>
+                <div className="stat-card" style={{borderLeft: '4px solid #2563eb'}}>
+                  <div className="stat-icon">🏭</div>
                   <div className="stat-content">
                     <div className="stat-label">Total Produced</div>
                     <div className="stat-value">{totalProduced.toLocaleString()}</div>
-                    <div className="stat-percent">{summary.progress || 0}% complete</div>
+                    {totalPlanned > 0 && <div className="stat-sub">of {totalPlanned.toLocaleString()} planned</div>}
                   </div>
                 </div>
-                <div className="stat-card pallets">
+                <div className="stat-card" style={{borderLeft: '4px solid #8b5cf6'}}>
                   <div className="stat-icon">🔬</div>
                   <div className="stat-content">
                     <div className="stat-label">FTR Tested</div>
                     <div className="stat-value">{(productionData?.total_ftr_ok || 0).toLocaleString()}</div>
-                    <div className="stat-sub">OK: {(productionData?.total_ftr_ok || 0).toLocaleString()} | Rejected: {(productionData?.total_rejected || 0).toLocaleString()}</div>
+                    <div className="stat-sub">OK: {(productionData?.total_ftr_ok || 0).toLocaleString()} | Rej: {(productionData?.total_rejected || 0).toLocaleString()}</div>
                   </div>
                 </div>
-                <div className="stat-card remaining">
+                <div className="stat-card" style={{borderLeft: '4px solid #22c55e'}}>
                   <div className="stat-icon">🚚</div>
                   <div className="stat-content">
                     <div className="stat-label">Dispatched</div>
-                    <div className="stat-value">{totalDispatched.toLocaleString()}</div>
-                    <div className="stat-sub">{totalProduced > 0 ? `${Math.round((totalDispatched/totalProduced)*100)}% of produced` : ''}</div>
+                    <div className="stat-value" style={{color: '#16a34a'}}>{totalDispatched.toLocaleString()}</div>
+                    <div className="stat-sub">{totalFtrAssigned > 0 ? `${Math.round((totalDispatched/totalFtrAssigned)*100)}% of assigned` : ''}</div>
                   </div>
                 </div>
-                <div className="stat-card total">
+                <div className="stat-card" style={{borderLeft: '4px solid #f59e0b'}}>
                   <div className="stat-icon">📦</div>
                   <div className="stat-content">
-                    <div className="stat-label">Packed</div>
-                    <div className="stat-value">{totalPacked.toLocaleString()}</div>
-                    <div className="stat-sub">Dispatch Pending: {totalDispPending.toLocaleString()}</div>
+                    <div className="stat-label">Packed (Not Dispatched)</div>
+                    <div className="stat-value" style={{color: '#d97706'}}>{totalPacked.toLocaleString()}</div>
+                    <div className="stat-sub">Awaiting dispatch</div>
                   </div>
                 </div>
+                <div className="stat-card" style={{borderLeft: '4px solid #ef4444'}}>
+                  <div className="stat-icon">⏳</div>
+                  <div className="stat-content">
+                    <div className="stat-label">Not Packed Yet</div>
+                    <div className="stat-value" style={{color: '#dc2626'}}>{totalDispPending.toLocaleString()}</div>
+                    <div className="stat-sub">Produced but not packed</div>
+                  </div>
+                </div>
+                {totalPending > 0 && (
+                  <div className="stat-card" style={{borderLeft: '4px solid #6b7280'}}>
+                    <div className="stat-icon">📋</div>
+                    <div className="stat-content">
+                      <div className="stat-label">Production Pending</div>
+                      <div className="stat-value" style={{color: '#6b7280'}}>{totalPending.toLocaleString()}</div>
+                      <div className="stat-sub">Not yet produced</div>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Overall Progress Bar */}
-              {totalPlanned > 0 && (
+              {/* Overall Dispatch Progress Bar */}
+              {totalFtrAssigned > 0 && (
                 <div className="section" style={{marginBottom: '20px'}}>
-                  <div className="progress-bar-container" style={{maxWidth: '100%'}}>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '6px'}}>
-                      <span style={{fontSize: '13px', fontWeight: 600, color: '#334155'}}>Overall Progress</span>
-                      <span style={{fontSize: '13px', fontWeight: 600, color: '#2563eb'}}>{summary.progress || 0}%</span>
-                    </div>
-                    <div className="progress-bar" style={{height: '16px', borderRadius: '8px'}}>
-                      <div className="progress-dispatched" style={{width: `${summary.progress || 0}%`, borderRadius: '8px'}}></div>
-                    </div>
-                    <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '4px', fontSize: '12px', color: '#64748b'}}>
-                      <span>{totalProduced.toLocaleString()} produced</span>
-                      <span>{totalPending.toLocaleString()} remaining</span>
-                    </div>
+                  <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '8px'}}>
+                    <span style={{fontSize: '14px', fontWeight: 600, color: '#334155'}}>Dispatch Progress</span>
+                    <span style={{fontSize: '14px', fontWeight: 600, color: '#2563eb'}}>
+                      {Math.round(((totalDispatched + totalPacked) / totalFtrAssigned) * 100)}%
+                    </span>
+                  </div>
+                  <div style={{height: '24px', borderRadius: '12px', background: '#f1f5f9', overflow: 'hidden', display: 'flex'}}>
+                    {totalDispatched > 0 && (
+                      <div style={{
+                        width: `${(totalDispatched / totalFtrAssigned) * 100}%`,
+                        background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#fff', fontSize: '11px', fontWeight: 600,
+                        minWidth: '40px'
+                      }}>{totalDispatched.toLocaleString()}</div>
+                    )}
+                    {totalPacked > 0 && (
+                      <div style={{
+                        width: `${(totalPacked / totalFtrAssigned) * 100}%`,
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#fff', fontSize: '11px', fontWeight: 600,
+                        minWidth: '40px'
+                      }}>{totalPacked.toLocaleString()}</div>
+                    )}
+                    {totalDispPending > 0 && (
+                      <div style={{
+                        width: `${(totalDispPending / totalFtrAssigned) * 100}%`,
+                        background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#fff', fontSize: '11px', fontWeight: 600,
+                        minWidth: '40px'
+                      }}>{totalDispPending.toLocaleString()}</div>
+                    )}
+                  </div>
+                  <div style={{display: 'flex', gap: '20px', marginTop: '6px', fontSize: '12px'}}>
+                    <span style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+                      <span style={{width: '12px', height: '12px', borderRadius: '3px', background: '#22c55e', display: 'inline-block'}}></span>
+                      Dispatched ({totalDispatched.toLocaleString()})
+                    </span>
+                    <span style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+                      <span style={{width: '12px', height: '12px', borderRadius: '3px', background: '#f59e0b', display: 'inline-block'}}></span>
+                      Packed ({totalPacked.toLocaleString()})
+                    </span>
+                    <span style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+                      <span style={{width: '12px', height: '12px', borderRadius: '3px', background: '#ef4444', display: 'inline-block'}}></span>
+                      Not Packed ({totalDispPending.toLocaleString()})
+                    </span>
                   </div>
                 </div>
               )}
 
-              {/* PDI-wise Production Table */}
-              {pdiWise.length > 0 ? (
+              {/* Tab Switcher */}
+              <div className="tab-switcher" style={{marginBottom: '16px'}}>
+                <button 
+                  className={`tab-btn ${activeTab === 'summary' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('summary')}
+                >
+                  📋 PDI Summary
+                </button>
+                <button 
+                  className={`tab-btn ${activeTab === 'pallets' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('pallets')}
+                >
+                  📦 Pallet-wise Report
+                </button>
+              </div>
+
+              {/* ==================== TAB 1: PDI Summary ==================== */}
+              {activeTab === 'summary' && pdiWise.length > 0 && (
                 <div className="section">
-                  <h3>📋 PDI-wise Production Status</h3>
+                  <h3>📋 PDI-wise Complete Status</h3>
                   <div className="pallet-table-container">
                     <table className="pallet-table">
                       <thead>
@@ -246,102 +324,276 @@ const DispatchTracker = () => {
                           <th>#</th>
                           <th>PDI Number</th>
                           <th>Produced</th>
-                          <th>FTR Tested</th>
-                          <th>Dispatched</th>
-                          <th>Packed</th>
-                          <th>Disp. Pending</th>
-                          <th>Progress</th>
-                          <th>Duration</th>
+                          <th>FTR Assigned</th>
+                          <th style={{background: '#dcfce7', color: '#166534'}}>Dispatched</th>
+                          <th style={{background: '#fef9c3', color: '#854d0e'}}>Packed</th>
+                          <th style={{background: '#fee2e2', color: '#991b1b'}}>Not Packed</th>
+                          <th>Pallets</th>
+                          <th>Dispatch %</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {pdiWise.map((pdi, index) => (
-                          <tr key={index}>
-                            <td>{index + 1}</td>
-                            <td className="pdi-number"><strong>{pdi.pdi_number}</strong></td>
-                            <td className="module-count">
-                              <span className="badge">{pdi.produced.toLocaleString()}</span>
-                            </td>
-                            <td className="module-count">
-                              <span className="badge packed-badge">{pdi.ftr_tested.toLocaleString()}</span>
-                            </td>
-                            <td className="module-count">
-                              {(pdi.dispatched || 0) > 0
-                                ? <span className="badge clickable-badge" onClick={() => setSerialModal({
-                                    title: `${pdi.pdi_number} — Dispatched (${pdi.dispatched.toLocaleString()})`,
-                                    serials: pdi.dispatched_serials || [],
-                                    type: 'dispatched'
-                                  })}>{pdi.dispatched.toLocaleString()}</span>
-                                : <span style={{color: '#999'}}>0</span>
-                              }
-                            </td>
-                            <td className="module-count">
-                              {(pdi.packed || 0) > 0
-                                ? <span className="badge packed-badge clickable-badge" onClick={() => setSerialModal({
-                                    title: `${pdi.pdi_number} — Packed (${pdi.packed.toLocaleString()})`,
-                                    serials: pdi.packed_serials || [],
-                                    type: 'packed'
-                                  })}>{pdi.packed.toLocaleString()}</span>
-                                : <span style={{color: '#999'}}>0</span>
-                              }
-                            </td>
-                            <td className="module-count">
-                              {(pdi.dispatch_pending || 0) > 0 
-                                ? <span className="badge pending-badge clickable-badge" onClick={() => setSerialModal({
-                                    title: `${pdi.pdi_number} — Dispatch Pending (${pdi.dispatch_pending.toLocaleString()})`,
-                                    serials: pdi.pending_serials || [],
-                                    type: 'pending'
-                                  })}>{pdi.dispatch_pending.toLocaleString()}</span>
-                                : <span style={{color: '#22c55e', fontWeight: 600}}>✓ Done</span>
-                              }
-                            </td>
-                            <td>
-                              <div className="progress-bar-container">
-                                <div className="progress-bar">
-                                  <div className="progress-dispatched" style={{width: `${pdi.progress}%`}}></div>
-                                </div>
-                                <span className="progress-text">{pdi.progress}%</span>
-                              </div>
-                            </td>
-                            <td style={{fontSize: '11px', color: '#64748b'}}>
-                              {pdi.start_date && pdi.last_date ? (
-                                <>
-                                  <div>{pdi.start_date}</div>
-                                  <div>→ {pdi.last_date}</div>
-                                  <div style={{color: '#94a3b8'}}>{pdi.production_days} days</div>
-                                </>
-                              ) : pdi.assigned_date ? (
-                                <div>Assigned: {pdi.assigned_date}</div>
-                              ) : (
-                                <span style={{color: '#999'}}>—</span>
+                        {pdiWise.map((pdi, index) => {
+                          const totalAssigned = (pdi.dispatched || 0) + (pdi.packed || 0) + (pdi.dispatch_pending || 0);
+                          const dispatchPct = totalAssigned > 0 ? Math.round(((pdi.dispatched || 0) / totalAssigned) * 100) : 0;
+                          const palletCount = (pdi.pallet_groups || []).length;
+                          
+                          return (
+                            <React.Fragment key={index}>
+                              <tr className={expandedPdi === pdi.pdi_number ? 'expanded-row' : ''}>
+                                <td>{index + 1}</td>
+                                <td className="pdi-number">
+                                  <strong>{pdi.pdi_number}</strong>
+                                  {pdi.start_date && <div style={{fontSize: '10px', color: '#94a3b8'}}>{pdi.start_date} → {pdi.last_date}</div>}
+                                </td>
+                                <td className="module-count">
+                                  <span className="badge">{pdi.produced.toLocaleString()}</span>
+                                </td>
+                                <td className="module-count">
+                                  <span className="badge" style={{background:'#ede9fe', color:'#6d28d9'}}>{pdi.ftr_tested.toLocaleString()}</span>
+                                </td>
+                                <td className="module-count">
+                                  {(pdi.dispatched || 0) > 0
+                                    ? <span className="badge clickable-badge" style={{background:'#dcfce7', color:'#166534'}} onClick={() => setSerialModal({
+                                        title: `${pdi.pdi_number} — Dispatched (${pdi.dispatched.toLocaleString()})`,
+                                        serials: pdi.dispatched_serials || [],
+                                        type: 'dispatched'
+                                      })}>{pdi.dispatched.toLocaleString()}</span>
+                                    : <span style={{color: '#ccc'}}>0</span>
+                                  }
+                                </td>
+                                <td className="module-count">
+                                  {(pdi.packed || 0) > 0
+                                    ? <span className="badge clickable-badge" style={{background:'#fef9c3', color:'#854d0e'}} onClick={() => setSerialModal({
+                                        title: `${pdi.pdi_number} — Packed (${pdi.packed.toLocaleString()})`,
+                                        serials: pdi.packed_serials || [],
+                                        type: 'packed'
+                                      })}>{pdi.packed.toLocaleString()}</span>
+                                    : <span style={{color: '#ccc'}}>0</span>
+                                  }
+                                </td>
+                                <td className="module-count">
+                                  {(pdi.dispatch_pending || 0) > 0 
+                                    ? <span className="badge clickable-badge" style={{background:'#fee2e2', color:'#991b1b'}} onClick={() => setSerialModal({
+                                        title: `${pdi.pdi_number} — Not Packed (${pdi.dispatch_pending.toLocaleString()})`,
+                                        serials: pdi.pending_serials || [],
+                                        type: 'pending'
+                                      })}>{pdi.dispatch_pending.toLocaleString()}</span>
+                                    : <span style={{color: '#22c55e', fontWeight: 600}}>✓</span>
+                                  }
+                                </td>
+                                <td>
+                                  {palletCount > 0 ? (
+                                    <span 
+                                      className="badge clickable-badge" 
+                                      style={{background:'#e0e7ff', color:'#3730a3', cursor:'pointer'}}
+                                      onClick={() => togglePdiExpand(pdi.pdi_number)}
+                                    >
+                                      {palletCount} pallets {expandedPdi === pdi.pdi_number ? '▲' : '▼'}
+                                    </span>
+                                  ) : <span style={{color:'#ccc'}}>—</span>}
+                                </td>
+                                <td>
+                                  <div className="progress-bar-container">
+                                    <div style={{height: '10px', borderRadius: '5px', background: '#f1f5f9', overflow: 'hidden', display: 'flex', width: '80px'}}>
+                                      <div style={{width: `${dispatchPct}%`, background: '#22c55e', transition: 'width 0.3s'}}></div>
+                                      <div style={{width: `${totalAssigned > 0 ? Math.round(((pdi.packed || 0) / totalAssigned) * 100) : 0}%`, background: '#f59e0b', transition: 'width 0.3s'}}></div>
+                                    </div>
+                                    <span className="progress-text" style={{fontSize:'11px'}}>{dispatchPct}%</span>
+                                  </div>
+                                </td>
+                              </tr>
+
+                              {/* Expanded Pallet Detail Row */}
+                              {expandedPdi === pdi.pdi_number && (pdi.pallet_groups || []).length > 0 && (
+                                <tr>
+                                  <td colSpan="9" style={{padding: 0, background: '#f8fafc'}}>
+                                    <div style={{padding: '12px 20px'}}>
+                                      <h4 style={{margin: '0 0 10px', fontSize: '13px', color: '#334155'}}>
+                                        📦 Pallet Details — {pdi.pdi_number} ({(pdi.pallet_groups || []).length} pallets)
+                                      </h4>
+                                      <table className="pallet-table" style={{fontSize: '12px', margin: 0}}>
+                                        <thead>
+                                          <tr>
+                                            <th>#</th>
+                                            <th>Pallet No</th>
+                                            <th>Status</th>
+                                            <th>Modules</th>
+                                            <th>Dispatch Party</th>
+                                            <th>Date</th>
+                                            <th>Running Order</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {(pdi.pallet_groups || []).map((pg, pi) => (
+                                            <tr key={pi}>
+                                              <td>{pi + 1}</td>
+                                              <td><strong>{pg.pallet_no}</strong></td>
+                                              <td>
+                                                <span className="badge" style={{
+                                                  background: pg.status === 'Dispatched' ? '#dcfce7' : pg.status === 'Packed' ? '#fef9c3' : '#fee2e2',
+                                                  color: pg.status === 'Dispatched' ? '#166534' : pg.status === 'Packed' ? '#854d0e' : '#991b1b',
+                                                  fontSize: '11px'
+                                                }}>
+                                                  {pg.status === 'Dispatched' ? '🚚' : pg.status === 'Packed' ? '📦' : '⏳'} {pg.status}
+                                                </span>
+                                              </td>
+                                              <td><strong>{pg.count}</strong></td>
+                                              <td style={{fontSize: '11px'}}>{pg.dispatch_party || '—'}</td>
+                                              <td style={{fontSize: '11px'}}>{pg.date || '—'}</td>
+                                              <td style={{fontSize: '11px'}}>{pg.running_order || '—'}</td>
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
                               )}
-                            </td>
-                          </tr>
-                        ))}
+                            </React.Fragment>
+                          );
+                        })}
                         {/* Total Row */}
-                        <tr style={{fontWeight: 'bold', background: '#f0f7ff'}}>
+                        <tr style={{fontWeight: 'bold', background: '#f0f7ff', borderTop: '2px solid #2563eb'}}>
                           <td></td>
                           <td>TOTAL</td>
                           <td><span className="badge">{totalProduced.toLocaleString()}</span></td>
-                          <td><span className="badge packed-badge">{totalFtrAssigned.toLocaleString()}</span></td>
-                          <td><span className="badge">{totalDispatched.toLocaleString()}</span></td>
-                          <td><span className="badge packed-badge">{totalPacked.toLocaleString()}</span></td>
-                          <td>{totalDispPending > 0 ? <span className="badge pending-badge">{totalDispPending.toLocaleString()}</span> : <span style={{color: '#22c55e'}}>✓</span>}</td>
-                          <td>
-                            <div className="progress-bar-container">
-                              <div className="progress-bar">
-                                <div className="progress-dispatched" style={{width: `${summary.progress || 0}%`}}></div>
-                              </div>
-                              <span className="progress-text">{summary.progress || 0}%</span>
-                            </div>
-                          </td>
+                          <td><span className="badge" style={{background:'#ede9fe', color:'#6d28d9'}}>{totalFtrAssigned.toLocaleString()}</span></td>
+                          <td><span className="badge" style={{background:'#dcfce7', color:'#166534'}}>{totalDispatched.toLocaleString()}</span></td>
+                          <td><span className="badge" style={{background:'#fef9c3', color:'#854d0e'}}>{totalPacked.toLocaleString()}</span></td>
+                          <td>{totalDispPending > 0 ? <span className="badge" style={{background:'#fee2e2', color:'#991b1b'}}>{totalDispPending.toLocaleString()}</span> : <span style={{color: '#22c55e'}}>✓</span>}</td>
                           <td></td>
+                          <td>
+                            <span style={{fontSize: '13px', color: '#2563eb', fontWeight: 700}}>
+                              {totalFtrAssigned > 0 ? Math.round((totalDispatched / totalFtrAssigned) * 100) : 0}%
+                            </span>
+                          </td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {/* ==================== TAB 2: Pallet-wise Report ==================== */}
+              {activeTab === 'pallets' && (
+                <div className="section">
+                  <h3>📦 Pallet-wise Dispatch Report</h3>
+                  {pdiWise.map((pdi, pdiIdx) => {
+                    const pallets = pdi.pallet_groups || [];
+                    const dispPallets = pallets.filter(p => p.status === 'Dispatched');
+                    const packPallets = pallets.filter(p => p.status === 'Packed');
+                    
+                    if (pallets.length === 0 && (pdi.dispatched || 0) === 0 && (pdi.packed || 0) === 0) return null;
+
+                    return (
+                      <div key={pdiIdx} style={{marginBottom: '24px', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden'}}>
+                        {/* PDI Header */}
+                        <div style={{
+                          background: 'linear-gradient(135deg, #1e40af, #3b82f6)',
+                          color: '#fff', padding: '14px 20px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}>
+                          <div>
+                            <h4 style={{margin: 0, fontSize: '16px'}}>{pdi.pdi_number}</h4>
+                            <div style={{fontSize: '12px', opacity: 0.85, marginTop: '4px'}}>
+                              FTR Assigned: {pdi.ftr_tested.toLocaleString()} | 
+                              Produced: {pdi.produced.toLocaleString()}
+                            </div>
+                          </div>
+                          <div style={{display: 'flex', gap: '12px', fontSize: '13px'}}>
+                            <span style={{background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '20px'}}>
+                              🚚 {(pdi.dispatched || 0).toLocaleString()}
+                            </span>
+                            <span style={{background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '20px'}}>
+                              📦 {(pdi.packed || 0).toLocaleString()}
+                            </span>
+                            <span style={{background: 'rgba(255,255,255,0.2)', padding: '4px 12px', borderRadius: '20px'}}>
+                              ⏳ {(pdi.dispatch_pending || 0).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Dispatched Pallets */}
+                        {dispPallets.length > 0 && (
+                          <div style={{padding: '12px 16px'}}>
+                            <h5 style={{margin: '0 0 8px', fontSize: '13px', color: '#166534', display:'flex', alignItems:'center', gap:'6px'}}>
+                              <span style={{width:'10px', height:'10px', borderRadius:'2px', background:'#22c55e', display:'inline-block'}}></span>
+                              Dispatched Pallets ({dispPallets.length})
+                            </h5>
+                            <div className="pallet-table-container">
+                              <table className="pallet-table" style={{fontSize: '12px'}}>
+                                <thead>
+                                  <tr style={{background: '#dcfce7'}}>
+                                    <th>Pallet No</th>
+                                    <th>Modules</th>
+                                    <th>Dispatch Party</th>
+                                    <th>Date</th>
+                                    <th>Running Order</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {dispPallets.map((pg, i) => (
+                                    <tr key={i}>
+                                      <td><strong>{pg.pallet_no}</strong></td>
+                                      <td>{pg.count}</td>
+                                      <td style={{fontSize: '11px'}}>{pg.dispatch_party || '—'}</td>
+                                      <td>{pg.date || '—'}</td>
+                                      <td>{pg.running_order || '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Packed Pallets */}
+                        {packPallets.length > 0 && (
+                          <div style={{padding: '12px 16px', borderTop: dispPallets.length > 0 ? '1px solid #e2e8f0' : 'none'}}>
+                            <h5 style={{margin: '0 0 8px', fontSize: '13px', color: '#854d0e', display:'flex', alignItems:'center', gap:'6px'}}>
+                              <span style={{width:'10px', height:'10px', borderRadius:'2px', background:'#f59e0b', display:'inline-block'}}></span>
+                              Packed Pallets — Awaiting Dispatch ({packPallets.length})
+                            </h5>
+                            <div className="pallet-table-container">
+                              <table className="pallet-table" style={{fontSize: '12px'}}>
+                                <thead>
+                                  <tr style={{background: '#fef9c3'}}>
+                                    <th>Pallet No</th>
+                                    <th>Modules</th>
+                                    <th>Date</th>
+                                    <th>Running Order</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {packPallets.map((pg, i) => (
+                                    <tr key={i}>
+                                      <td><strong>{pg.pallet_no}</strong></td>
+                                      <td>{pg.count}</td>
+                                      <td>{pg.date || '—'}</td>
+                                      <td>{pg.running_order || '—'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Not Packed */}
+                        {(pdi.dispatch_pending || 0) > 0 && (
+                          <div style={{padding: '10px 16px', background: '#fef2f2', borderTop: '1px solid #fecaca', fontSize: '13px', color: '#991b1b'}}>
+                            ⏳ <strong>{pdi.dispatch_pending.toLocaleString()}</strong> modules not packed yet
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {pdiWise.length === 0 && (
                 <div className="section">
                   <div className="pending-summary">
                     <div className="pending-count">No PDI data found</div>
@@ -357,7 +609,7 @@ const DispatchTracker = () => {
       {/* Serial Detail Modal */}
       {serialModal && (
         <div className="modal-overlay" onClick={() => setSerialModal(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '800px', maxHeight: '80vh', overflow: 'auto'}}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '900px', maxHeight: '80vh', overflow: 'auto'}}>
             <div className="modal-header">
               <h2>{serialModal.title}</h2>
               <button className="close-btn" onClick={() => setSerialModal(null)}>✕</button>
@@ -369,9 +621,9 @@ const DispatchTracker = () => {
                     <tr>
                       <th>#</th>
                       <th>Barcode / Serial</th>
-                      {serialModal.type === 'dispatched' && <th>Pallet No</th>}
+                      {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && <th>Pallet No</th>}
                       {serialModal.type === 'dispatched' && <th>Dispatch Party</th>}
-                      {serialModal.type === 'packed' && <th>Pallet No</th>}
+                      {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && <th>Date</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -379,15 +631,17 @@ const DispatchTracker = () => {
                       <tr key={i}>
                         <td>{i + 1}</td>
                         <td style={{fontFamily: 'monospace', fontSize: '11px'}}>{s.serial}</td>
-                        {serialModal.type === 'dispatched' && <td><span className="badge packed-badge" style={{fontSize: '10px'}}>{s.pallet_no || '—'}</span></td>}
+                        {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && (
+                          <td><span className="badge" style={{background:'#e0e7ff', color:'#3730a3', fontSize:'10px'}}>{s.pallet_no || '—'}</span></td>
+                        )}
                         {serialModal.type === 'dispatched' && <td style={{fontSize: '11px'}}>{s.dispatch_party || '—'}</td>}
-                        {serialModal.type === 'packed' && <td><span className="badge packed-badge" style={{fontSize: '10px'}}>{s.pallet_no || '—'}</span></td>}
+                        {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && <td style={{fontSize: '11px'}}>{s.date || '—'}</td>}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <p style={{textAlign: 'center', color: '#999'}}>No serial details available (data limited to 500 records)</p>
+                <p style={{textAlign: 'center', color: '#999'}}>No serial details available</p>
               )}
               {serialModal.serials.length >= 500 && (
                 <p style={{textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: '10px'}}>
@@ -405,64 +659,24 @@ const DispatchTracker = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>➕ Add New Company</h2>
-              <button 
-                className="close-btn" 
-                onClick={() => setShowNewCompanyModal(false)}
-              >
-                ✕
-              </button>
+              <button className="close-btn" onClick={() => setShowNewCompanyModal(false)}>✕</button>
             </div>
             <form onSubmit={handleCreateCompany}>
               <div className="form-group">
                 <label>Company Name *</label>
-                <input
-                  type="text"
-                  value={newCompanyData.companyName}
-                  onChange={(e) => setNewCompanyData({
-                    ...newCompanyData,
-                    companyName: e.target.value
-                  })}
-                  placeholder="e.g., Larsen & Toubro"
-                  required
-                />
+                <input type="text" value={newCompanyData.companyName} onChange={(e) => setNewCompanyData({...newCompanyData, companyName: e.target.value})} placeholder="e.g., Larsen & Toubro" required />
               </div>
               <div className="form-group">
                 <label>Module Wattage (W) *</label>
-                <input
-                  type="number"
-                  value={newCompanyData.moduleWattage}
-                  onChange={(e) => setNewCompanyData({
-                    ...newCompanyData,
-                    moduleWattage: e.target.value
-                  })}
-                  placeholder="e.g., 630"
-                  required
-                />
+                <input type="number" value={newCompanyData.moduleWattage} onChange={(e) => setNewCompanyData({...newCompanyData, moduleWattage: e.target.value})} placeholder="e.g., 630" required />
               </div>
               <div className="form-group">
                 <label>Cells per Module *</label>
-                <input
-                  type="number"
-                  value={newCompanyData.cellsPerModule}
-                  onChange={(e) => setNewCompanyData({
-                    ...newCompanyData,
-                    cellsPerModule: e.target.value
-                  })}
-                  placeholder="e.g., 66"
-                  required
-                />
+                <input type="number" value={newCompanyData.cellsPerModule} onChange={(e) => setNewCompanyData({...newCompanyData, cellsPerModule: e.target.value})} placeholder="e.g., 66" required />
               </div>
               <div className="modal-actions">
-                <button 
-                  type="button" 
-                  onClick={() => setShowNewCompanyModal(false)}
-                  className="cancel-btn"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="submit-btn" disabled={loading}>
-                  {loading ? 'Creating...' : 'Create Company'}
-                </button>
+                <button type="button" onClick={() => setShowNewCompanyModal(false)} className="cancel-btn">Cancel</button>
+                <button type="submit" className="submit-btn" disabled={loading}>{loading ? 'Creating...' : 'Create Company'}</button>
               </div>
             </form>
           </div>
