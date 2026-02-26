@@ -1504,19 +1504,27 @@ def get_pdi_production_status(company_id):
         except Exception as e:
             print(f"[PDI Production] total FTR query error: {e}")
 
-        # 6. Get ALL assigned serials per PDI for dispatch cross-reference
+        # 6. Get ALL serials per PDI for dispatch cross-reference (no status filter)
         pdi_serials_map = {}
         try:
             cursor.execute("""
                 SELECT serial_number, pdi_number
                 FROM ftr_master_serials
-                WHERE company_id = %s AND status = 'assigned' AND pdi_number IS NOT NULL
+                WHERE company_id = %s AND pdi_number IS NOT NULL AND serial_number IS NOT NULL
             """, (company_id,))
             for row in cursor.fetchall():
                 pdi = row['pdi_number']
-                if pdi not in pdi_serials_map:
-                    pdi_serials_map[pdi] = []
-                pdi_serials_map[pdi].append(row['serial_number'])
+                serial = row['serial_number']
+                if pdi and serial and not serial.strip().startswith('20'):
+                    if pdi not in pdi_serials_map:
+                        pdi_serials_map[pdi] = []
+                    pdi_serials_map[pdi].append(serial.strip())
+            print(f"[PDI Production] Total serials from FTR: {sum(len(s) for s in pdi_serials_map.values())} across {len(pdi_serials_map)} PDIs")
+            # Print sample serial for debug
+            if pdi_serials_map:
+                first_pdi = list(pdi_serials_map.keys())[0]
+                if pdi_serials_map[first_pdi]:
+                    print(f"[PDI Production] Sample local serial: {pdi_serials_map[first_pdi][0]}")
         except Exception as e:
             print(f"[PDI Production] serial fetch error: {e}")
 
@@ -1529,9 +1537,9 @@ def get_pdi_production_status(company_id):
         if 'rays' in lower_name:
             packing_party_names = ['RAYS POWER INFRA PRIVATE LIMITED']
         elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
-            packing_party_names = ['LARSEN & TOUBRO LIMITED, CONSTRUCTION']
+            packing_party_names = ['LARSEN & TOUBRO LIMITED', 'LARSEN & TOUBRO LIMITED, CONSTRUCTION', 'LARSEN AND TOUBRO']
         elif 'sterling' in lower_name or 'sterlin' in lower_name or 's&w' in lower_name:
-            packing_party_names = ['STERLING AND WILSON RENEWABLE ENERGY LIMITED', 'S&W']
+            packing_party_names = ['STERLING AND WILSON RENEWABLE ENERGY LIMITED', 'STERLING AND WILSON', 'S&W']
         
         # Fetch packed serials from packing API
         packed_lookup = {}  # serial -> {pallet_no, running_order, ...}
@@ -1544,10 +1552,13 @@ def get_pdi_production_status(company_id):
                     json={'party_name': party_name},
                     timeout=120
                 )
+                print(f"[PDI Production] Packing API response for {party_name}: status={response.status_code}")
                 if response.status_code == 200:
                     data = response.json()
-                    if data.get('status') == 'success':
-                        for item in data.get('data', []):
+                    print(f"[PDI Production] Packing API data: status={data.get('status')}, count={len(data.get('data', []))}")
+                    if data.get('status') == 'success' or data.get('data'):
+                        items = data.get('data', [])
+                        for item in items:
                             barcode = item.get('barcode', '').strip().upper()
                             if barcode:
                                 packed_lookup[barcode] = {
@@ -1555,7 +1566,8 @@ def get_pdi_production_status(company_id):
                                     'running_order': item.get('running_order', ''),
                                     'status': 'Packed'
                                 }
-                        print(f"[PDI Production] Packing API: {len(data.get('data', []))} from {party_name}")
+                        if items:
+                            print(f"[PDI Production] Sample MRP barcode: {items[0].get('barcode', 'N/A')}")
             except Exception as e:
                 print(f"[PDI Production] Packing API error ({party_name}): {e}")
         
@@ -1603,15 +1615,13 @@ def get_pdi_production_status(company_id):
                 if serial_upper in dispatched_serials_set:
                     # DISPATCHED - in dispatch cache
                     pdi_dispatch_data[pdi]['dispatched'] += 1
-                    if len(pdi_dispatch_data[pdi]['dispatched_serials']) < 500:
-                        packing_info = packed_lookup.get(serial_upper, {})
-                        pdi_dispatch_data[pdi]['dispatched_serials'].append({
-                            'serial': serial,
-                            'pallet_no': packing_info.get('pallet_no', ''),
-                            'status': 'Dispatched'
-                        })
-                    # Add to pallet group
                     packing_info = packed_lookup.get(serial_upper, {})
+                    pdi_dispatch_data[pdi]['dispatched_serials'].append({
+                        'serial': serial,
+                        'pallet_no': packing_info.get('pallet_no', ''),
+                        'status': 'Dispatched'
+                    })
+                    # Add to pallet group
                     pallet_no = packing_info.get('pallet_no') or 'Unknown'
                     if pallet_no not in pdi_dispatch_data[pdi]['pallet_groups']:
                         pdi_dispatch_data[pdi]['pallet_groups'][pallet_no] = {
@@ -1625,12 +1635,11 @@ def get_pdi_production_status(company_id):
                     # PACKED (NOT DISPATCHED) - in packing API but not dispatch cache
                     pdi_dispatch_data[pdi]['packed'] += 1
                     packing_info = packed_lookup[serial_upper]
-                    if len(pdi_dispatch_data[pdi]['packed_serials']) < 500:
-                        pdi_dispatch_data[pdi]['packed_serials'].append({
-                            'serial': serial,
-                            'pallet_no': packing_info.get('pallet_no', ''),
-                            'status': 'Packed'
-                        })
+                    pdi_dispatch_data[pdi]['packed_serials'].append({
+                        'serial': serial,
+                        'pallet_no': packing_info.get('pallet_no', ''),
+                        'status': 'Packed'
+                    })
                     # Add to pallet group
                     pallet_no = packing_info.get('pallet_no') or 'Unknown'
                     if pallet_no not in pdi_dispatch_data[pdi]['pallet_groups']:
@@ -1644,12 +1653,11 @@ def get_pdi_production_status(company_id):
                 else:
                     # NOT PACKED - not in packing API at all
                     pdi_dispatch_data[pdi]['not_packed'] += 1
-                    if len(pdi_dispatch_data[pdi]['not_packed_serials']) < 1000:
-                        pdi_dispatch_data[pdi]['not_packed_serials'].append({
-                            'serial': serial,
-                            'pallet_no': '',
-                            'status': 'Not Packed'
-                        })
+                    pdi_dispatch_data[pdi]['not_packed_serials'].append({
+                        'serial': serial,
+                        'pallet_no': '',
+                        'status': 'Not Packed'
+                    })
         
         total_dispatched = sum(d['dispatched'] for d in pdi_dispatch_data.values())
         total_packed = sum(d['packed'] for d in pdi_dispatch_data.values())
@@ -1816,17 +1824,18 @@ def export_not_packed_serials(company_id):
         
         # Get all FTR serials for this company grouped by PDI
         cursor.execute("""
-            SELECT pdi_number, serial_numbers FROM ftr_master_serials 
-            WHERE company_id = %s AND serial_numbers IS NOT NULL
+            SELECT pdi_number, serial_number FROM ftr_master_serials 
+            WHERE company_id = %s AND pdi_number IS NOT NULL AND serial_number IS NOT NULL
         """, (company_id,))
         
         pdi_serials_map = {}
         for row in cursor.fetchall():
             pdi = row['pdi_number']
-            if row['serial_numbers']:
-                serials = [s.strip() for s in row['serial_numbers'].split(',') if s.strip() and not s.strip().startswith('20')]
-                if serials:
-                    pdi_serials_map[pdi] = serials
+            serial = row['serial_number']
+            if pdi and serial and not serial.strip().startswith('20'):
+                if pdi not in pdi_serials_map:
+                    pdi_serials_map[pdi] = []
+                pdi_serials_map[pdi].append(serial.strip())
         
         # Map company name to packing API party name
         PACKING_PARTY_NAMES = {
