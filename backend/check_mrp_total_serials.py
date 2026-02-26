@@ -1,5 +1,5 @@
 """
-Check total serial numbers from MRP API - All pages
+Check total serial numbers from MRP API - All pages (1 to 1000)
 """
 import requests
 import json
@@ -11,19 +11,18 @@ PARTY_IDS = {
 }
 
 def fetch_all_serials(party_name, party_id):
-    """Fetch all serial numbers from MRP API for a party"""
+    """Fetch all serial numbers from MRP API for a party - Loop pages 1 to 1000"""
     print(f"\n{'='*50}")
     print(f"Fetching: {party_name}")
     print(f"Party ID: {party_id}")
     print(f"{'='*50}")
     
     all_serials = []
-    page = 1
     limit = 100
-    total_pages = 1
-    total_records = 0
+    empty_pages = 0
+    max_empty = 3  # Stop after 3 consecutive empty pages
     
-    while page <= total_pages:
+    for page in range(1, 1001):  # Loop 1 to 1000
         payload = {
             "party_id": party_id,
             "from_date": "2025-01-01",
@@ -44,14 +43,16 @@ def fetch_all_serials(party_name, party_id):
                 break
             
             data = response.json()
-            
-            if page == 1:
-                total_records = data.get('total_records', 0)
-                total_pages = (total_records // limit) + (1 if total_records % limit > 0 else 0)
-                print(f"Total Records (dispatches): {total_records}")
-                print(f"Total Pages: {total_pages}")
-            
             dispatch_summary = data.get('dispatch_summary', [])
+            
+            if not dispatch_summary:
+                empty_pages += 1
+                if empty_pages >= max_empty:
+                    print(f"Page {page}: Empty - stopping (3 consecutive empty pages)")
+                    break
+                continue
+            else:
+                empty_pages = 0  # Reset counter
             
             page_serials = 0
             for item in dispatch_summary:
@@ -66,8 +67,7 @@ def fetch_all_serials(party_name, party_id):
                                     all_serials.append(serial)
                                     page_serials += 1
             
-            print(f"Page {page}/{total_pages}: {len(dispatch_summary)} dispatches, {page_serials} serials")
-            page += 1
+            print(f"Page {page}: {len(dispatch_summary)} dispatches, {page_serials} serials (Total so far: {len(all_serials)})")
             
         except Exception as e:
             print(f"Error on page {page}: {e}")
@@ -85,7 +85,7 @@ def fetch_all_serials(party_name, party_id):
 
 if __name__ == "__main__":
     print("="*60)
-    print("MRP API - Total Serials Check (Last 1 Year)")
+    print("MRP API - Total Serials Check (Last 1 Year) - ALL PAGES")
     print("="*60)
     
     all_company_serials = {}

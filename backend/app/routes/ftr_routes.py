@@ -726,6 +726,7 @@ DISPATCH_HISTORY_API = 'https://umanmrp.in/api/party-dispatch-history.php'
 def auto_sync_mrp_cache(matched_company, party_id):
     """
     Automatically sync MRP dispatch data to local cache.
+    Loops through pages 1-1000 to fetch ALL data.
     Called when cache is empty or stale (older than 1 hour).
     """
     from datetime import datetime, timedelta
@@ -737,11 +738,11 @@ def auto_sync_mrp_cache(matched_company, party_id):
     from_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
     
     all_barcodes = []
-    page = 1
     limit = 100
-    total_pages = 1
+    empty_pages = 0
+    max_empty = 3  # Stop after 3 consecutive empty pages
     
-    while page <= total_pages:
+    for page in range(1, 1001):  # Loop pages 1 to 1000
         try:
             payload = {
                 "party_id": party_id,
@@ -762,14 +763,18 @@ def auto_sync_mrp_cache(matched_company, party_id):
                 break
                 
             result = response.json()
-            
-            if page == 1:
-                total_records = result.get('total_records', 0)
-                total_pages = (total_records // limit) + (1 if total_records % limit > 0 else 0)
-                print(f"[Auto Sync] Total records: {total_records}, Total pages: {total_pages}")
-            
             dispatch_summary = result.get('dispatch_summary', [])
             
+            if not dispatch_summary:
+                empty_pages += 1
+                if empty_pages >= max_empty:
+                    print(f"[Auto Sync] Page {page}: Empty - stopping (3 consecutive empty)")
+                    break
+                continue
+            else:
+                empty_pages = 0
+            
+            page_count = 0
             for item in dispatch_summary:
                 pallet_nos = item.get('pallet_nos', {})
                 status = item.get('status', 'Packed')
@@ -796,8 +801,10 @@ def auto_sync_mrp_cache(matched_company, party_id):
                                         'company': matched_company,
                                         'party_id': party_id
                                     })
+                                    page_count += 1
             
-            page += 1
+            print(f"[Auto Sync] Page {page}: {len(dispatch_summary)} dispatches, {page_count} serials (Total: {len(all_barcodes)})")
+            
         except Exception as e:
             print(f"[Auto Sync] Error on page {page}: {e}")
             break
@@ -1742,6 +1749,7 @@ def sync_mrp_dispatch():
     """
     Sync dispatch data from MRP API to local cache table.
     Fetches last 1 year of data for specified company.
+    Loops through pages 1-1000 to get ALL data.
     """
     try:
         data = request.get_json() or {}
@@ -1778,13 +1786,13 @@ def sync_mrp_dispatch():
         print(f"[MRP Sync] Company: {company_name}, Party ID: {party_id}")
         print(f"[MRP Sync] Date range: {from_date} to {to_date}")
         
-        # Fetch from MRP API
+        # Fetch from MRP API - Loop pages 1 to 1000
         all_barcodes = []
-        page = 1
         limit = 100
-        total_pages = 1
+        empty_pages = 0
+        max_empty = 3
         
-        while page <= total_pages:
+        for page in range(1, 1001):
             payload = {
                 "party_id": party_id,
                 "from_date": from_date,
@@ -1804,14 +1812,18 @@ def sync_mrp_dispatch():
                 break
                 
             result = response.json()
-            
-            if page == 1:
-                total_records = result.get('total_records', 0)
-                total_pages = (total_records // limit) + (1 if total_records % limit > 0 else 0)
-                print(f"[MRP Sync] Total records: {total_records}, Total pages: {total_pages}")
-            
             dispatch_summary = result.get('dispatch_summary', [])
             
+            if not dispatch_summary:
+                empty_pages += 1
+                if empty_pages >= max_empty:
+                    print(f"[MRP Sync] Page {page}: Empty - stopping (3 consecutive empty)")
+                    break
+                continue
+            else:
+                empty_pages = 0
+            
+            page_count = 0
             for item in dispatch_summary:
                 pallet_nos = item.get('pallet_nos', {})
                 status = item.get('status', 'Packed')
@@ -1821,26 +1833,27 @@ def sync_mrp_dispatch():
                 invoice_no = item.get('invoice_no', '')
                 
                 # Parse pallet_nos - each key is pallet number, value is space-separated serials
-                for pallet_no, serials_str in pallet_nos.items():
-                    if serials_str:
-                        serials = serials_str.strip().split()
-                        for serial in serials:
-                            serial = serial.strip()
-                            if serial:
-                                all_barcodes.append({
-                                    'serial_number': serial.upper(),
-                                    'pallet_no': pallet_no,
-                                    'status': status,
-                                    'dispatch_party': dispatch_party,
-                                    'vehicle_no': vehicle_no,
-                                    'dispatch_date': dispatch_date,
-                                    'invoice_no': invoice_no,
-                                    'company': matched_company,
-                                    'party_id': party_id
-                                })
+                if isinstance(pallet_nos, dict):
+                    for pallet_no, serials_str in pallet_nos.items():
+                        if serials_str and isinstance(serials_str, str):
+                            serials = serials_str.strip().split()
+                            for serial in serials:
+                                serial = serial.strip()
+                                if serial:
+                                    all_barcodes.append({
+                                        'serial_number': serial.upper(),
+                                        'pallet_no': pallet_no,
+                                        'status': status,
+                                        'dispatch_party': dispatch_party,
+                                        'vehicle_no': vehicle_no,
+                                        'dispatch_date': dispatch_date,
+                                        'invoice_no': invoice_no,
+                                        'company': matched_company,
+                                        'party_id': party_id
+                                    })
+                                    page_count += 1
             
-            print(f"[MRP Sync] Page {page}/{total_pages} processed, {len(dispatch_summary)} records")
-            page += 1
+            print(f"[MRP Sync] Page {page}: {len(dispatch_summary)} dispatches, {page_count} serials (Total: {len(all_barcodes)})")
         
         print(f"[MRP Sync] Total barcodes fetched: {len(all_barcodes)}")
         
