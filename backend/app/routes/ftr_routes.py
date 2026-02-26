@@ -709,6 +709,19 @@ def get_mrp_party_name_ftr(local_name):
     return local_name
 
 
+def normalize_company_name(name):
+    """Normalize company name for matching - remove special chars, extra spaces"""
+    import re
+    name = name.strip().lower()
+    # Replace & with 'and' and also keep original
+    name = re.sub(r'[&]+', ' and ', name)
+    # Remove special characters
+    name = re.sub(r'[^a-z0-9\s]', '', name)
+    # Normalize whitespace
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
+
+
 def fetch_dispatch_history(company_name):
     """
     Fetch dispatch history from NEW MRP API - party-dispatch-history.php
@@ -717,21 +730,51 @@ def fetch_dispatch_history(company_name):
     """
     mrp_party_name = get_mrp_party_name_ftr(company_name)
     lower_name = company_name.strip().lower()
+    normalized_name = normalize_company_name(company_name)
     
-    print(f"[Dispatch History] Company: {company_name}, lower_name: {lower_name}")
+    print(f"[Dispatch History] Company: {company_name}")
+    print(f"[Dispatch History] lower_name: {lower_name}, normalized: {normalized_name}")
     print(f"[Dispatch History] Available PARTY_IDS keys: {list(PARTY_IDS.keys())}")
     
-    # Get party_id from mapping
+    # Get party_id from mapping - try multiple matching strategies
     party_id = None
-    for key, pid in PARTY_IDS.items():
-        if key in lower_name or lower_name in key:
-            print(f"[Dispatch History] Match found: key={key}, lower_name={lower_name}")
-            party_id = pid
-            break
     
+    # Strategy 1: Exact match on lowercase
+    if lower_name in PARTY_IDS:
+        party_id = PARTY_IDS[lower_name]
+        print(f"[Dispatch History] Exact match found for: {lower_name}")
+    
+    # Strategy 2: Partial match
     if not party_id:
-        party_id = PARTY_IDS.get(lower_name)
-        print(f"[Dispatch History] Direct lookup result: {party_id}")
+        for key, pid in PARTY_IDS.items():
+            if key in lower_name or lower_name in key:
+                print(f"[Dispatch History] Partial match: key={key}, lower_name={lower_name}")
+                party_id = pid
+                break
+    
+    # Strategy 3: Normalized name match
+    if not party_id:
+        for key, pid in PARTY_IDS.items():
+            normalized_key = normalize_company_name(key)
+            if normalized_key in normalized_name or normalized_name in normalized_key:
+                print(f"[Dispatch History] Normalized match: key={key}, normalized_key={normalized_key}")
+                party_id = pid
+                break
+    
+    # Strategy 4: Check for key words (rays, larsen, sterling, kpi)
+    if not party_id:
+        if 'rays' in lower_name:
+            party_id = '931db2c5-b016-4914-b378-69e9f22562a7'
+            print(f"[Dispatch History] Keyword match: rays")
+        elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
+            party_id = 'a005562f-568a-46e9-bf2e-700affb171e8'
+            print(f"[Dispatch History] Keyword match: larsen/l&t")
+        elif 'sterling' in lower_name or 's&w' in lower_name:
+            party_id = '141b81a0-2bab-4790-b825-3c8734d41484'
+            print(f"[Dispatch History] Keyword match: sterling/s&w")
+        elif 'kpi' in lower_name:
+            party_id = 'kpi-green-energy-party-id'
+            print(f"[Dispatch History] Keyword match: kpi")
     
     if not party_id:
         print(f"[Dispatch History] No party_id found for: {company_name}")
