@@ -1412,32 +1412,32 @@ def get_pdi_production_status(company_id):
             for serial in serials:
                 info = find_in_mrp_lookup(serial)
                 if info:
-                    pallet_key = info['pallet_no'] or 'No Pallet'
+                    pallet_key = info.get('pallet_no') or 'No Pallet'
                     
                     # Group by pallet
                     if pallet_key not in pallet_groups:
                         pallet_groups[pallet_key] = {
                             'pallet_no': pallet_key,
-                            'status': info['status'],
-                            'dispatch_party': info['dispatch_party'],
-                            'date': info['date'],
-                            'running_order': info['running_order'],
+                            'status': info.get('status', 'Unknown'),
+                            'dispatch_party': info.get('dispatch_party', ''),
+                            'date': info.get('date', ''),
+                            'vehicle_no': info.get('vehicle_no', ''),
                             'serials': [],
                             'count': 0
                         }
                     pallet_groups[pallet_key]['serials'].append(serial)
                     pallet_groups[pallet_key]['count'] += 1
                     
-                    if info['status'] == 'Dispatched':
+                    if info.get('status') == 'Dispatched':
                         dispatched += 1
-                        dp = info['dispatch_party']
+                        dp = info.get('dispatch_party', '')
                         dispatch_parties[dp] = dispatch_parties.get(dp, 0) + 1
                         if len(dispatched_serials) < 500:
                             dispatched_serials.append({
                                 'serial': serial,
-                                'pallet_no': info['pallet_no'],
-                                'dispatch_party': info['dispatch_party'],
-                                'date': info['date']
+                                'pallet_no': info.get('pallet_no', ''),
+                                'dispatch_party': info.get('dispatch_party', ''),
+                                'date': info.get('date', '')
                             })
                     elif info['status'] == 'Packed':
                         packed += 1
