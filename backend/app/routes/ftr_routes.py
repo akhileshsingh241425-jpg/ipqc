@@ -1067,3 +1067,194 @@ def get_dispatch_tracking_pdi_wise(company_id):
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============================================================
+# PDI Production Status — kitne ban gaye, kitne pending
+# ============================================================
+@ftr_bp.route('/pdi-production-status/<int:company_id>', methods=['GET'])
+def get_pdi_production_status(company_id):
+    """
+    Returns PDI-wise production status for a company:
+    - FTR tested serials per PDI (from ftr_master_serials)
+    - Production output per PDI (from production_records)
+    - Planned qty per PDI (from pdi_batches + master_orders)
+    - Pending = planned - produced
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # 1. Get company info
+        cursor.execute("SELECT id, company_name FROM companies WHERE id = %s", (company_id,))
+        company = cursor.fetchone()
+        if not company:
+            conn.close()
+            return jsonify({"success": False, "error": "Company not found"}), 404
+
+        # 2. FTR Master Serials — PDI-wise count (modules FTR tested & assigned)
+        ftr_pdi_counts = {}
+        try:
+            cursor.execute("""
+                SELECT pdi_number, COUNT(*) as count, MIN(assigned_date) as assigned_date
+                FROM ftr_master_serials
+                WHERE company_id = %s AND status = 'assigned' AND pdi_number IS NOT NULL
+                GROUP BY pdi_number
+                ORDER BY pdi_number
+            """, (company_id,))
+            for row in cursor.fetchall():
+                ftr_pdi_counts[row['pdi_number']] = {
+                    'ftr_count': row['count'],
+                    'assigned_date': str(row['assigned_date']) if row['assigned_date'] else None
+                }
+        except Exception as e:
+            print(f"[PDI Production] ftr_master_serials query error: {e}")
+
+        # 3. Production Records — PDI-wise total production (day + night)
+        production_pdi_counts = {}
+        try:
+            cursor.execute("""
+                SELECT pdi, 
+                       SUM(COALESCE(day_production, 0) + COALESCE(night_production, 0)) as total_production,
+                       COUNT(*) as record_count,
+                       MIN(date) as start_date,
+                       MAX(date) as last_date
+                FROM production_records
+                WHERE company_id = %s AND pdi IS NOT NULL AND pdi != ''
+                GROUP BY pdi
+                ORDER BY pdi
+            """, (company_id,))
+            for row in cursor.fetchall():
+                production_pdi_counts[row['pdi']] = {
+                    'total_production': int(row['total_production'] or 0),
+                    'record_count': row['record_count'],
+                    'start_date': str(row['start_date']) if row['start_date'] else None,
+                    'last_date': str(row['last_date']) if row['last_date'] else None
+                }
+        except Exception as e:
+            print(f"[PDI Production] production_records query error: {e}")
+
+        # 4. PDI Batches — planned modules per PDI (from master_orders)
+        planned_pdi = {}
+        total_order_qty = 0
+        order_number = None
+        try:
+            cursor.execute("""
+                SELECT mo.id as order_id, mo.order_number, mo.total_modules,
+                       pb.pdi_number, pb.planned_modules, pb.actual_modules, pb.status as batch_status
+                FROM master_orders mo
+                JOIN pdi_batches pb ON pb.order_id = mo.id
+                WHERE mo.company_id = %s
+                ORDER BY pb.batch_sequence
+            """, (company_id,))
+            rows = cursor.fetchall()
+            for row in rows:
+                total_order_qty = row['total_modules'] or 0
+                order_number = row['order_number']
+                planned_pdi[row['pdi_number']] = {
+                    'planned_modules': row['planned_modules'] or 0,
+                    'actual_modules': row['actual_modules'] or 0,
+                    'batch_status': row['batch_status']
+                }
+        except Exception as e:
+            print(f"[PDI Production] pdi_batches query error (table may not exist): {e}")
+
+        # 5. Total FTR count (all serials, including available)
+        total_ftr = 0
+        total_ftr_ok = 0
+        total_rejected = 0
+        total_available = 0
+        try:
+            cursor.execute("""
+                SELECT 
+                    COUNT(*) as total,
+                    SUM(CASE WHEN class_status = 'OK' OR class_status IS NULL THEN 1 ELSE 0 END) as ok_count,
+                    SUM(CASE WHEN class_status = 'REJECTED' THEN 1 ELSE 0 END) as rejected,
+                    SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) as available
+                FROM ftr_master_serials
+                WHERE company_id = %s
+            """, (company_id,))
+            row = cursor.fetchone()
+            if row:
+                total_ftr = row['total'] or 0
+                total_ftr_ok = row['ok_count'] or 0
+                total_rejected = row['rejected'] or 0
+                total_available = row['available'] or 0
+        except Exception as e:
+            print(f"[PDI Production] total FTR query error: {e}")
+
+        conn.close()
+
+        # 6. Build combined PDI-wise results
+        all_pdis = sorted(set(
+            list(ftr_pdi_counts.keys()) +
+            list(production_pdi_counts.keys()) +
+            list(planned_pdi.keys())
+        ))
+
+        pdi_wise = []
+        grand_produced = 0
+        grand_planned = 0
+        grand_ftr = 0
+
+        for pdi in all_pdis:
+            ftr_info = ftr_pdi_counts.get(pdi, {})
+            prod_info = production_pdi_counts.get(pdi, {})
+            plan_info = planned_pdi.get(pdi, {})
+
+            ftr_count = ftr_info.get('ftr_count', 0)
+            produced = prod_info.get('total_production', 0)
+            planned = plan_info.get('planned_modules', 0)
+
+            # "Ban gaye" = produced from production records; if zero, fall back to FTR count
+            ban_gaye = produced if produced > 0 else ftr_count
+            # Pending = planned - produced (if planned exists)
+            pending = max(0, planned - ban_gaye) if planned > 0 else 0
+            # Progress %
+            progress = round((ban_gaye / planned) * 100, 1) if planned > 0 else (100 if ban_gaye > 0 else 0)
+
+            grand_produced += ban_gaye
+            grand_planned += planned
+            grand_ftr += ftr_count
+
+            pdi_wise.append({
+                'pdi_number': pdi,
+                'produced': ban_gaye,
+                'ftr_tested': ftr_count,
+                'planned': planned,
+                'pending': pending,
+                'progress': progress,
+                'production_days': prod_info.get('record_count', 0),
+                'start_date': prod_info.get('start_date'),
+                'last_date': prod_info.get('last_date'),
+                'assigned_date': ftr_info.get('assigned_date'),
+                'batch_status': plan_info.get('batch_status', 'N/A')
+            })
+
+        grand_pending = max(0, grand_planned - grand_produced) if grand_planned > 0 else 0
+        grand_progress = round((grand_produced / grand_planned) * 100, 1) if grand_planned > 0 else (100 if grand_produced > 0 else 0)
+
+        return jsonify({
+            "success": True,
+            "company": company['company_name'],
+            "order_number": order_number,
+            "total_order_qty": total_order_qty,
+            "total_ftr": total_ftr,
+            "total_ftr_ok": total_ftr_ok,
+            "total_rejected": total_rejected,
+            "total_available": total_available,
+            "summary": {
+                "total_produced": grand_produced,
+                "total_planned": grand_planned,
+                "total_pending": grand_pending,
+                "total_ftr_assigned": grand_ftr,
+                "progress": grand_progress
+            },
+            "pdi_wise": pdi_wise
+        })
+
+    except Exception as e:
+        print(f"[PDI Production] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
