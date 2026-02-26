@@ -1513,50 +1513,107 @@ def get_pdi_production_status(company_id):
         except Exception as e:
             print(f"[PDI Production] serial fetch error: {e}")
 
+        # 6b. Get dispatch status via SQL JOIN (more reliable than Python dict lookup)
+        # This handles collation issues automatically
+        pdi_dispatch_data = {}  # pdi -> {dispatched: count, packed: count, serials: [...]}
+        matched_company = None
+        company_name = company['company_name']
+        lower_name = company_name.strip().lower()
+        
+        if 'rays' in lower_name:
+            matched_company = 'Rays Power'
+        elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
+            matched_company = 'L&T'
+        elif 'sterling' in lower_name or 'sterlin' in lower_name or 's&w' in lower_name:
+            matched_company = 'Sterling'
+        
+        if matched_company:
+            try:
+                # Get dispatch counts per PDI via SQL JOIN
+                cursor.execute("""
+                    SELECT 
+                        f.pdi_number,
+                        f.serial_number,
+                        m.status as dispatch_status,
+                        m.pallet_no,
+                        m.dispatch_party,
+                        m.dispatch_date,
+                        m.vehicle_no
+                    FROM ftr_master_serials f
+                    INNER JOIN mrp_dispatch_cache m 
+                        ON f.serial_number COLLATE utf8mb4_unicode_ci = m.serial_number
+                    WHERE f.company_id = %s 
+                        AND f.status = 'assigned' 
+                        AND f.pdi_number IS NOT NULL
+                        AND m.company = %s
+                """, (company_id, matched_company))
+                
+                for row in cursor.fetchall():
+                    pdi = row['pdi_number']
+                    if pdi not in pdi_dispatch_data:
+                        pdi_dispatch_data[pdi] = {
+                            'dispatched': 0,
+                            'packed': 0,
+                            'dispatched_serials': [],
+                            'packed_serials': [],
+                            'pallet_groups': {}
+                        }
+                    
+                    status = row['dispatch_status'] or 'Dispatched'
+                    pallet_no = row['pallet_no'] or 'No Pallet'
+                    
+                    # Group by pallet
+                    if pallet_no not in pdi_dispatch_data[pdi]['pallet_groups']:
+                        pdi_dispatch_data[pdi]['pallet_groups'][pallet_no] = {
+                            'pallet_no': pallet_no,
+                            'status': status,
+                            'dispatch_party': row['dispatch_party'] or '',
+                            'date': str(row['dispatch_date']) if row['dispatch_date'] else '',
+                            'vehicle_no': row['vehicle_no'] or '',
+                            'serials': [],
+                            'count': 0
+                        }
+                    pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials'].append(row['serial_number'])
+                    pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['count'] += 1
+                    
+                    if status == 'Dispatched':
+                        pdi_dispatch_data[pdi]['dispatched'] += 1
+                        if len(pdi_dispatch_data[pdi]['dispatched_serials']) < 500:
+                            pdi_dispatch_data[pdi]['dispatched_serials'].append({
+                                'serial': row['serial_number'],
+                                'pallet_no': pallet_no,
+                                'dispatch_party': row['dispatch_party'] or '',
+                                'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
+                            })
+                    else:  # Packed
+                        pdi_dispatch_data[pdi]['packed'] += 1
+                        if len(pdi_dispatch_data[pdi]['packed_serials']) < 500:
+                            pdi_dispatch_data[pdi]['packed_serials'].append({
+                                'serial': row['serial_number'],
+                                'pallet_no': pallet_no,
+                                'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
+                            })
+                
+                total_matched = sum(d['dispatched'] + d['packed'] for d in pdi_dispatch_data.values())
+                print(f"[PDI Production] SQL JOIN dispatch match: {total_matched} serials across {len(pdi_dispatch_data)} PDIs")
+                
+            except Exception as e:
+                print(f"[PDI Production] SQL dispatch join error: {e}")
+                import traceback
+                traceback.print_exc()
+
         conn.close()
 
-        # 7. Fetch barcode tracking from MRP API (get_barcode_tracking.php)
-        company_name = company['company_name']
-        mrp_lookup = {}
+        # 7. Build debug info
+        total_dispatched_in_result = sum(d.get('dispatched', 0) + d.get('packed', 0) for d in pdi_dispatch_data.values())
         mrp_error = None
-        debug_info = {}
-        used_party_id = None
-        try:
-            mrp_lookup, mrp_party_name, used_party_id = fetch_dispatch_history(company_name)
-            print(f"[PDI Production] Dispatch lookup built: {len(mrp_lookup)} barcodes for party: {mrp_party_name}")
-            
-            # DEBUG: Log sample barcodes from MRP
-            sample_mrp_barcodes = list(mrp_lookup.keys())[:5]
-            print(f"[PDI Production] Sample MRP barcodes: {sample_mrp_barcodes}")
-            
-            # DEBUG: Collect all serials from ftr_master_serials for this company
-            all_local_serials = []
-            for pdi, serials in pdi_serials_map.items():
-                all_local_serials.extend(serials)
-            sample_local_serials = all_local_serials[:5]
-            print(f"[PDI Production] Sample LOCAL serials: {sample_local_serials}")
-            
-            # DEBUG: Check if any match (simple uppercase comparison)
-            def debug_find_match(serial_num):
-                """Check if serial matches any MRP barcode - simple uppercase match"""
-                serial_upper = serial_num.strip().upper()
-                return serial_upper in mrp_lookup
-            
-            matches = [s for s in all_local_serials if debug_find_match(s)]
-            print(f"[PDI Production] MATCHES: {len(matches)} out of {len(all_local_serials)} local serials")
-            
-            debug_info = {
-                'sample_mrp_barcodes': sample_mrp_barcodes,
-                'sample_local_serials': sample_local_serials,
-                'total_mrp_barcodes': len(mrp_lookup),
-                'total_local_serials': len(all_local_serials),
-                'matches_found': len(matches),
-                'party_id_used': used_party_id,
-                'company_name': company_name
-            }
-        except Exception as e:
-            mrp_error = str(e)
-            print(f"[PDI Production] Dispatch fetch error: {e}")
+        debug_info = {
+            'matched_company': matched_company,
+            'total_pdi_with_dispatch': len(pdi_dispatch_data),
+            'total_dispatched_serials': total_dispatched_in_result,
+            'company_name': company_name,
+            'using_sql_join': True
+        }
 
         # 8. Build combined PDI-wise results
         all_pdis = sorted(set(
@@ -1593,78 +1650,30 @@ def get_pdi_production_status(company_id):
             grand_planned += planned
             grand_ftr += ftr_count
 
-            # Cross-reference serials with MRP for dispatch status
-            dispatched = 0
-            packed = 0
-            disp_pending = 0
-            dispatch_parties = {}
-            dispatched_serials = []
-            packed_serials = []
-            pending_serials = []
+            # Get dispatch data from SQL JOIN results
+            dispatch_data = pdi_dispatch_data.get(pdi, {})
+            dispatched = dispatch_data.get('dispatched', 0)
+            packed = dispatch_data.get('packed', 0)
+            dispatched_serials = dispatch_data.get('dispatched_serials', [])
+            packed_serials = dispatch_data.get('packed_serials', [])
             
-            # Pallet-wise grouping
-            pallet_groups = {}  # pallet_no -> {serials:[], status:'Dispatched'/'Packed', dispatch_party:'', date:''}
-
-            # Helper function to find serial in mrp_lookup - simple uppercase match
-            def find_in_mrp_lookup(serial_num):
-                """Find serial in MRP lookup - simple uppercase match"""
-                serial_upper = serial_num.strip().upper()
-                return mrp_lookup.get(serial_upper)
-
-            serials = pdi_serials_map.get(pdi, [])
-            for serial in serials:
-                info = find_in_mrp_lookup(serial)
-                if info:
-                    pallet_key = info.get('pallet_no') or 'No Pallet'
-                    
-                    # Group by pallet
-                    if pallet_key not in pallet_groups:
-                        pallet_groups[pallet_key] = {
-                            'pallet_no': pallet_key,
-                            'status': info.get('status', 'Unknown'),
-                            'dispatch_party': info.get('dispatch_party', ''),
-                            'date': info.get('date', ''),
-                            'vehicle_no': info.get('vehicle_no', ''),
-                            'serials': [],
-                            'count': 0
-                        }
-                    pallet_groups[pallet_key]['serials'].append(serial)
-                    pallet_groups[pallet_key]['count'] += 1
-                    
-                    if info.get('status') == 'Dispatched':
-                        dispatched += 1
-                        dp = info.get('dispatch_party', '')
-                        dispatch_parties[dp] = dispatch_parties.get(dp, 0) + 1
-                        if len(dispatched_serials) < 500:
-                            dispatched_serials.append({
-                                'serial': serial,
-                                'pallet_no': info.get('pallet_no', ''),
-                                'dispatch_party': info.get('dispatch_party', ''),
-                                'date': info.get('date', '')
-                            })
-                    elif info['status'] == 'Packed':
-                        packed += 1
-                        if len(packed_serials) < 500:
-                            packed_serials.append({
-                                'serial': serial,
-                                'pallet_no': info['pallet_no'],
-                                'date': info['date']
-                            })
-                    else:
-                        disp_pending += 1
-                        if len(pending_serials) < 200:
-                            pending_serials.append({'serial': serial})
-                else:
-                    disp_pending += 1
-                    if len(pending_serials) < 200:
-                        pending_serials.append({'serial': serial})
-
-            # Build pallet list sorted by pallet_no
-            pallet_list = sorted(pallet_groups.values(), key=lambda x: str(x['pallet_no']))
+            # Calculate dispatch pending
+            total_assigned = len(pdi_serials_map.get(pdi, []))
+            disp_pending = max(0, total_assigned - dispatched - packed)
+            
+            # Get pallet groups from SQL data
+            pallet_groups_dict = dispatch_data.get('pallet_groups', {})
+            pallet_list = sorted(pallet_groups_dict.values(), key=lambda x: str(x['pallet_no']))
             # Limit serials per pallet to 50 for response size
             for p in pallet_list:
                 if len(p['serials']) > 50:
                     p['serials'] = p['serials'][:50]
+            
+            # Build dispatch parties summary
+            dispatch_parties = {}
+            for ds in dispatched_serials:
+                dp = ds.get('dispatch_party', '')
+                dispatch_parties[dp] = dispatch_parties.get(dp, 0) + 1
 
             grand_dispatched += dispatched
             grand_packed += packed
@@ -1688,7 +1697,7 @@ def get_pdi_production_status(company_id):
                 'dispatch_parties': [{'party': k, 'count': v} for k, v in sorted(dispatch_parties.items(), key=lambda x: x[1], reverse=True)],
                 'dispatched_serials': dispatched_serials,
                 'packed_serials': packed_serials,
-                'pending_serials': pending_serials,
+                'pending_serials': [],
                 'pallet_groups': pallet_list
             })
 
@@ -1704,7 +1713,7 @@ def get_pdi_production_status(company_id):
             "total_ftr_ok": total_ftr_ok,
             "total_rejected": total_rejected,
             "total_available": total_available,
-            "mrp_lookup_size": len(mrp_lookup),
+            "dispatch_matches": debug_info.get('total_dispatched_serials', 0),
             "mrp_error": mrp_error,
             "debug_info": debug_info,
             "summary": {
