@@ -39,42 +39,16 @@ const DispatchTracker = () => {
       setLoading(true);
       setError(null);
       
-      // Fetch production + dispatch data in parallel
-      const [prodRes, dispatchRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/ftr/pdi-production-status/${company.id}`),
-        fetch(`${API_BASE_URL}/ftr/dispatch-tracking-pdi/${company.id}`).catch(() => null)
-      ]);
+      // Single API call — production + dispatch combined
+      const res = await fetch(`${API_BASE_URL}/ftr/pdi-production-status/${company.id}`);
+      const result = await res.json();
+      console.log('PDI Production + Dispatch Status:', result);
+      console.log('MRP lookup size:', result.mrp_lookup_size, 'MRP error:', result.mrp_error);
       
-      const prodResult = await prodRes.json();
-      let dispatchResult = null;
-      if (dispatchRes && dispatchRes.ok) {
-        dispatchResult = await dispatchRes.json();
-      }
-      console.log('PDI Production Status:', prodResult);
-      console.log('PDI Dispatch Status:', dispatchResult);
-      
-      if (prodResult.success) {
-        // Merge dispatch data into production data
-        if (dispatchResult?.success && dispatchResult.pdi_wise) {
-          const dispatchMap = {};
-          (dispatchResult.pdi_wise || []).forEach(d => {
-            dispatchMap[d.pdi_number] = d;
-          });
-          prodResult.dispatch_summary = dispatchResult.summary || {};
-          prodResult.pdi_wise = (prodResult.pdi_wise || []).map(pdi => ({
-            ...pdi,
-            dispatched: dispatchMap[pdi.pdi_number]?.dispatched || 0,
-            packed: dispatchMap[pdi.pdi_number]?.packed || 0,
-            dispatch_pending: dispatchMap[pdi.pdi_number]?.pending || 0,
-            dispatch_parties: dispatchMap[pdi.pdi_number]?.dispatch_parties || [],
-            dispatched_serials: dispatchMap[pdi.pdi_number]?.dispatched_serials || [],
-            packed_serials: dispatchMap[pdi.pdi_number]?.packed_serials || [],
-            pending_serials: dispatchMap[pdi.pdi_number]?.pending_serials || []
-          }));
-        }
-        setProductionData(prodResult);
+      if (result.success) {
+        setProductionData(result);
       } else {
-        setError(prodResult.error || 'No data found');
+        setError(result.error || 'No data found');
         setProductionData(null);
       }
     } catch (err) {
@@ -116,15 +90,14 @@ const DispatchTracker = () => {
   };
 
   const summary = productionData?.summary || {};
-  const dispSummary = productionData?.dispatch_summary || {};
   const pdiWise = productionData?.pdi_wise || [];
   const totalProduced = summary.total_produced || 0;
   const totalPlanned = summary.total_planned || 0;
   const totalPending = summary.total_pending || 0;
   const totalFtrAssigned = summary.total_ftr_assigned || 0;
-  const totalDispatched = dispSummary.dispatched || pdiWise.reduce((s, p) => s + (p.dispatched || 0), 0);
-  const totalPacked = dispSummary.packed || pdiWise.reduce((s, p) => s + (p.packed || 0), 0);
-  const totalDispPending = dispSummary.pending || pdiWise.reduce((s, p) => s + (p.dispatch_pending || 0), 0);
+  const totalDispatched = summary.total_dispatched || 0;
+  const totalPacked = summary.total_packed || 0;
+  const totalDispPending = summary.total_dispatch_pending || 0;
 
   return (
     <div className="dispatch-tracker">
@@ -194,6 +167,18 @@ const DispatchTracker = () => {
                   <button onClick={() => loadProductionData(selectedCompany)} className="refresh-btn">🔄 Refresh</button>
                 </div>
               </div>
+
+              {/* MRP Warning */}
+              {productionData?.mrp_error && (
+                <div style={{background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', fontSize: '13px', color: '#92400e'}}>
+                  ⚠️ MRP API Error: {productionData.mrp_error} — Dispatch data may not be available
+                </div>
+              )}
+              {productionData?.mrp_lookup_size === 0 && !productionData?.mrp_error && (
+                <div style={{background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', fontSize: '13px', color: '#92400e'}}>
+                  ⚠️ MRP returned 0 records for this company — Company name may not match MRP
+                </div>
+              )}
 
               {/* Summary Cards */}
               <div className="summary-grid">

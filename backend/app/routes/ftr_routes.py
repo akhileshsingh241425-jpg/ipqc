@@ -1220,9 +1220,53 @@ def get_pdi_production_status(company_id):
         except Exception as e:
             print(f"[PDI Production] total FTR query error: {e}")
 
+        # 6. Get ALL assigned serials per PDI for dispatch cross-reference
+        pdi_serials_map = {}
+        try:
+            cursor.execute("""
+                SELECT serial_number, pdi_number
+                FROM ftr_master_serials
+                WHERE company_id = %s AND status = 'assigned' AND pdi_number IS NOT NULL
+            """, (company_id,))
+            for row in cursor.fetchall():
+                pdi = row['pdi_number']
+                if pdi not in pdi_serials_map:
+                    pdi_serials_map[pdi] = []
+                pdi_serials_map[pdi].append(row['serial_number'])
+        except Exception as e:
+            print(f"[PDI Production] serial fetch error: {e}")
+
         conn.close()
 
-        # 6. Build combined PDI-wise results
+        # 7. Fetch MRP data for dispatch status
+        company_name = company['company_name']
+        mrp_lookup = {}
+        mrp_error = None
+        try:
+            mrp_data, mrp_party_name = fetch_mrp_barcode_data(company_name)
+            print(f"[PDI Production] MRP records fetched: {len(mrp_data)} for party: {mrp_party_name}")
+            for b in mrp_data:
+                barcode = b.get('barcode', '')
+                if barcode:
+                    dispatch_party = (b.get('dispatch_party', '') or '').strip()
+                    pallet_no = (b.get('pallet_no', '') or '').strip()
+                    if dispatch_party:
+                        status = 'Dispatched'
+                    elif pallet_no:
+                        status = 'Packed'
+                    else:
+                        status = 'Pending'
+                    mrp_lookup[barcode] = {
+                        'pallet_no': pallet_no,
+                        'dispatch_party': dispatch_party,
+                        'status': status
+                    }
+            print(f"[PDI Production] MRP lookup built: {len(mrp_lookup)} barcodes")
+        except Exception as e:
+            mrp_error = str(e)
+            print(f"[PDI Production] MRP fetch error: {e}")
+
+        # 8. Build combined PDI-wise results
         all_pdis = sorted(set(
             list(ftr_pdi_counts.keys()) +
             list(production_pdi_counts.keys()) +
@@ -1233,6 +1277,9 @@ def get_pdi_production_status(company_id):
         grand_produced = 0
         grand_planned = 0
         grand_ftr = 0
+        grand_dispatched = 0
+        grand_packed = 0
+        grand_disp_pending = 0
 
         for pdi in all_pdis:
             ftr_info = ftr_pdi_counts.get(pdi, {})
@@ -1254,6 +1301,49 @@ def get_pdi_production_status(company_id):
             grand_planned += planned
             grand_ftr += ftr_count
 
+            # Cross-reference serials with MRP for dispatch status
+            dispatched = 0
+            packed = 0
+            disp_pending = 0
+            dispatch_parties = {}
+            dispatched_serials = []
+            packed_serials = []
+            pending_serials = []
+
+            serials = pdi_serials_map.get(pdi, [])
+            for serial in serials:
+                if serial in mrp_lookup:
+                    info = mrp_lookup[serial]
+                    if info['status'] == 'Dispatched':
+                        dispatched += 1
+                        dp = info['dispatch_party']
+                        dispatch_parties[dp] = dispatch_parties.get(dp, 0) + 1
+                        if len(dispatched_serials) < 500:
+                            dispatched_serials.append({
+                                'serial': serial,
+                                'pallet_no': info['pallet_no'],
+                                'dispatch_party': info['dispatch_party']
+                            })
+                    elif info['status'] == 'Packed':
+                        packed += 1
+                        if len(packed_serials) < 500:
+                            packed_serials.append({
+                                'serial': serial,
+                                'pallet_no': info['pallet_no']
+                            })
+                    else:
+                        disp_pending += 1
+                        if len(pending_serials) < 200:
+                            pending_serials.append({'serial': serial})
+                else:
+                    disp_pending += 1
+                    if len(pending_serials) < 200:
+                        pending_serials.append({'serial': serial})
+
+            grand_dispatched += dispatched
+            grand_packed += packed
+            grand_disp_pending += disp_pending
+
             pdi_wise.append({
                 'pdi_number': pdi,
                 'produced': ban_gaye,
@@ -1265,7 +1355,14 @@ def get_pdi_production_status(company_id):
                 'start_date': prod_info.get('start_date'),
                 'last_date': prod_info.get('last_date'),
                 'assigned_date': ftr_info.get('assigned_date'),
-                'batch_status': plan_info.get('batch_status', 'N/A')
+                'batch_status': plan_info.get('batch_status', 'N/A'),
+                'dispatched': dispatched,
+                'packed': packed,
+                'dispatch_pending': disp_pending,
+                'dispatch_parties': [{'party': k, 'count': v} for k, v in sorted(dispatch_parties.items(), key=lambda x: x[1], reverse=True)],
+                'dispatched_serials': dispatched_serials,
+                'packed_serials': packed_serials,
+                'pending_serials': pending_serials
             })
 
         grand_pending = max(0, grand_planned - grand_produced) if grand_planned > 0 else 0
@@ -1280,12 +1377,17 @@ def get_pdi_production_status(company_id):
             "total_ftr_ok": total_ftr_ok,
             "total_rejected": total_rejected,
             "total_available": total_available,
+            "mrp_lookup_size": len(mrp_lookup),
+            "mrp_error": mrp_error,
             "summary": {
                 "total_produced": grand_produced,
                 "total_planned": grand_planned,
                 "total_pending": grand_pending,
                 "total_ftr_assigned": grand_ftr,
-                "progress": grand_progress
+                "progress": grand_progress,
+                "total_dispatched": grand_dispatched,
+                "total_packed": grand_packed,
+                "total_dispatch_pending": grand_disp_pending
             },
             "pdi_wise": pdi_wise
         })
