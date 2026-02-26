@@ -756,9 +756,9 @@ def fetch_dispatch_history(company_name):
                                 if isinstance(barcodes_str, str):
                                     barcodes = barcodes_str.strip().split()
                                     for barcode in barcodes:
-                                        barcode = barcode.strip()
+                                        barcode = barcode.strip().upper()
                                         if barcode:
-                                            mrp_lookup[barcode] = {
+                                            dispatch_info = {
                                                 'status': 'Dispatched',
                                                 'pallet_no': str(pallet_no),
                                                 'dispatch_party': vehicle_no,
@@ -771,6 +771,14 @@ def fetch_dispatch_history(company_name):
                                                 'factory_name': factory_name,
                                                 'dispatch_id': dispatch_id
                                             }
+                                            # Store with original barcode
+                                            mrp_lookup[barcode] = dispatch_info
+                                            # Also store without GS prefix if present
+                                            if barcode.startswith('GS'):
+                                                mrp_lookup[barcode[2:]] = dispatch_info
+                                            # Also store just the numeric part (last 10 digits as serial)
+                                            if len(barcode) >= 10:
+                                                mrp_lookup[barcode[-10:]] = dispatch_info
                                             total_barcodes += 1
                     
                     print(f"  Page {page}: {len(dispatch_summary)} dispatches, running total: {total_barcodes} barcodes")
@@ -1260,9 +1268,46 @@ def get_pdi_production_status(company_id):
         company_name = company['company_name']
         mrp_lookup = {}
         mrp_error = None
+        debug_info = {}
         try:
             mrp_lookup, mrp_party_name = fetch_dispatch_history(company_name)
             print(f"[PDI Production] Dispatch lookup built: {len(mrp_lookup)} barcodes for party: {mrp_party_name}")
+            
+            # DEBUG: Log sample barcodes from MRP
+            sample_mrp_barcodes = list(mrp_lookup.keys())[:5]
+            print(f"[PDI Production] Sample MRP barcodes: {sample_mrp_barcodes}")
+            
+            # DEBUG: Collect all serials from ftr_master_serials for this company
+            all_local_serials = []
+            for pdi, serials in pdi_serials_map.items():
+                all_local_serials.extend(serials)
+            sample_local_serials = all_local_serials[:5]
+            print(f"[PDI Production] Sample LOCAL serials: {sample_local_serials}")
+            
+            # DEBUG: Check if any match (with normalized lookup)
+            def debug_find_match(serial_num):
+                """Check if serial matches any MRP barcode"""
+                serial_upper = serial_num.strip().upper()
+                if serial_upper in mrp_lookup:
+                    return True
+                if ('GS' + serial_upper) in mrp_lookup:
+                    return True
+                if serial_upper.startswith('GS') and serial_upper[2:] in mrp_lookup:
+                    return True
+                if len(serial_upper) >= 10 and serial_upper[-10:] in mrp_lookup:
+                    return True
+                return False
+            
+            matches = [s for s in all_local_serials if debug_find_match(s)]
+            print(f"[PDI Production] MATCHES: {len(matches)} out of {len(all_local_serials)} local serials")
+            
+            debug_info = {
+                'sample_mrp_barcodes': sample_mrp_barcodes,
+                'sample_local_serials': sample_local_serials,
+                'total_mrp_barcodes': len(mrp_lookup),
+                'total_local_serials': len(all_local_serials),
+                'matches_found': len(matches)
+            }
         except Exception as e:
             mrp_error = str(e)
             print(f"[PDI Production] Dispatch fetch error: {e}")
@@ -1314,10 +1359,28 @@ def get_pdi_production_status(company_id):
             # Pallet-wise grouping
             pallet_groups = {}  # pallet_no -> {serials:[], status:'Dispatched'/'Packed', dispatch_party:'', date:''}
 
+            # Helper function to find serial in mrp_lookup with different formats
+            def find_in_mrp_lookup(serial_num):
+                """Try multiple formats to find serial in MRP lookup"""
+                serial_upper = serial_num.strip().upper()
+                # Try exact match first
+                if serial_upper in mrp_lookup:
+                    return mrp_lookup[serial_upper]
+                # Try with GS prefix
+                if ('GS' + serial_upper) in mrp_lookup:
+                    return mrp_lookup['GS' + serial_upper]
+                # Try without GS prefix
+                if serial_upper.startswith('GS') and serial_upper[2:] in mrp_lookup:
+                    return mrp_lookup[serial_upper[2:]]
+                # Try last 10 digits
+                if len(serial_upper) >= 10 and serial_upper[-10:] in mrp_lookup:
+                    return mrp_lookup[serial_upper[-10:]]
+                return None
+
             serials = pdi_serials_map.get(pdi, [])
             for serial in serials:
-                if serial in mrp_lookup:
-                    info = mrp_lookup[serial]
+                info = find_in_mrp_lookup(serial)
+                if info:
                     pallet_key = info['pallet_no'] or 'No Pallet'
                     
                     # Group by pallet
@@ -1409,6 +1472,7 @@ def get_pdi_production_status(company_id):
             "total_available": total_available,
             "mrp_lookup_size": len(mrp_lookup),
             "mrp_error": mrp_error,
+            "debug_info": debug_info,
             "summary": {
                 "total_produced": grand_produced,
                 "total_planned": grand_planned,
