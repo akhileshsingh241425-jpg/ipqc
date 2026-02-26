@@ -38,14 +38,39 @@ const DispatchTracker = () => {
       setLoading(true);
       setError(null);
       
-      const res = await fetch(`${API_BASE_URL}/ftr/pdi-production-status/${company.id}`);
-      const result = await res.json();
-      console.log('PDI Production Status:', result);
+      // Fetch production + dispatch data in parallel
+      const [prodRes, dispatchRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/ftr/pdi-production-status/${company.id}`),
+        fetch(`${API_BASE_URL}/ftr/dispatch-tracking-pdi/${company.id}`).catch(() => null)
+      ]);
       
-      if (result.success) {
-        setProductionData(result);
+      const prodResult = await prodRes.json();
+      let dispatchResult = null;
+      if (dispatchRes && dispatchRes.ok) {
+        dispatchResult = await dispatchRes.json();
+      }
+      console.log('PDI Production Status:', prodResult);
+      console.log('PDI Dispatch Status:', dispatchResult);
+      
+      if (prodResult.success) {
+        // Merge dispatch data into production data
+        if (dispatchResult?.success && dispatchResult.pdi_wise) {
+          const dispatchMap = {};
+          (dispatchResult.pdi_wise || []).forEach(d => {
+            dispatchMap[d.pdi_number] = d;
+          });
+          prodResult.dispatch_summary = dispatchResult.summary || {};
+          prodResult.pdi_wise = (prodResult.pdi_wise || []).map(pdi => ({
+            ...pdi,
+            dispatched: dispatchMap[pdi.pdi_number]?.dispatched || 0,
+            packed: dispatchMap[pdi.pdi_number]?.packed || 0,
+            dispatch_pending: dispatchMap[pdi.pdi_number]?.pending || 0,
+            dispatch_parties: dispatchMap[pdi.pdi_number]?.dispatch_parties || []
+          }));
+        }
+        setProductionData(prodResult);
       } else {
-        setError(result.error || 'No data found');
+        setError(prodResult.error || 'No data found');
         setProductionData(null);
       }
     } catch (err) {
@@ -87,19 +112,23 @@ const DispatchTracker = () => {
   };
 
   const summary = productionData?.summary || {};
+  const dispSummary = productionData?.dispatch_summary || {};
   const pdiWise = productionData?.pdi_wise || [];
   const totalProduced = summary.total_produced || 0;
   const totalPlanned = summary.total_planned || 0;
   const totalPending = summary.total_pending || 0;
   const totalFtrAssigned = summary.total_ftr_assigned || 0;
+  const totalDispatched = dispSummary.dispatched || pdiWise.reduce((s, p) => s + (p.dispatched || 0), 0);
+  const totalPacked = dispSummary.packed || pdiWise.reduce((s, p) => s + (p.packed || 0), 0);
+  const totalDispPending = dispSummary.pending || pdiWise.reduce((s, p) => s + (p.dispatch_pending || 0), 0);
 
   return (
     <div className="dispatch-tracker">
       {/* Header */}
       <div className="dispatch-header">
         <div>
-          <h1>🏭 PDI Production Dashboard</h1>
-          <p>PDI-wise production status — kitne ban gaye, kitne pending</p>
+          <h1>🏭 PDI Production & Dispatch Dashboard</h1>
+          <p>PDI-wise production, packing &amp; dispatch status</p>
         </div>
       </div>
 
@@ -181,23 +210,19 @@ const DispatchTracker = () => {
                   </div>
                 </div>
                 <div className="stat-card remaining">
-                  <div className="stat-icon">⏳</div>
+                  <div className="stat-icon">🚚</div>
                   <div className="stat-content">
-                    <div className="stat-label">Pending</div>
-                    <div className="stat-value">{totalPending.toLocaleString()}</div>
-                    <div className="stat-sub">{totalPlanned > 0 ? `of ${totalPlanned.toLocaleString()} planned` : 'No planned qty set'}</div>
+                    <div className="stat-label">Dispatched</div>
+                    <div className="stat-value">{totalDispatched.toLocaleString()}</div>
+                    <div className="stat-sub">{totalProduced > 0 ? `${Math.round((totalDispatched/totalProduced)*100)}% of produced` : ''}</div>
                   </div>
                 </div>
                 <div className="stat-card total">
-                  <div className="stat-icon">📋</div>
+                  <div className="stat-icon">📦</div>
                   <div className="stat-content">
-                    <div className="stat-label">{totalPlanned > 0 ? 'Total Order Qty' : 'FTR Assigned'}</div>
-                    <div className="stat-value">{(totalPlanned > 0 ? totalPlanned : totalFtrAssigned).toLocaleString()}</div>
-                    <div className="stat-sub">
-                      {productionData?.total_available > 0 
-                        ? `${productionData.total_available.toLocaleString()} available (unassigned)` 
-                        : 'All assigned to PDIs'}
-                    </div>
+                    <div className="stat-label">Packed</div>
+                    <div className="stat-value">{totalPacked.toLocaleString()}</div>
+                    <div className="stat-sub">Dispatch Pending: {totalDispPending.toLocaleString()}</div>
                   </div>
                 </div>
               </div>
@@ -233,8 +258,9 @@ const DispatchTracker = () => {
                           <th>PDI Number</th>
                           <th>Produced</th>
                           <th>FTR Tested</th>
-                          <th>{totalPlanned > 0 ? 'Planned' : '—'}</th>
-                          <th>Pending</th>
+                          <th>Dispatched</th>
+                          <th>Packed</th>
+                          <th>Disp. Pending</th>
                           <th>Progress</th>
                           <th>Duration</th>
                         </tr>
@@ -250,15 +276,21 @@ const DispatchTracker = () => {
                             <td className="module-count">
                               <span className="badge packed-badge">{pdi.ftr_tested.toLocaleString()}</span>
                             </td>
-                            <td>
-                              {pdi.planned > 0 
-                                ? <strong>{pdi.planned.toLocaleString()}</strong>
-                                : <span style={{color: '#999'}}>—</span>
+                            <td className="module-count">
+                              {(pdi.dispatched || 0) > 0
+                                ? <span className="badge">{pdi.dispatched.toLocaleString()}</span>
+                                : <span style={{color: '#999'}}>0</span>
                               }
                             </td>
                             <td className="module-count">
-                              {pdi.pending > 0 
-                                ? <span className="badge pending-badge">{pdi.pending.toLocaleString()}</span>
+                              {(pdi.packed || 0) > 0
+                                ? <span className="badge packed-badge">{pdi.packed.toLocaleString()}</span>
+                                : <span style={{color: '#999'}}>0</span>
+                              }
+                            </td>
+                            <td className="module-count">
+                              {(pdi.dispatch_pending || 0) > 0 
+                                ? <span className="badge pending-badge">{pdi.dispatch_pending.toLocaleString()}</span>
                                 : <span style={{color: '#22c55e', fontWeight: 600}}>✓ Done</span>
                               }
                             </td>
@@ -291,8 +323,9 @@ const DispatchTracker = () => {
                           <td>TOTAL</td>
                           <td><span className="badge">{totalProduced.toLocaleString()}</span></td>
                           <td><span className="badge packed-badge">{totalFtrAssigned.toLocaleString()}</span></td>
-                          <td>{totalPlanned > 0 ? <strong>{totalPlanned.toLocaleString()}</strong> : '—'}</td>
-                          <td>{totalPending > 0 ? <span className="badge pending-badge">{totalPending.toLocaleString()}</span> : <span style={{color: '#22c55e'}}>✓</span>}</td>
+                          <td><span className="badge">{totalDispatched.toLocaleString()}</span></td>
+                          <td><span className="badge packed-badge">{totalPacked.toLocaleString()}</span></td>
+                          <td>{totalDispPending > 0 ? <span className="badge pending-badge">{totalDispPending.toLocaleString()}</span> : <span style={{color: '#22c55e'}}>✓</span>}</td>
                           <td>
                             <div className="progress-bar-container">
                               <div className="progress-bar">
