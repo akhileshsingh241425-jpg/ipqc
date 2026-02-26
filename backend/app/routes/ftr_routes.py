@@ -1520,12 +1520,50 @@ def get_pdi_production_status(company_id):
         except Exception as e:
             print(f"[PDI Production] serial fetch error: {e}")
 
-        # 6b. Get dispatch status via SQL JOIN (more reliable than Python dict lookup)
-        # This handles collation issues automatically
-        pdi_dispatch_data = {}  # pdi -> {dispatched: count, packed: count, serials: [...]}
-        matched_company = None
+        # 6b. Get Packing API data (get_barcode_tracking.php)
         company_name = company['company_name']
         lower_name = company_name.strip().lower()
+        
+        # Map to MRP party name for packing API
+        packing_party_names = []
+        if 'rays' in lower_name:
+            packing_party_names = ['RAYS POWER INFRA PRIVATE LIMITED']
+        elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
+            packing_party_names = ['LARSEN & TOUBRO LIMITED, CONSTRUCTION']
+        elif 'sterling' in lower_name or 'sterlin' in lower_name or 's&w' in lower_name:
+            packing_party_names = ['STERLING AND WILSON RENEWABLE ENERGY LIMITED', 'S&W']
+        
+        # Fetch packed serials from packing API
+        packed_lookup = {}  # serial -> {pallet_no, running_order, ...}
+        print(f"[PDI Production] Fetching packing data for: {packing_party_names}")
+        
+        for party_name in packing_party_names:
+            try:
+                response = http_requests.post(
+                    'https://umanmrp.in/api/get_barcode_tracking.php',
+                    json={'party_name': party_name},
+                    timeout=120
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('status') == 'success':
+                        for item in data.get('data', []):
+                            barcode = item.get('barcode', '').strip().upper()
+                            if barcode:
+                                packed_lookup[barcode] = {
+                                    'pallet_no': item.get('pallet_no', ''),
+                                    'running_order': item.get('running_order', ''),
+                                    'status': 'Packed'
+                                }
+                        print(f"[PDI Production] Packing API: {len(data.get('data', []))} from {party_name}")
+            except Exception as e:
+                print(f"[PDI Production] Packing API error ({party_name}): {e}")
+        
+        print(f"[PDI Production] Total packed serials: {len(packed_lookup)}")
+
+        # 6c. Get dispatch status via SQL JOIN with local cache
+        pdi_dispatch_data = {}  # pdi -> {dispatched: count, packed: count, serials: [...]}
+        matched_company = None
         
         if 'rays' in lower_name:
             matched_company = 'Rays Power'
@@ -1534,80 +1572,89 @@ def get_pdi_production_status(company_id):
         elif 'sterling' in lower_name or 'sterlin' in lower_name or 's&w' in lower_name:
             matched_company = 'Sterling'
         
+        # Build dispatched serials set from cache
+        dispatched_serials_set = set()
         if matched_company:
             try:
-                # Get dispatch counts per PDI via SQL JOIN
                 cursor.execute("""
-                    SELECT 
-                        f.pdi_number,
-                        f.serial_number,
-                        m.status as dispatch_status,
-                        m.pallet_no,
-                        m.dispatch_party,
-                        m.dispatch_date,
-                        m.vehicle_no
-                    FROM ftr_master_serials f
-                    INNER JOIN mrp_dispatch_cache m 
-                        ON f.serial_number COLLATE utf8mb4_unicode_ci = m.serial_number
-                    WHERE f.company_id = %s 
-                        AND f.status = 'assigned' 
-                        AND f.pdi_number IS NOT NULL
-                        AND m.company = %s
-                """, (company_id, matched_company))
-                
+                    SELECT serial_number FROM mrp_dispatch_cache WHERE company = %s
+                """, (matched_company,))
                 for row in cursor.fetchall():
-                    pdi = row['pdi_number']
-                    if pdi not in pdi_dispatch_data:
-                        pdi_dispatch_data[pdi] = {
-                            'dispatched': 0,
-                            'packed': 0,
-                            'dispatched_serials': [],
-                            'packed_serials': [],
-                            'pallet_groups': {}
-                        }
-                    
-                    status = row['dispatch_status'] or 'Dispatched'
-                    pallet_no = row['pallet_no'] or 'No Pallet'
-                    
-                    # Group by pallet
+                    dispatched_serials_set.add(row['serial_number'].strip().upper())
+                print(f"[PDI Production] Dispatched serials in cache: {len(dispatched_serials_set)}")
+            except Exception as e:
+                print(f"[PDI Production] Dispatch cache query error: {e}")
+        
+        # 6d. Now categorize each PDI's serials into 3 categories
+        for pdi, serials in pdi_serials_map.items():
+            pdi_dispatch_data[pdi] = {
+                'dispatched': 0,
+                'packed': 0,
+                'not_packed': 0,
+                'dispatched_serials': [],
+                'packed_serials': [],
+                'not_packed_serials': [],
+                'pallet_groups': {}
+            }
+            
+            for serial in serials:
+                serial_upper = serial.strip().upper()
+                
+                if serial_upper in dispatched_serials_set:
+                    # DISPATCHED - in dispatch cache
+                    pdi_dispatch_data[pdi]['dispatched'] += 1
+                    if len(pdi_dispatch_data[pdi]['dispatched_serials']) < 500:
+                        packing_info = packed_lookup.get(serial_upper, {})
+                        pdi_dispatch_data[pdi]['dispatched_serials'].append({
+                            'serial': serial,
+                            'pallet_no': packing_info.get('pallet_no', ''),
+                            'status': 'Dispatched'
+                        })
+                    # Add to pallet group
+                    packing_info = packed_lookup.get(serial_upper, {})
+                    pallet_no = packing_info.get('pallet_no') or 'Unknown'
                     if pallet_no not in pdi_dispatch_data[pdi]['pallet_groups']:
                         pdi_dispatch_data[pdi]['pallet_groups'][pallet_no] = {
-                            'pallet_no': pallet_no,
-                            'status': status,
-                            'dispatch_party': row['dispatch_party'] or '',
-                            'date': str(row['dispatch_date']) if row['dispatch_date'] else '',
-                            'vehicle_no': row['vehicle_no'] or '',
-                            'serials': [],
-                            'count': 0
+                            'pallet_no': pallet_no, 'status': 'Dispatched', 'count': 0, 'serials': []
                         }
-                    pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials'].append(row['serial_number'])
                     pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['count'] += 1
-                    
-                    if status == 'Dispatched':
-                        pdi_dispatch_data[pdi]['dispatched'] += 1
-                        if len(pdi_dispatch_data[pdi]['dispatched_serials']) < 500:
-                            pdi_dispatch_data[pdi]['dispatched_serials'].append({
-                                'serial': row['serial_number'],
-                                'pallet_no': pallet_no,
-                                'dispatch_party': row['dispatch_party'] or '',
-                                'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
-                            })
-                    else:  # Packed
-                        pdi_dispatch_data[pdi]['packed'] += 1
-                        if len(pdi_dispatch_data[pdi]['packed_serials']) < 500:
-                            pdi_dispatch_data[pdi]['packed_serials'].append({
-                                'serial': row['serial_number'],
-                                'pallet_no': pallet_no,
-                                'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
-                            })
-                
-                total_matched = sum(d['dispatched'] + d['packed'] for d in pdi_dispatch_data.values())
-                print(f"[PDI Production] SQL JOIN dispatch match: {total_matched} serials across {len(pdi_dispatch_data)} PDIs")
-                
-            except Exception as e:
-                print(f"[PDI Production] SQL dispatch join error: {e}")
-                import traceback
-                traceback.print_exc()
+                    if len(pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials']) < 50:
+                        pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials'].append(serial)
+                        
+                elif serial_upper in packed_lookup:
+                    # PACKED (NOT DISPATCHED) - in packing API but not dispatch cache
+                    pdi_dispatch_data[pdi]['packed'] += 1
+                    packing_info = packed_lookup[serial_upper]
+                    if len(pdi_dispatch_data[pdi]['packed_serials']) < 500:
+                        pdi_dispatch_data[pdi]['packed_serials'].append({
+                            'serial': serial,
+                            'pallet_no': packing_info.get('pallet_no', ''),
+                            'status': 'Packed'
+                        })
+                    # Add to pallet group
+                    pallet_no = packing_info.get('pallet_no') or 'Unknown'
+                    if pallet_no not in pdi_dispatch_data[pdi]['pallet_groups']:
+                        pdi_dispatch_data[pdi]['pallet_groups'][pallet_no] = {
+                            'pallet_no': pallet_no, 'status': 'Packed', 'count': 0, 'serials': []
+                        }
+                    pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['count'] += 1
+                    if len(pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials']) < 50:
+                        pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials'].append(serial)
+                        
+                else:
+                    # NOT PACKED - not in packing API at all
+                    pdi_dispatch_data[pdi]['not_packed'] += 1
+                    if len(pdi_dispatch_data[pdi]['not_packed_serials']) < 1000:
+                        pdi_dispatch_data[pdi]['not_packed_serials'].append({
+                            'serial': serial,
+                            'pallet_no': '',
+                            'status': 'Not Packed'
+                        })
+        
+        total_dispatched = sum(d['dispatched'] for d in pdi_dispatch_data.values())
+        total_packed = sum(d['packed'] for d in pdi_dispatch_data.values())
+        total_not_packed = sum(d['not_packed'] for d in pdi_dispatch_data.values())
+        print(f"[PDI Production] Final: Dispatched={total_dispatched}, Packed={total_packed}, Not Packed={total_not_packed}")
 
         conn.close()
 
@@ -1657,18 +1704,16 @@ def get_pdi_production_status(company_id):
             grand_planned += planned
             grand_ftr += ftr_count
 
-            # Get dispatch data from SQL JOIN results
+            # Get dispatch data from 3-category classification
             dispatch_data = pdi_dispatch_data.get(pdi, {})
             dispatched = dispatch_data.get('dispatched', 0)
             packed = dispatch_data.get('packed', 0)
+            not_packed = dispatch_data.get('not_packed', 0)
             dispatched_serials = dispatch_data.get('dispatched_serials', [])
             packed_serials = dispatch_data.get('packed_serials', [])
+            not_packed_serials = dispatch_data.get('not_packed_serials', [])
             
-            # Calculate dispatch pending
-            total_assigned = len(pdi_serials_map.get(pdi, []))
-            disp_pending = max(0, total_assigned - dispatched - packed)
-            
-            # Get pallet groups from SQL data
+            # Get pallet groups 
             pallet_groups_dict = dispatch_data.get('pallet_groups', {})
             pallet_list = sorted(pallet_groups_dict.values(), key=lambda x: str(x['pallet_no']))
             # Limit serials per pallet to 50 for response size
@@ -1684,7 +1729,7 @@ def get_pdi_production_status(company_id):
 
             grand_dispatched += dispatched
             grand_packed += packed
-            grand_disp_pending += disp_pending
+            grand_disp_pending += not_packed  # Not packed = dispatch pending
 
             pdi_wise.append({
                 'pdi_number': pdi,
@@ -1700,11 +1745,12 @@ def get_pdi_production_status(company_id):
                 'batch_status': plan_info.get('batch_status', 'N/A'),
                 'dispatched': dispatched,
                 'packed': packed,
-                'dispatch_pending': disp_pending,
+                'not_packed': not_packed,
+                'dispatch_pending': not_packed,  # Not packed = dispatch pending
                 'dispatch_parties': [{'party': k, 'count': v} for k, v in sorted(dispatch_parties.items(), key=lambda x: x[1], reverse=True)],
                 'dispatched_serials': dispatched_serials,
                 'packed_serials': packed_serials,
-                'pending_serials': [],
+                'not_packed_serials': not_packed_serials,
                 'pallet_groups': pallet_list
             })
 
@@ -1731,6 +1777,7 @@ def get_pdi_production_status(company_id):
                 "progress": grand_progress,
                 "total_dispatched": grand_dispatched,
                 "total_packed": grand_packed,
+                "total_not_packed": grand_disp_pending,
                 "total_dispatch_pending": grand_disp_pending
             },
             "pdi_wise": pdi_wise
@@ -1741,6 +1788,176 @@ def get_pdi_production_status(company_id):
         import traceback
         traceback.print_exc()
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+@ftr_bp.route('/export-not-packed-serials/<int:company_id>', methods=['GET'])
+def export_not_packed_serials(company_id):
+    """
+    Export Not Packed serials to Excel for a company.
+    Returns Excel file with serial numbers grouped by PDI.
+    """
+    try:
+        import io
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+        from flask import send_file
+        
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+        
+        # Get company info
+        cursor.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
+        company = cursor.fetchone()
+        if not company:
+            return jsonify({"success": False, "error": "Company not found"}), 404
+        
+        company_name = company.get('company_name', '')
+        lower_name = company_name.lower()
+        
+        # Get all FTR serials for this company grouped by PDI
+        cursor.execute("""
+            SELECT pdi_number, serial_numbers FROM ftr_master_serials 
+            WHERE company_id = %s AND serial_numbers IS NOT NULL
+        """, (company_id,))
+        
+        pdi_serials_map = {}
+        for row in cursor.fetchall():
+            pdi = row['pdi_number']
+            if row['serial_numbers']:
+                serials = [s.strip() for s in row['serial_numbers'].split(',') if s.strip() and not s.strip().startswith('20')]
+                if serials:
+                    pdi_serials_map[pdi] = serials
+        
+        # Map company name to packing API party name
+        PACKING_PARTY_NAMES = {
+            'rays': 'RAYS POWER INFRA PRIVATE LIMITED',
+            'l&t': 'LARSEN & TOUBRO LIMITED CONSTRUCTION',
+            'larsen': 'LARSEN & TOUBRO LIMITED CONSTRUCTION',
+            'lnt': 'LARSEN & TOUBRO LIMITED CONSTRUCTION',
+            'sterling': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+            's&w': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED'
+        }
+        
+        # Find matching party names
+        matching_party_names = []
+        for key, party_name in PACKING_PARTY_NAMES.items():
+            if key in lower_name:
+                if party_name not in matching_party_names:
+                    matching_party_names.append(party_name)
+        
+        # Fetch from Packing API
+        packed_serials_set = set()
+        for party_name in matching_party_names:
+            try:
+                payload = {"party_name": party_name}
+                response = http_requests.post(
+                    "https://umanmrp.in/api/get_barcode_tracking.php",
+                    json=payload,
+                    timeout=120
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    for item in data.get('data', []):
+                        barcode = item.get('barcode', '').strip().upper()
+                        if barcode:
+                            packed_serials_set.add(barcode)
+            except Exception as e:
+                print(f"[Export] Packing API error ({party_name}): {e}")
+        
+        # Build not packed list grouped by PDI
+        not_packed_by_pdi = {}
+        for pdi, serials in pdi_serials_map.items():
+            not_packed_list = []
+            for serial in serials:
+                if serial.strip().upper() not in packed_serials_set:
+                    not_packed_list.append(serial)
+            if not_packed_list:
+                not_packed_by_pdi[pdi] = not_packed_list
+        
+        conn.close()
+        
+        # Create Excel workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Not Packed Serials"
+        
+        # Styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+        
+        # Headers
+        headers = ["S.No", "PDI Number", "Serial Number", "Status"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal='center')
+            cell.border = thin_border
+        
+        # Data
+        row_num = 2
+        serial_no = 1
+        for pdi in sorted(not_packed_by_pdi.keys()):
+            for serial in not_packed_by_pdi[pdi]:
+                ws.cell(row=row_num, column=1, value=serial_no).border = thin_border
+                ws.cell(row=row_num, column=2, value=pdi).border = thin_border
+                ws.cell(row=row_num, column=3, value=serial).border = thin_border
+                ws.cell(row=row_num, column=4, value="Not Packed").border = thin_border
+                row_num += 1
+                serial_no += 1
+        
+        # Adjust column widths
+        ws.column_dimensions['A'].width = 8
+        ws.column_dimensions['B'].width = 15
+        ws.column_dimensions['C'].width = 30
+        ws.column_dimensions['D'].width = 12
+        
+        # Summary sheet
+        ws2 = wb.create_sheet("Summary")
+        ws2.cell(row=1, column=1, value="Company").font = Font(bold=True)
+        ws2.cell(row=1, column=2, value=company_name)
+        ws2.cell(row=2, column=1, value="Total PDIs").font = Font(bold=True)
+        ws2.cell(row=2, column=2, value=len(not_packed_by_pdi))
+        ws2.cell(row=3, column=1, value="Total Not Packed").font = Font(bold=True)
+        ws2.cell(row=3, column=2, value=serial_no - 1)
+        ws2.cell(row=4, column=1, value="Export Date").font = Font(bold=True)
+        ws2.cell(row=4, column=2, value=datetime.now().strftime('%Y-%m-%d %H:%M'))
+        
+        # PDI-wise summary
+        ws2.cell(row=6, column=1, value="PDI Number").font = Font(bold=True)
+        ws2.cell(row=6, column=2, value="Not Packed Count").font = Font(bold=True)
+        row = 7
+        for pdi in sorted(not_packed_by_pdi.keys()):
+            ws2.cell(row=row, column=1, value=pdi)
+            ws2.cell(row=row, column=2, value=len(not_packed_by_pdi[pdi]))
+            row += 1
+        
+        # Save to buffer
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        filename = f"not_packed_serials_{company_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        
+        return send_file(
+            buffer,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+    except Exception as e:
+        print(f"[Export] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 # ============ MRP DISPATCH CACHE ENDPOINTS ============
 
