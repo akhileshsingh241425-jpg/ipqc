@@ -419,9 +419,8 @@ const DispatchTracker = () => {
                                             <th>Pallet No</th>
                                             <th>Status</th>
                                             <th>Modules</th>
-                                            <th>Dispatch Party</th>
-                                            <th>Date</th>
-                                            <th>Running Order</th>
+                                            <th>Vehicle No</th>
+                                            <th>Dispatch Date</th>
                                           </tr>
                                         </thead>
                                         <tbody>
@@ -439,9 +438,8 @@ const DispatchTracker = () => {
                                                 </span>
                                               </td>
                                               <td><strong>{pg.count}</strong></td>
-                                              <td style={{fontSize: '11px'}}>{pg.dispatch_party || '—'}</td>
-                                              <td style={{fontSize: '11px'}}>{pg.date || '—'}</td>
-                                              <td style={{fontSize: '11px'}}>{pg.running_order || '—'}</td>
+                                              <td style={{fontSize: '11px'}}>{pg.dispatch_party || pg.vehicle_no || '—'}</td>
+                                              <td style={{fontSize: '11px'}}>{pg.date || pg.dispatch_date || '—'}</td>
                                             </tr>
                                           ))}
                                         </tbody>
@@ -527,9 +525,8 @@ const DispatchTracker = () => {
                                   <tr style={{background: '#dcfce7'}}>
                                     <th>Pallet No</th>
                                     <th>Modules</th>
-                                    <th>Dispatch Party</th>
-                                    <th>Date</th>
-                                    <th>Running Order</th>
+                                    <th>Vehicle No</th>
+                                    <th>Dispatch Date</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -537,9 +534,8 @@ const DispatchTracker = () => {
                                     <tr key={i}>
                                       <td><strong>{pg.pallet_no}</strong></td>
                                       <td>{pg.count}</td>
-                                      <td style={{fontSize: '11px'}}>{pg.dispatch_party || '—'}</td>
-                                      <td>{pg.date || '—'}</td>
-                                      <td>{pg.running_order || '—'}</td>
+                                      <td style={{fontSize: '11px'}}>{pg.dispatch_party || pg.vehicle_no || '—'}</td>
+                                      <td>{pg.date || pg.dispatch_date || '—'}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -562,7 +558,6 @@ const DispatchTracker = () => {
                                     <th>Pallet No</th>
                                     <th>Modules</th>
                                     <th>Date</th>
-                                    <th>Running Order</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -571,7 +566,6 @@ const DispatchTracker = () => {
                                       <td><strong>{pg.pallet_no}</strong></td>
                                       <td>{pg.count}</td>
                                       <td>{pg.date || '—'}</td>
-                                      <td>{pg.running_order || '—'}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -622,7 +616,7 @@ const DispatchTracker = () => {
                       <th>#</th>
                       <th>Barcode / Serial</th>
                       {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && <th>Pallet No</th>}
-                      {serialModal.type === 'dispatched' && <th>Dispatch Party</th>}
+                      {serialModal.type === 'dispatched' && <th>Vehicle No</th>}
                       {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && <th>Date</th>}
                     </tr>
                   </thead>

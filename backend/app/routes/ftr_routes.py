@@ -695,44 +695,103 @@ def get_mrp_party_name_ftr(local_name):
     return local_name
 
 
-def fetch_mrp_barcode_data(company_name):
+def fetch_dispatch_history(company_name):
     """
-    Fetch barcode tracking data from MRP API - same logic as ai_assistant_routes.
-    For Sterling and Wilson, fetches from TWO party names.
-    Returns combined data list.
+    Fetch dispatch history from NEW MRP API - party-dispatch-history.php
+    Returns mrp_lookup dict: barcode → {status, pallet_no, dispatch_date, vehicle_no, invoice_no, factory_name}
+    Handles pagination automatically (fetches ALL pages).
     """
     mrp_party_name = get_mrp_party_name_ftr(company_name)
-    lower_name = company_name.lower()
+    lower_name = company_name.strip().lower()
     
-    # Check if Sterling and Wilson - need dual fetch
-    is_sterling = 'sterling' in mrp_party_name.lower() or 'sterlin' in lower_name or 's&w' in lower_name
+    # Get party_id from mapping
+    party_id = None
+    for key, pid in PARTY_IDS.items():
+        if key in lower_name or lower_name in key:
+            party_id = pid
+            break
     
-    party_names = [mrp_party_name]
-    if is_sterling:
-        party_names = ['STERLING AND WILSON RENEWABLE ENERGY LIMITED', 'S&W']
+    if not party_id:
+        party_id = PARTY_IDS.get(lower_name)
     
-    all_data = []
-    for party_name in party_names:
+    if not party_id:
+        print(f"[Dispatch History] No party_id found for: {company_name}")
+        return {}, mrp_party_name
+    
+    print(f"[Dispatch History] Fetching for {company_name}, party_id: {party_id}")
+    
+    mrp_lookup = {}
+    all_dispatches = []  # Store raw dispatch data for grouping
+    page = 1
+    limit = 50
+    total_barcodes = 0
+    
+    while True:
         try:
             response = http_requests.post(
-                'https://umanmrp.in/api/get_barcode_tracking.php',
-                json={'party_name': party_name},
+                'https://umanmrp.in/api/party-dispatch-history.php',
+                json={'party_id': party_id, 'page': page, 'limit': limit},
                 timeout=60
             )
             if response.status_code == 200:
                 data = response.json()
-                # MRP API returns 'status': 'success', NOT 'success': true
                 if data.get('status') == 'success':
-                    party_data = data.get('data', [])
-                    all_data.extend(party_data)
-                    print(f"  ✅ Fetched {len(party_data)} records from party: {party_name}")
+                    dispatch_summary = data.get('dispatch_summary', [])
+                    pagination = data.get('pagination', {})
+                    
+                    for dispatch in dispatch_summary:
+                        dispatch_date = dispatch.get('dispatch_date', '')
+                        vehicle_no = dispatch.get('vehicle_no', '')
+                        invoice_no = dispatch.get('invoice_no', '')
+                        factory_name = dispatch.get('factory_name', '')
+                        dispatch_id = dispatch.get('dispatch_id', '')
+                        total_qty = dispatch.get('total_qty', 0)
+                        pallet_nos = dispatch.get('pallet_nos', {})
+                        
+                        # Store raw dispatch for grouping
+                        all_dispatches.append(dispatch)
+                        
+                        if isinstance(pallet_nos, dict):
+                            for pallet_no, barcodes_str in pallet_nos.items():
+                                if isinstance(barcodes_str, str):
+                                    barcodes = barcodes_str.strip().split()
+                                    for barcode in barcodes:
+                                        barcode = barcode.strip()
+                                        if barcode:
+                                            mrp_lookup[barcode] = {
+                                                'status': 'Dispatched',
+                                                'pallet_no': str(pallet_no),
+                                                'dispatch_party': vehicle_no,
+                                                'packed_party': '',
+                                                'running_order': '',
+                                                'date': dispatch_date,
+                                                'dispatch_date': dispatch_date,
+                                                'vehicle_no': vehicle_no,
+                                                'invoice_no': invoice_no,
+                                                'factory_name': factory_name,
+                                                'dispatch_id': dispatch_id
+                                            }
+                                            total_barcodes += 1
+                    
+                    print(f"  Page {page}: {len(dispatch_summary)} dispatches, running total: {total_barcodes} barcodes")
+                    
+                    has_next = pagination.get('has_next_page', False)
+                    if has_next:
+                        page += 1
+                    else:
+                        break
                 else:
-                    print(f"  ⚠️ API returned status: {data.get('status')} for {party_name}")
+                    print(f"  API returned status: {data.get('status')}")
+                    break
+            else:
+                print(f"  API returned HTTP {response.status_code}")
+                break
         except Exception as e:
-            print(f"  ⚠️ Error fetching from {party_name}: {str(e)}")
-            continue
+            print(f"  Error fetching page {page}: {str(e)}")
+            break
     
-    return all_data, mrp_party_name
+    print(f"[Dispatch History] Total dispatched barcodes: {len(mrp_lookup)}, Total dispatches: {len(all_dispatches)}")
+    return mrp_lookup, mrp_party_name
 
 
 @ftr_bp.route('/dispatch-tracking/<company_id>', methods=['GET'])
@@ -758,12 +817,12 @@ def get_dispatch_tracking(company_id):
         
         print(f"\n[Dispatch Tracking] Company ID: {company_id}, Name: {company_name}")
 
-        # Fetch data using same method as AI assistant
-        mrp_data, mrp_party_name = fetch_mrp_barcode_data(company_name)
+        # Fetch dispatch history from new MRP API
+        mrp_lookup, mrp_party_name = fetch_dispatch_history(company_name)
 
-        print(f"[Dispatch Tracking] Total records fetched: {len(mrp_data)}")
+        print(f"[Dispatch Tracking] Dispatch barcodes found: {len(mrp_lookup)}")
 
-        if not mrp_data:
+        if not mrp_lookup:
             return jsonify({
                 "success": True,
                 "company_name": company_name,
@@ -779,94 +838,78 @@ def get_dispatch_tracking(company_id):
                 },
                 "pdi_groups": [],
                 "vehicle_groups": [],
-                "message": "No data found in MRP system"
+                "dispatch_groups": [],
+                "message": "No dispatch data found in MRP system"
             })
-        total = len(mrp_data)
 
-        # ====================================================
-        # Process data using SAME logic as ai_assistant_routes
-        # MRP API returns FLAT data:
-        #   barcode, pallet_no, dispatch_party, running_order
-        # Status logic (from ai_assistant_routes.py):
-        #   - has dispatch_party → DISPATCHED
-        #   - has pallet_no but no dispatch_party → PACKED
-        #   - neither → PENDING (not in MRP / not packed yet)
-        # ====================================================
-        dispatched = 0
+        # All barcodes in dispatch history are dispatched
+        total = len(mrp_lookup)
+        dispatched = total
         packed = 0
         pending = 0
-        pallet_map = {}   # group by pallet_no
-        dispatch_party_map = {}  # group by dispatch_party
 
-        # Log first item to debug structure
-        if mrp_data:
-            sample = mrp_data[0]
-            print(f"[Dispatch Tracking] Sample record keys: {list(sample.keys())}")
-            print(f"[Dispatch Tracking] Sample record: barcode={sample.get('barcode','?')}, pallet_no={sample.get('pallet_no','?')}, dispatch_party={sample.get('dispatch_party','?')}")
+        # Group by vehicle_no (dispatch_party)
+        vehicle_map = {}
+        pallet_map = {}
 
-        for item in mrp_data:
-            barcode = item.get('barcode', '')
-            pallet_no = item.get('pallet_no', '')
-            dispatch_party = item.get('dispatch_party', '')
-            running_order = item.get('running_order', '')
+        for barcode, info in mrp_lookup.items():
+            vehicle = info.get('vehicle_no', '') or info.get('dispatch_party', '') or 'Unknown'
+            pallet_no = info.get('pallet_no', '')
+            dispatch_date = info.get('dispatch_date', '') or info.get('date', '')
+            invoice_no = info.get('invoice_no', '')
+            factory_name = info.get('factory_name', '')
 
-            if dispatch_party:
-                # DISPATCHED - has dispatch_party
-                dispatched += 1
+            # Group by vehicle
+            if vehicle not in vehicle_map:
+                vehicle_map[vehicle] = {
+                    'dispatch_party': vehicle,
+                    'vehicle_no': vehicle,
+                    'dispatch_date': dispatch_date,
+                    'invoice_no': invoice_no,
+                    'factory_name': factory_name,
+                    'module_count': 0,
+                    'pallets': set(),
+                    'serials': []
+                }
+            vehicle_map[vehicle]['module_count'] += 1
+            if pallet_no:
+                vehicle_map[vehicle]['pallets'].add(pallet_no)
+            if len(vehicle_map[vehicle]['serials']) < 50:
+                vehicle_map[vehicle]['serials'].append(barcode)
 
-                # Group by dispatch_party (acts like vehicle/shipment group)
-                if dispatch_party not in dispatch_party_map:
-                    dispatch_party_map[dispatch_party] = {
-                        'dispatch_party': dispatch_party,
-                        'module_count': 0,
-                        'pallets': set(),
-                        'serials': []
-                    }
-                dispatch_party_map[dispatch_party]['module_count'] += 1
-                if pallet_no:
-                    dispatch_party_map[dispatch_party]['pallets'].add(pallet_no)
-                if len(dispatch_party_map[dispatch_party]['serials']) < 50:
-                    dispatch_party_map[dispatch_party]['serials'].append(barcode)
-
-            elif pallet_no:
-                # PACKED - has pallet_no but no dispatch_party
-                packed += 1
-
-                # Group by pallet
+            # Group by pallet
+            if pallet_no:
                 if pallet_no not in pallet_map:
                     pallet_map[pallet_no] = {
                         'pallet_no': pallet_no,
                         'module_count': 0,
+                        'vehicle_no': vehicle,
+                        'dispatch_date': dispatch_date,
                         'serials': []
                     }
                 pallet_map[pallet_no]['module_count'] += 1
                 if len(pallet_map[pallet_no]['serials']) < 20:
                     pallet_map[pallet_no]['serials'].append(barcode)
-            else:
-                # PENDING - not packed, not dispatched
-                pending += 1
-
-        # Calculate percentages
-        packed_percent = round((packed / total) * 100) if total > 0 else 0
-        dispatched_percent = round((dispatched / total) * 100) if total > 0 else 0
-        pending_percent = round((pending / total) * 100) if total > 0 else 0
-
-        # Build pallet groups (packed pallets)
-        pallet_groups = sorted(pallet_map.values(), key=lambda x: str(x['pallet_no']))
 
         # Build dispatch groups
         dispatch_groups = []
-        for dp_name, dp_data in dispatch_party_map.items():
+        for v_name, v_data in vehicle_map.items():
             dispatch_groups.append({
-                'dispatch_party': dp_name,
-                'module_count': dp_data['module_count'],
-                'pallet_count': len(dp_data['pallets']),
-                'pallets': sorted(list(dp_data['pallets'])),
-                'serials': dp_data['serials']
+                'dispatch_party': v_name,
+                'vehicle_no': v_data['vehicle_no'],
+                'dispatch_date': v_data['dispatch_date'],
+                'invoice_no': v_data['invoice_no'],
+                'factory_name': v_data['factory_name'],
+                'module_count': v_data['module_count'],
+                'pallet_count': len(v_data['pallets']),
+                'pallets': sorted(list(v_data['pallets'])),
+                'serials': v_data['serials']
             })
         dispatch_groups.sort(key=lambda x: x['module_count'], reverse=True)
 
-        print(f"[Dispatch Tracking] Result: dispatched={dispatched}, packed={packed}, pending={pending}")
+        pallet_groups = sorted(pallet_map.values(), key=lambda x: str(x['pallet_no']))
+
+        print(f"[Dispatch Tracking] Result: dispatched={dispatched}, vehicles={len(vehicle_map)}, pallets={len(pallet_map)}")
 
         return jsonify({
             "success": True,
@@ -877,9 +920,9 @@ def get_dispatch_tracking(company_id):
                 "packed": packed,
                 "dispatched": dispatched,
                 "pending": pending,
-                "packed_percent": packed_percent,
-                "dispatched_percent": dispatched_percent,
-                "pending_percent": pending_percent
+                "packed_percent": 0,
+                "dispatched_percent": 100 if total > 0 else 0,
+                "pending_percent": 0
             },
             "pallet_groups": pallet_groups,
             "dispatch_groups": dispatch_groups
@@ -969,38 +1012,9 @@ def get_dispatch_tracking_pdi_wise(company_id):
 
         print(f"\n[PDI Dispatch] Company: {company_name}, PDIs: {list(pdi_serials_map.keys())}, Total serials: {len(all_serials_rows)}")
 
-        # Step 4: Fetch MRP data for this company (same as AI assistant)
-        mrp_data, mrp_party_name = fetch_mrp_barcode_data(company_name)
-        print(f"[PDI Dispatch] MRP records fetched: {len(mrp_data)}")
-
-        # Step 5: Build MRP lookup — barcode → {status, pallet_no, dispatch_party}
-        mrp_lookup = {}
-        for b in mrp_data:
-            barcode = b.get('barcode', '')
-            if barcode:
-                mrp_status = (b.get('status', '') or '').strip().lower()
-                dispatch_party = b.get('dispatch_party') or ''
-                if isinstance(dispatch_party, str):
-                    dispatch_party = dispatch_party.strip()
-                pallet_no = b.get('pallet_no', '')
-                if pallet_no is None:
-                    pallet_no = ''
-                pallet_no = str(pallet_no).strip()
-                
-                if mrp_status == 'dispatched' or (dispatch_party and dispatch_party != ''):
-                    status = 'Dispatched'
-                elif mrp_status == 'packed' or (pallet_no and pallet_no != ''):
-                    status = 'Packed'
-                else:
-                    status = 'Pending'
-
-                mrp_lookup[barcode] = {
-                    'pallet_no': pallet_no,
-                    'dispatch_party': dispatch_party,
-                    'status': status
-                }
-
-        print(f"[PDI Dispatch] MRP lookup size: {len(mrp_lookup)}")
+        # Step 4: Fetch dispatch history from new MRP API
+        mrp_lookup, mrp_party_name = fetch_dispatch_history(company_name)
+        print(f"[PDI Dispatch] Dispatch lookup built: {len(mrp_lookup)} barcodes")
 
         # Step 6: Cross-reference each PDI's serials with MRP data
         overall_dispatched = 0
@@ -1242,49 +1256,16 @@ def get_pdi_production_status(company_id):
 
         conn.close()
 
-        # 7. Fetch MRP data for dispatch status
+        # 7. Fetch dispatch history from NEW MRP API (party-dispatch-history.php)
         company_name = company['company_name']
         mrp_lookup = {}
         mrp_error = None
         try:
-            mrp_data, mrp_party_name = fetch_mrp_barcode_data(company_name)
-            print(f"[PDI Production] MRP records fetched: {len(mrp_data)} for party: {mrp_party_name}")
-            for b in mrp_data:
-                barcode = b.get('barcode', '')
-                if barcode:
-                    # MRP now returns 'status' field directly: "dispatched" / "packed"
-                    mrp_status = (b.get('status', '') or '').strip().lower()
-                    dispatch_party = b.get('dispatch_party') or ''
-                    if isinstance(dispatch_party, str):
-                        dispatch_party = dispatch_party.strip()
-                    pallet_no = b.get('pallet_no', '')
-                    if pallet_no is None:
-                        pallet_no = ''
-                    pallet_no = str(pallet_no).strip()
-                    packed_party = b.get('packed_party') or ''
-                    running_order = b.get('running_order') or ''
-                    mrp_date = b.get('date') or ''
-
-                    # Use MRP status field first, fallback to dispatch_party/pallet_no
-                    if mrp_status == 'dispatched' or (dispatch_party and dispatch_party != ''):
-                        status = 'Dispatched'
-                    elif mrp_status == 'packed' or (pallet_no and pallet_no != ''):
-                        status = 'Packed'
-                    else:
-                        status = 'Pending'
-
-                    mrp_lookup[barcode] = {
-                        'pallet_no': pallet_no,
-                        'dispatch_party': dispatch_party,
-                        'packed_party': packed_party,
-                        'running_order': running_order,
-                        'date': mrp_date,
-                        'status': status
-                    }
-            print(f"[PDI Production] MRP lookup built: {len(mrp_lookup)} barcodes")
+            mrp_lookup, mrp_party_name = fetch_dispatch_history(company_name)
+            print(f"[PDI Production] Dispatch lookup built: {len(mrp_lookup)} barcodes for party: {mrp_party_name}")
         except Exception as e:
             mrp_error = str(e)
-            print(f"[PDI Production] MRP fetch error: {e}")
+            print(f"[PDI Production] Dispatch fetch error: {e}")
 
         # 8. Build combined PDI-wise results
         all_pdis = sorted(set(
