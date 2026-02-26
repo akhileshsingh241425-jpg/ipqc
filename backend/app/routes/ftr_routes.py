@@ -672,15 +672,29 @@ COMPANY_NAME_MAP = {
     'KPI': 'KPI GREEN ENERGY LIMITED',
 }
 
-# Party IDs for dispatch history API
+# Party IDs for dispatch history API - exact mapping from MRP system
 PARTY_IDS = {
+    # Rays Power
     'rays power': '931db2c5-b016-4914-b378-69e9f22562a7',
+    'rays power infra': '931db2c5-b016-4914-b378-69e9f22562a7',
+    'rays power infra limited': '931db2c5-b016-4914-b378-69e9f22562a7',
+    'rays': '931db2c5-b016-4914-b378-69e9f22562a7',
+    # Larsen & Toubro
     'larsen & toubro': 'a005562f-568a-46e9-bf2e-700affb171e8',
+    'larsen and toubro': 'a005562f-568a-46e9-bf2e-700affb171e8',
+    'larsen & toubro limited': 'a005562f-568a-46e9-bf2e-700affb171e8',
     'l&t': 'a005562f-568a-46e9-bf2e-700affb171e8',
-    'sterlin and wilson': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'lnt': 'a005562f-568a-46e9-bf2e-700affb171e8',
+    # Sterling and Wilson
     'sterling and wilson': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'sterlin and wilson': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'sterling & wilson': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'sterling and wilson renewable energy limited': '141b81a0-2bab-4790-b825-3c8734d41484',
     's&w': '141b81a0-2bab-4790-b825-3c8734d41484',
+    'sw': '141b81a0-2bab-4790-b825-3c8734d41484',
+    # KPI Green Energy
     'kpi green energy': 'kpi-green-energy-party-id',
+    'kpi': 'kpi-green-energy-party-id',
 }
 
 
@@ -732,12 +746,24 @@ def fetch_dispatch_history(company_name):
     total_barcodes = 0
     api_debug = {'pages_fetched': 0, 'total_dispatches': 0, 'api_errors': []}
     
+    # Use wide date range to get all dispatch history
+    from datetime import datetime, timedelta
+    today = datetime.now().strftime('%Y-%m-%d')
+    from_date = '2024-01-01'  # Start from beginning of 2024
+    
     while True:
         try:
-            print(f"[Dispatch History] Calling API - page {page}, party_id: {party_id}")
+            payload = {
+                'party_id': party_id,
+                'from_date': from_date,
+                'to_date': today,
+                'page': page,
+                'limit': limit
+            }
+            print(f"[Dispatch History] Calling API - payload: {payload}")
             response = http_requests.post(
                 'https://umanmrp.in/api/party-dispatch-history.php',
-                json={'party_id': party_id, 'page': page, 'limit': limit},
+                json=payload,
                 timeout=60
             )
             print(f"[Dispatch History] API Response Status: {response.status_code}")
