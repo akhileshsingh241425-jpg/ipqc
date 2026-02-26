@@ -713,86 +713,58 @@ def normalize_company_name(name):
     """Normalize company name for matching - remove special chars, extra spaces"""
     import re
     name = name.strip().lower()
-    # Replace & with 'and' and also keep original
     name = re.sub(r'[&]+', ' and ', name)
-    # Remove special characters
     name = re.sub(r'[^a-z0-9\s]', '', name)
-    # Normalize whitespace
     name = re.sub(r'\s+', ' ', name).strip()
     return name
 
 
+# Party Dispatch History API
+DISPATCH_HISTORY_API = 'https://umanmrp.in/api/party-dispatch-history.php'
+
+
 def fetch_dispatch_history(company_name):
     """
-    Fetch dispatch history from NEW MRP API - party-dispatch-history.php
-    Returns mrp_lookup dict: barcode → {status, pallet_no, dispatch_date, vehicle_no, invoice_no, factory_name}
-    Handles pagination automatically (fetches ALL pages).
+    Fetch dispatch history from MRP API - party-dispatch-history.php
+    Uses party_id with from_date and to_date (1 year range)
+    Returns mrp_lookup dict: barcode → {status, pallet_no, dispatch_date, vehicle_no, etc.}
     """
     mrp_party_name = get_mrp_party_name_ftr(company_name)
     lower_name = company_name.strip().lower()
-    normalized_name = normalize_company_name(company_name)
     
-    print(f"[Dispatch History] Company: {company_name}")
-    print(f"[Dispatch History] lower_name: {lower_name}, normalized: {normalized_name}")
-    print(f"[Dispatch History] Available PARTY_IDS keys: {list(PARTY_IDS.keys())}")
+    print(f"[Dispatch History] Company: {company_name}, lower_name: {lower_name}")
     
-    # Get party_id from mapping - try multiple matching strategies
+    # Get party_id - keyword based matching
     party_id = None
-    
-    # Strategy 1: Exact match on lowercase
-    if lower_name in PARTY_IDS:
-        party_id = PARTY_IDS[lower_name]
-        print(f"[Dispatch History] Exact match found for: {lower_name}")
-    
-    # Strategy 2: Partial match
-    if not party_id:
-        for key, pid in PARTY_IDS.items():
-            if key in lower_name or lower_name in key:
-                print(f"[Dispatch History] Partial match: key={key}, lower_name={lower_name}")
-                party_id = pid
-                break
-    
-    # Strategy 3: Normalized name match
-    if not party_id:
-        for key, pid in PARTY_IDS.items():
-            normalized_key = normalize_company_name(key)
-            if normalized_key in normalized_name or normalized_name in normalized_key:
-                print(f"[Dispatch History] Normalized match: key={key}, normalized_key={normalized_key}")
-                party_id = pid
-                break
-    
-    # Strategy 4: Check for key words (rays, larsen, sterling, kpi)
-    if not party_id:
-        if 'rays' in lower_name:
-            party_id = '931db2c5-b016-4914-b378-69e9f22562a7'
-            print(f"[Dispatch History] Keyword match: rays")
-        elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
-            party_id = 'a005562f-568a-46e9-bf2e-700affb171e8'
-            print(f"[Dispatch History] Keyword match: larsen/l&t")
-        elif 'sterling' in lower_name or 's&w' in lower_name:
-            party_id = '141b81a0-2bab-4790-b825-3c8734d41484'
-            print(f"[Dispatch History] Keyword match: sterling/s&w")
-        elif 'kpi' in lower_name:
-            party_id = 'kpi-green-energy-party-id'
-            print(f"[Dispatch History] Keyword match: kpi")
+    if 'rays' in lower_name:
+        party_id = '931db2c5-b016-4914-b378-69e9f22562a7'
+        print(f"[Dispatch History] Matched: Rays Power")
+    elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
+        party_id = 'a005562f-568a-46e9-bf2e-700affb171e8'
+        print(f"[Dispatch History] Matched: Larsen & Toubro")
+    elif 'sterling' in lower_name or 'sterlin' in lower_name or 's&w' in lower_name:
+        party_id = '141b81a0-2bab-4790-b825-3c8734d41484'
+        print(f"[Dispatch History] Matched: Sterling and Wilson")
+    elif 'kpi' in lower_name:
+        party_id = 'kpi-green-energy-party-id'
+        print(f"[Dispatch History] Matched: KPI Green Energy")
     
     if not party_id:
         print(f"[Dispatch History] No party_id found for: {company_name}")
         return {}, mrp_party_name, None
     
-    print(f"[Dispatch History] Fetching for {company_name}, party_id: {party_id}")
+    print(f"[Dispatch History] Using party_id: {party_id}")
     
     mrp_lookup = {}
-    all_dispatches = []  # Store raw dispatch data for grouping
     page = 1
     limit = 50
     total_barcodes = 0
-    api_debug = {'pages_fetched': 0, 'total_dispatches': 0, 'api_errors': []}
+    total_dispatches = 0
     
-    # Use wide date range to get all dispatch history
-    from datetime import datetime, timedelta
+    # Date range - 1 year back to today
+    from datetime import datetime
     today = datetime.now().strftime('%Y-%m-%d')
-    from_date = '2024-01-01'  # Start from beginning of 2024
+    from_date = '2025-01-01'  # Start from 2025
     
     while True:
         try:
@@ -803,80 +775,78 @@ def fetch_dispatch_history(company_name):
                 'page': page,
                 'limit': limit
             }
-            print(f"[Dispatch History] Calling API - payload: {payload}")
+            print(f"[Dispatch History] API call page {page}: {payload}")
+            
             response = http_requests.post(
-                'https://umanmrp.in/api/party-dispatch-history.php',
+                DISPATCH_HISTORY_API,
                 json=payload,
                 timeout=60
             )
-            print(f"[Dispatch History] API Response Status: {response.status_code}")
+            
+            print(f"[Dispatch History] Response status: {response.status_code}")
+            
             if response.status_code == 200:
                 data = response.json()
-                print(f"[Dispatch History] API Response: status={data.get('status')}, dispatch_count={len(data.get('dispatch_summary', []))}")
+                
                 if data.get('status') == 'success':
                     dispatch_summary = data.get('dispatch_summary', [])
                     pagination = data.get('pagination', {})
                     
+                    print(f"[Dispatch History] Page {page}: {len(dispatch_summary)} dispatches, pagination: {pagination}")
+                    
                     for dispatch in dispatch_summary:
+                        dispatch_id = dispatch.get('dispatch_id', '')
                         dispatch_date = dispatch.get('dispatch_date', '')
                         vehicle_no = dispatch.get('vehicle_no', '')
                         invoice_no = dispatch.get('invoice_no', '')
                         factory_name = dispatch.get('factory_name', '')
-                        dispatch_id = dispatch.get('dispatch_id', '')
-                        total_qty = dispatch.get('total_qty', 0)
                         pallet_nos = dispatch.get('pallet_nos', {})
                         
-                        # Store raw dispatch for grouping
-                        all_dispatches.append(dispatch)
+                        total_dispatches += 1
                         
+                        # Parse pallet_nos - each pallet has space-separated serial numbers
                         if isinstance(pallet_nos, dict):
                             for pallet_no, barcodes_str in pallet_nos.items():
                                 if isinstance(barcodes_str, str):
+                                    # Split by space to get individual barcodes
                                     barcodes = barcodes_str.strip().split()
                                     for barcode in barcodes:
                                         barcode = barcode.strip().upper()
                                         if barcode:
-                                            dispatch_info = {
+                                            mrp_lookup[barcode] = {
                                                 'status': 'Dispatched',
                                                 'pallet_no': str(pallet_no),
-                                                'dispatch_party': vehicle_no,
-                                                'packed_party': '',
-                                                'running_order': '',
-                                                'date': dispatch_date,
-                                                'dispatch_date': dispatch_date,
+                                                'dispatch_party': factory_name,
                                                 'vehicle_no': vehicle_no,
+                                                'dispatch_date': dispatch_date,
                                                 'invoice_no': invoice_no,
-                                                'factory_name': factory_name,
-                                                'dispatch_id': dispatch_id
+                                                'dispatch_id': dispatch_id,
+                                                'date': dispatch_date
                                             }
-                                            # Store with original barcode
-                                            mrp_lookup[barcode] = dispatch_info
-                                            # Also store without GS prefix if present
-                                            if barcode.startswith('GS'):
-                                                mrp_lookup[barcode[2:]] = dispatch_info
-                                            # Also store just the numeric part (last 10 digits as serial)
-                                            if len(barcode) >= 10:
-                                                mrp_lookup[barcode[-10:]] = dispatch_info
                                             total_barcodes += 1
                     
-                    print(f"  Page {page}: {len(dispatch_summary)} dispatches, running total: {total_barcodes} barcodes")
+                    print(f"[Dispatch History] Running total: {total_barcodes} barcodes from {total_dispatches} dispatches")
                     
+                    # Check for next page
                     has_next = pagination.get('has_next_page', False)
                     if has_next:
                         page += 1
                     else:
                         break
                 else:
-                    print(f"  API returned status: {data.get('status')}")
+                    print(f"[Dispatch History] API status not success: {data.get('status')}, message: {data.get('message', 'N/A')}")
                     break
             else:
-                print(f"  API returned HTTP {response.status_code}")
+                print(f"[Dispatch History] HTTP error: {response.status_code}")
                 break
+                
         except Exception as e:
-            print(f"  Error fetching page {page}: {str(e)}")
+            print(f"[Dispatch History] Error on page {page}: {str(e)}")
+            import traceback
+            traceback.print_exc()
             break
     
-    print(f"[Dispatch History] Total dispatched barcodes: {len(mrp_lookup)}, Total dispatches: {len(all_dispatches)}")
+    print(f"[Dispatch History] FINAL: {len(mrp_lookup)} unique barcodes from {total_dispatches} dispatches")
     return mrp_lookup, mrp_party_name, party_id
 
 
@@ -1342,7 +1312,7 @@ def get_pdi_production_status(company_id):
 
         conn.close()
 
-        # 7. Fetch dispatch history from NEW MRP API (party-dispatch-history.php)
+        # 7. Fetch barcode tracking from MRP API (get_barcode_tracking.php)
         company_name = company['company_name']
         mrp_lookup = {}
         mrp_error = None
@@ -1350,7 +1320,7 @@ def get_pdi_production_status(company_id):
         used_party_id = None
         try:
             mrp_lookup, mrp_party_name, used_party_id = fetch_dispatch_history(company_name)
-            print(f"[PDI Production] Dispatch lookup built: {len(mrp_lookup)} barcodes for party: {mrp_party_name}, party_id: {used_party_id}")
+            print(f"[PDI Production] Dispatch lookup built: {len(mrp_lookup)} barcodes for party: {mrp_party_name}")
             
             # DEBUG: Log sample barcodes from MRP
             sample_mrp_barcodes = list(mrp_lookup.keys())[:5]
@@ -1363,19 +1333,11 @@ def get_pdi_production_status(company_id):
             sample_local_serials = all_local_serials[:5]
             print(f"[PDI Production] Sample LOCAL serials: {sample_local_serials}")
             
-            # DEBUG: Check if any match (with normalized lookup)
+            # DEBUG: Check if any match (simple uppercase comparison)
             def debug_find_match(serial_num):
-                """Check if serial matches any MRP barcode"""
+                """Check if serial matches any MRP barcode - simple uppercase match"""
                 serial_upper = serial_num.strip().upper()
-                if serial_upper in mrp_lookup:
-                    return True
-                if ('GS' + serial_upper) in mrp_lookup:
-                    return True
-                if serial_upper.startswith('GS') and serial_upper[2:] in mrp_lookup:
-                    return True
-                if len(serial_upper) >= 10 and serial_upper[-10:] in mrp_lookup:
-                    return True
-                return False
+                return serial_upper in mrp_lookup
             
             matches = [s for s in all_local_serials if debug_find_match(s)]
             print(f"[PDI Production] MATCHES: {len(matches)} out of {len(all_local_serials)} local serials")
@@ -1440,23 +1402,11 @@ def get_pdi_production_status(company_id):
             # Pallet-wise grouping
             pallet_groups = {}  # pallet_no -> {serials:[], status:'Dispatched'/'Packed', dispatch_party:'', date:''}
 
-            # Helper function to find serial in mrp_lookup with different formats
+            # Helper function to find serial in mrp_lookup - simple uppercase match
             def find_in_mrp_lookup(serial_num):
-                """Try multiple formats to find serial in MRP lookup"""
+                """Find serial in MRP lookup - simple uppercase match"""
                 serial_upper = serial_num.strip().upper()
-                # Try exact match first
-                if serial_upper in mrp_lookup:
-                    return mrp_lookup[serial_upper]
-                # Try with GS prefix
-                if ('GS' + serial_upper) in mrp_lookup:
-                    return mrp_lookup['GS' + serial_upper]
-                # Try without GS prefix
-                if serial_upper.startswith('GS') and serial_upper[2:] in mrp_lookup:
-                    return mrp_lookup[serial_upper[2:]]
-                # Try last 10 digits
-                if len(serial_upper) >= 10 and serial_upper[-10:] in mrp_lookup:
-                    return mrp_lookup[serial_upper[-10:]]
-                return None
+                return mrp_lookup.get(serial_upper)
 
             serials = pdi_serials_map.get(pdi, [])
             for serial in serials:
