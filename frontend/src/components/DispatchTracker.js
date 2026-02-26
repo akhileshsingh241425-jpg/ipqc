@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { companyService } from '../services/apiService';
 import '../styles/DispatchTracker.css';
+import * as XLSX from 'xlsx';
 
 const API_BASE_URL = window.location.hostname === 'localhost' 
   ? 'http://localhost:5003/api' 
@@ -16,6 +17,8 @@ const DispatchTracker = () => {
   const [serialModal, setSerialModal] = useState(null);
   const [activeTab, setActiveTab] = useState('summary');
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
+  const [serialSearch, setSerialSearch] = useState('');
+  const [searchResult, setSearchResult] = useState(null);
   const [newCompanyData, setNewCompanyData] = useState({
     companyName: '',
     moduleWattage: '',
@@ -88,6 +91,97 @@ const DispatchTracker = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Search serial number across all PDIs
+  const handleSerialSearch = () => {
+    if (!serialSearch.trim() || !productionData?.pdi_wise) {
+      setSearchResult(null);
+      return;
+    }
+    const searchTerm = serialSearch.trim().toUpperCase();
+    let found = null;
+    
+    for (const pdi of productionData.pdi_wise) {
+      // Check dispatched
+      const dispSerial = (pdi.dispatched_serials || []).find(s => s.serial?.toUpperCase().includes(searchTerm));
+      if (dispSerial) {
+        found = { pdi: pdi.pdi_number, serial: dispSerial.serial, status: 'Dispatched', pallet: dispSerial.pallet_no, color: '#22c55e' };
+        break;
+      }
+      // Check packed
+      const packSerial = (pdi.packed_serials || []).find(s => s.serial?.toUpperCase().includes(searchTerm));
+      if (packSerial) {
+        found = { pdi: pdi.pdi_number, serial: packSerial.serial, status: 'Packed', pallet: packSerial.pallet_no, color: '#f59e0b' };
+        break;
+      }
+      // Check not packed
+      const notPackSerial = (pdi.not_packed_serials || []).find(s => s.serial?.toUpperCase().includes(searchTerm));
+      if (notPackSerial) {
+        found = { pdi: pdi.pdi_number, serial: notPackSerial.serial, status: 'Not Packed', pallet: '—', color: '#ef4444' };
+        break;
+      }
+    }
+    setSearchResult(found);
+  };
+
+  // Export serials to Excel
+  const exportToExcel = (type) => {
+    if (!productionData?.pdi_wise) return;
+    
+    let allSerials = [];
+    const companyName = selectedCompany?.companyName || 'Company';
+    
+    productionData.pdi_wise.forEach(pdi => {
+      if (type === 'dispatched' || type === 'all') {
+        (pdi.dispatched_serials || []).forEach(s => {
+          allSerials.push({
+            'PDI Number': pdi.pdi_number,
+            'Serial Number': s.serial,
+            'Status': 'Dispatched',
+            'Pallet No': s.pallet_no || '',
+            'Dispatch Party': s.dispatch_party || '',
+            'Date': s.date || ''
+          });
+        });
+      }
+      if (type === 'packed' || type === 'all') {
+        (pdi.packed_serials || []).forEach(s => {
+          allSerials.push({
+            'PDI Number': pdi.pdi_number,
+            'Serial Number': s.serial,
+            'Status': 'Packed',
+            'Pallet No': s.pallet_no || '',
+            'Dispatch Party': '',
+            'Date': s.date || ''
+          });
+        });
+      }
+      if (type === 'not_packed' || type === 'all') {
+        (pdi.not_packed_serials || []).forEach(s => {
+          allSerials.push({
+            'PDI Number': pdi.pdi_number,
+            'Serial Number': s.serial,
+            'Status': 'Not Packed',
+            'Pallet No': '',
+            'Dispatch Party': '',
+            'Date': ''
+          });
+        });
+      }
+    });
+    
+    if (allSerials.length === 0) {
+      alert('No serials to export!');
+      return;
+    }
+    
+    const ws = XLSX.utils.json_to_sheet(allSerials);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Serials');
+    
+    const typeLabel = type === 'all' ? 'All' : type === 'dispatched' ? 'Dispatched' : type === 'packed' ? 'Packed' : 'NotPacked';
+    XLSX.writeFile(wb, `${companyName}_${typeLabel}_Serials_${new Date().toISOString().slice(0,10)}.xlsx`);
   };
 
   const togglePdiExpand = (pdiNumber) => {
@@ -262,6 +356,61 @@ const DispatchTracker = () => {
                 )}
               </div>
 
+              {/* Search Serial & Export Section */}
+              <div style={{background: '#f8fafc', borderRadius: '12px', padding: '16px', marginBottom: '20px', border: '1px solid #e2e8f0'}}>
+                <div style={{display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'flex-start'}}>
+                  {/* Serial Search */}
+                  <div style={{flex: '1 1 300px'}}>
+                    <label style={{fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px', display: 'block'}}>🔍 Search Serial Number</label>
+                    <div style={{display: 'flex', gap: '8px'}}>
+                      <input 
+                        type="text"
+                        value={serialSearch}
+                        onChange={(e) => setSerialSearch(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleSerialSearch()}
+                        placeholder="Enter serial number..."
+                        style={{flex: 1, padding: '10px 14px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px'}}
+                      />
+                      <button onClick={handleSerialSearch} style={{padding: '10px 16px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600}}>
+                        Search
+                      </button>
+                    </div>
+                    {searchResult && (
+                      <div style={{marginTop: '10px', padding: '12px', background: '#fff', borderRadius: '8px', border: `2px solid ${searchResult.color}`}}>
+                        <div style={{fontWeight: 600, color: '#334155'}}>✅ Found: <code style={{background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px'}}>{searchResult.serial}</code></div>
+                        <div style={{fontSize: '13px', color: '#64748b', marginTop: '4px'}}>
+                          PDI: <strong>{searchResult.pdi}</strong> | Status: <span style={{color: searchResult.color, fontWeight: 600}}>{searchResult.status}</span> | Pallet: {searchResult.pallet}
+                        </div>
+                      </div>
+                    )}
+                    {serialSearch && searchResult === null && (
+                      <div style={{marginTop: '10px', padding: '10px', background: '#fef2f2', borderRadius: '8px', color: '#991b1b', fontSize: '13px'}}>
+                        ❌ Serial not found in current data
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Excel Export Buttons */}
+                  <div style={{flex: '0 0 auto'}}>
+                    <label style={{fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px', display: 'block'}}>📥 Export to Excel</label>
+                    <div style={{display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
+                      <button onClick={() => exportToExcel('all')} style={{padding: '8px 12px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600}}>
+                        📥 All Data
+                      </button>
+                      <button onClick={() => exportToExcel('dispatched')} style={{padding: '8px 12px', background: '#22c55e', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600}}>
+                        🚚 Dispatched
+                      </button>
+                      <button onClick={() => exportToExcel('packed')} style={{padding: '8px 12px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600}}>
+                        📦 Packed
+                      </button>
+                      <button onClick={() => exportToExcel('not_packed')} style={{padding: '8px 12px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600}}>
+                        ⏳ Not Packed
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Overall Dispatch Progress Bar */}
               {totalFtrAssigned > 0 && (
                 <div className="section" style={{marginBottom: '20px'}}>
@@ -393,12 +542,12 @@ const DispatchTracker = () => {
                                   }
                                 </td>
                                 <td className="module-count">
-                                  {(pdi.dispatch_pending || 0) > 0 
+                                  {(pdi.dispatch_pending || pdi.not_packed || 0) > 0 
                                     ? <span className="badge clickable-badge" style={{background:'#fee2e2', color:'#991b1b'}} onClick={() => setSerialModal({
-                                        title: `${pdi.pdi_number} — Not Packed (${pdi.dispatch_pending.toLocaleString()})`,
-                                        serials: pdi.pending_serials || [],
-                                        type: 'pending'
-                                      })}>{pdi.dispatch_pending.toLocaleString()}</span>
+                                        title: `${pdi.pdi_number} — Not Packed (${(pdi.not_packed || pdi.dispatch_pending || 0).toLocaleString()})`,
+                                        serials: pdi.not_packed_serials || [],
+                                        type: 'not_packed'
+                                      })}>{(pdi.not_packed || pdi.dispatch_pending || 0).toLocaleString()}</span>
                                     : <span style={{color: '#22c55e', fontWeight: 600}}>✓</span>
                                   }
                                 </td>
@@ -629,15 +778,35 @@ const DispatchTracker = () => {
               <button className="close-btn" onClick={() => setSerialModal(null)}>✕</button>
             </div>
             <div style={{padding: '16px'}}>
+              {/* Export button in modal */}
+              <div style={{marginBottom: '12px', display: 'flex', justifyContent: 'flex-end'}}>
+                <button 
+                  onClick={() => {
+                    const data = serialModal.serials.map((s, i) => ({
+                      'S.No': i + 1,
+                      'Serial Number': s.serial,
+                      'Pallet No': s.pallet_no || '',
+                      'Status': serialModal.type === 'dispatched' ? 'Dispatched' : serialModal.type === 'packed' ? 'Packed' : 'Not Packed'
+                    }));
+                    const ws = XLSX.utils.json_to_sheet(data);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, 'Serials');
+                    XLSX.writeFile(wb, `${serialModal.title.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
+                  }}
+                  style={{padding: '8px 14px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600}}
+                >
+                  📥 Export to Excel
+                </button>
+              </div>
               {serialModal.serials.length > 0 ? (
                 <table className="pallet-table" style={{fontSize: '12px'}}>
                   <thead>
                     <tr>
                       <th>#</th>
                       <th>Barcode / Serial</th>
-                      {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && <th>Pallet No</th>}
+                      <th>Pallet No</th>
                       {serialModal.type === 'dispatched' && <th>Vehicle No</th>}
-                      {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && <th>Date</th>}
+                      {serialModal.type !== 'not_packed' && <th>Date</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -645,11 +814,9 @@ const DispatchTracker = () => {
                       <tr key={i}>
                         <td>{i + 1}</td>
                         <td style={{fontFamily: 'monospace', fontSize: '11px'}}>{s.serial}</td>
-                        {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && (
-                          <td><span className="badge" style={{background:'#e0e7ff', color:'#3730a3', fontSize:'10px'}}>{s.pallet_no || '—'}</span></td>
-                        )}
+                        <td><span className="badge" style={{background:'#e0e7ff', color:'#3730a3', fontSize:'10px'}}>{s.pallet_no || '—'}</span></td>
                         {serialModal.type === 'dispatched' && <td style={{fontSize: '11px'}}>{s.dispatch_party || '—'}</td>}
-                        {(serialModal.type === 'dispatched' || serialModal.type === 'packed') && <td style={{fontSize: '11px'}}>{s.date || '—'}</td>}
+                        {serialModal.type !== 'not_packed' && <td style={{fontSize: '11px'}}>{s.date || '—'}</td>}
                       </tr>
                     ))}
                   </tbody>
