@@ -725,8 +725,8 @@ DISPATCH_HISTORY_API = 'https://umanmrp.in/api/party-dispatch-history.php'
 
 def fetch_dispatch_history(company_name):
     """
-    Fetch dispatch history from MRP API - party-dispatch-history.php
-    Uses party_id with from_date and to_date (1 year range)
+    Fetch dispatch history from LOCAL CACHE (mrp_dispatch_cache table)
+    Falls back to MRP API if cache is empty.
     Returns mrp_lookup dict: barcode → {status, pallet_no, dispatch_date, vehicle_no, etc.}
     """
     mrp_party_name = get_mrp_party_name_ftr(company_name)
@@ -736,26 +736,69 @@ def fetch_dispatch_history(company_name):
     
     # Get party_id - keyword based matching
     party_id = None
+    matched_company = None
     if 'rays' in lower_name:
         party_id = '931db2c5-b016-4914-b378-69e9f22562a7'
+        matched_company = 'Rays Power'
         print(f"[Dispatch History] Matched: Rays Power")
     elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
         party_id = 'a005562f-568a-46e9-bf2e-700affb171e8'
+        matched_company = 'L&T'
         print(f"[Dispatch History] Matched: Larsen & Toubro")
     elif 'sterling' in lower_name or 'sterlin' in lower_name or 's&w' in lower_name:
         party_id = '141b81a0-2bab-4790-b825-3c8734d41484'
+        matched_company = 'Sterling'
         print(f"[Dispatch History] Matched: Sterling and Wilson")
     elif 'kpi' in lower_name:
         party_id = 'kpi-green-energy-party-id'
+        matched_company = 'KPI'
         print(f"[Dispatch History] Matched: KPI Green Energy")
     
     if not party_id:
         print(f"[Dispatch History] No party_id found for: {company_name}")
         return {}, mrp_party_name, None
     
-    print(f"[Dispatch History] Using party_id: {party_id}")
+    print(f"[Dispatch History] Using party_id: {party_id}, matched_company: {matched_company}")
     
     mrp_lookup = {}
+    
+    # ===== FIRST: Try to fetch from local cache =====
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT serial_number, pallet_no, status, dispatch_party, vehicle_no, 
+                       dispatch_date, invoice_no
+                FROM mrp_dispatch_cache 
+                WHERE company = %s
+            """, (matched_company,))
+            cache_rows = cursor.fetchall()
+        conn.close()
+        
+        print(f"[Dispatch History] LOCAL CACHE: Found {len(cache_rows)} serials for {matched_company}")
+        
+        if cache_rows:
+            for row in cache_rows:
+                barcode = row['serial_number'].strip().upper()
+                mrp_lookup[barcode] = {
+                    'status': row['status'] or 'Dispatched',
+                    'pallet_no': row['pallet_no'] or '',
+                    'dispatch_party': row['dispatch_party'] or '',
+                    'vehicle_no': row['vehicle_no'] or '',
+                    'dispatch_date': str(row['dispatch_date']) if row['dispatch_date'] else '',
+                    'invoice_no': row['invoice_no'] or '',
+                    'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
+                }
+            
+            print(f"[Dispatch History] Using LOCAL CACHE: {len(mrp_lookup)} barcodes")
+            return mrp_lookup, mrp_party_name, party_id
+            
+    except Exception as e:
+        print(f"[Dispatch History] Cache read error: {e}")
+    
+    # ===== FALLBACK: Fetch from MRP API =====
+    print(f"[Dispatch History] Cache empty, fetching from MRP API...")
+    
     page = 1
     limit = 50
     total_barcodes = 0
@@ -1521,4 +1564,265 @@ def get_pdi_production_status(company_id):
         print(f"[PDI Production] Error: {e}")
         import traceback
         traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+# ============ MRP DISPATCH CACHE ENDPOINTS ============
+
+@ftr_bp.route('/sync-mrp-dispatch', methods=['POST'])
+def sync_mrp_dispatch():
+    """
+    Sync dispatch data from MRP API to local cache table.
+    Fetches last 1 year of data for specified company.
+    """
+    try:
+        data = request.get_json() or {}
+        company_name = data.get('company', '')
+        
+        # Party ID mapping
+        PARTY_IDS = {
+            'Rays Power': '931db2c5-b016-4914-b378-69e9f22562a7',
+            'L&T': 'a005562f-568a-46e9-bf2e-700affb171e8', 
+            'Sterling': '141b81a0-2bab-4790-b825-3c8734d41484'
+        }
+        
+        # Find party_id for company
+        party_id = None
+        matched_company = None
+        for name, pid in PARTY_IDS.items():
+            if name.lower() in company_name.lower() or company_name.lower() in name.lower():
+                party_id = pid
+                matched_company = name
+                break
+        
+        if not party_id:
+            return jsonify({
+                "success": False, 
+                "error": f"No party ID found for company: {company_name}",
+                "available_companies": list(PARTY_IDS.keys())
+            }), 400
+        
+        # Date range - last 1 year
+        from datetime import datetime, timedelta
+        to_date = datetime.now().strftime('%Y-%m-%d')
+        from_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+        
+        print(f"[MRP Sync] Company: {company_name}, Party ID: {party_id}")
+        print(f"[MRP Sync] Date range: {from_date} to {to_date}")
+        
+        # Fetch from MRP API
+        all_barcodes = []
+        page = 1
+        limit = 100
+        total_pages = 1
+        
+        while page <= total_pages:
+            payload = {
+                "party_id": party_id,
+                "from_date": from_date,
+                "to_date": to_date,
+                "page": page,
+                "limit": limit
+            }
+            
+            response = http_requests.post(
+                "https://umanmrp.in/api/party-dispatch-history.php",
+                json=payload,
+                timeout=60
+            )
+            
+            if response.status_code != 200:
+                print(f"[MRP Sync] API error on page {page}: {response.status_code}")
+                break
+                
+            result = response.json()
+            
+            if page == 1:
+                total_records = result.get('total_records', 0)
+                total_pages = (total_records // limit) + (1 if total_records % limit > 0 else 0)
+                print(f"[MRP Sync] Total records: {total_records}, Total pages: {total_pages}")
+            
+            dispatch_summary = result.get('dispatch_summary', [])
+            
+            for item in dispatch_summary:
+                pallet_nos = item.get('pallet_nos', {})
+                status = item.get('status', 'Packed')
+                dispatch_party = item.get('dispatch_party', '')
+                vehicle_no = item.get('vehicle_no', '')
+                dispatch_date = item.get('dispatch_date') or item.get('date', '')
+                invoice_no = item.get('invoice_no', '')
+                
+                # Parse pallet_nos - each key is pallet number, value is space-separated serials
+                for pallet_no, serials_str in pallet_nos.items():
+                    if serials_str:
+                        serials = serials_str.strip().split()
+                        for serial in serials:
+                            serial = serial.strip()
+                            if serial:
+                                all_barcodes.append({
+                                    'serial_number': serial.upper(),
+                                    'pallet_no': pallet_no,
+                                    'status': status,
+                                    'dispatch_party': dispatch_party,
+                                    'vehicle_no': vehicle_no,
+                                    'dispatch_date': dispatch_date,
+                                    'invoice_no': invoice_no,
+                                    'company': matched_company,
+                                    'party_id': party_id
+                                })
+            
+            print(f"[MRP Sync] Page {page}/{total_pages} processed, {len(dispatch_summary)} records")
+            page += 1
+        
+        print(f"[MRP Sync] Total barcodes fetched: {len(all_barcodes)}")
+        
+        # Save to local database
+        conn = get_db_connection()
+        inserted = 0
+        updated = 0
+        
+        try:
+            with conn.cursor() as cursor:
+                for barcode in all_barcodes:
+                    # Use INSERT ... ON DUPLICATE KEY UPDATE
+                    cursor.execute("""
+                        INSERT INTO mrp_dispatch_cache 
+                        (serial_number, pallet_no, status, dispatch_party, vehicle_no, dispatch_date, invoice_no, company, party_id, synced_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        ON DUPLICATE KEY UPDATE
+                        pallet_no = VALUES(pallet_no),
+                        status = VALUES(status),
+                        dispatch_party = VALUES(dispatch_party),
+                        vehicle_no = VALUES(vehicle_no),
+                        dispatch_date = VALUES(dispatch_date),
+                        invoice_no = VALUES(invoice_no),
+                        company = VALUES(company),
+                        party_id = VALUES(party_id),
+                        synced_at = NOW()
+                    """, (
+                        barcode['serial_number'],
+                        barcode['pallet_no'],
+                        barcode['status'],
+                        barcode['dispatch_party'],
+                        barcode['vehicle_no'],
+                        barcode['dispatch_date'] if barcode['dispatch_date'] else None,
+                        barcode['invoice_no'],
+                        barcode['company'],
+                        barcode['party_id']
+                    ))
+                    
+                    if cursor.rowcount == 1:
+                        inserted += 1
+                    elif cursor.rowcount == 2:
+                        updated += 1
+                
+                conn.commit()
+                
+                # Get total count
+                cursor.execute("SELECT COUNT(*) as total FROM mrp_dispatch_cache WHERE company = %s", (matched_company,))
+                total_in_db = cursor.fetchone()['total']
+                
+        finally:
+            conn.close()
+        
+        return jsonify({
+            "success": True,
+            "company": matched_company,
+            "party_id": party_id,
+            "date_range": {"from": from_date, "to": to_date},
+            "fetched_from_api": len(all_barcodes),
+            "inserted": inserted,
+            "updated": updated,
+            "total_in_cache": total_in_db
+        })
+        
+    except Exception as e:
+        print(f"[MRP Sync] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@ftr_bp.route('/mrp-cache-stats', methods=['GET'])
+def mrp_cache_stats():
+    """Get statistics about MRP dispatch cache"""
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Get stats by company
+            cursor.execute("""
+                SELECT 
+                    company,
+                    COUNT(*) as total_serials,
+                    COUNT(DISTINCT pallet_no) as total_pallets,
+                    SUM(CASE WHEN status = 'Dispatched' THEN 1 ELSE 0 END) as dispatched,
+                    SUM(CASE WHEN status = 'Packed' THEN 1 ELSE 0 END) as packed,
+                    MIN(synced_at) as first_sync,
+                    MAX(synced_at) as last_sync
+                FROM mrp_dispatch_cache
+                GROUP BY company
+            """)
+            stats = cursor.fetchall()
+            
+            # Get total
+            cursor.execute("SELECT COUNT(*) as total FROM mrp_dispatch_cache")
+            total = cursor.fetchone()['total']
+            
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "total_cached": total,
+            "by_company": stats
+        })
+        
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@ftr_bp.route('/mrp-cache-search', methods=['GET'])
+def mrp_cache_search():
+    """Search serials in MRP cache"""
+    try:
+        serial = request.args.get('serial', '').strip().upper()
+        company = request.args.get('company', '')
+        pallet = request.args.get('pallet', '')
+        limit = int(request.args.get('limit', 100))
+        
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            query = "SELECT * FROM mrp_dispatch_cache WHERE 1=1"
+            params = []
+            
+            if serial:
+                query += " AND serial_number LIKE %s"
+                params.append(f"%{serial}%")
+            if company:
+                query += " AND company LIKE %s"
+                params.append(f"%{company}%")
+            if pallet:
+                query += " AND pallet_no LIKE %s"
+                params.append(f"%{pallet}%")
+            
+            query += " ORDER BY synced_at DESC LIMIT %s"
+            params.append(limit)
+            
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            
+        conn.close()
+        
+        # Convert dates to strings
+        for r in results:
+            if r.get('dispatch_date'):
+                r['dispatch_date'] = str(r['dispatch_date'])
+            if r.get('synced_at'):
+                r['synced_at'] = str(r['synced_at'])
+        
+        return jsonify({
+            "success": True,
+            "count": len(results),
+            "results": results
+        })
+        
+    except Exception as e:
         return jsonify({"success": False, "error": str(e)}), 500
