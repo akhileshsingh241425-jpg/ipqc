@@ -723,12 +723,133 @@ def normalize_company_name(name):
 DISPATCH_HISTORY_API = 'https://umanmrp.in/api/party-dispatch-history.php'
 
 
+def auto_sync_mrp_cache(matched_company, party_id):
+    """
+    Automatically sync MRP dispatch data to local cache.
+    Called when cache is empty or stale (older than 1 hour).
+    """
+    from datetime import datetime, timedelta
+    
+    print(f"[Auto Sync] Starting sync for {matched_company}...")
+    
+    # Date range - last 1 year
+    to_date = datetime.now().strftime('%Y-%m-%d')
+    from_date = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d')
+    
+    all_barcodes = []
+    page = 1
+    limit = 100
+    total_pages = 1
+    
+    while page <= total_pages:
+        try:
+            payload = {
+                "party_id": party_id,
+                "from_date": from_date,
+                "to_date": to_date,
+                "page": page,
+                "limit": limit
+            }
+            
+            response = http_requests.post(
+                "https://umanmrp.in/api/party-dispatch-history.php",
+                json=payload,
+                timeout=60
+            )
+            
+            if response.status_code != 200:
+                print(f"[Auto Sync] API error on page {page}: {response.status_code}")
+                break
+                
+            result = response.json()
+            
+            if page == 1:
+                total_records = result.get('total_records', 0)
+                total_pages = (total_records // limit) + (1 if total_records % limit > 0 else 0)
+                print(f"[Auto Sync] Total records: {total_records}, Total pages: {total_pages}")
+            
+            dispatch_summary = result.get('dispatch_summary', [])
+            
+            for item in dispatch_summary:
+                pallet_nos = item.get('pallet_nos', {})
+                status = item.get('status', 'Packed')
+                dispatch_party = item.get('dispatch_party', '')
+                vehicle_no = item.get('vehicle_no', '')
+                dispatch_date = item.get('dispatch_date') or item.get('date', '')
+                invoice_no = item.get('invoice_no', '')
+                
+                if isinstance(pallet_nos, dict):
+                    for pallet_no, serials_str in pallet_nos.items():
+                        if serials_str and isinstance(serials_str, str):
+                            serials = serials_str.strip().split()
+                            for serial in serials:
+                                serial = serial.strip()
+                                if serial:
+                                    all_barcodes.append({
+                                        'serial_number': serial.upper(),
+                                        'pallet_no': pallet_no,
+                                        'status': status,
+                                        'dispatch_party': dispatch_party,
+                                        'vehicle_no': vehicle_no,
+                                        'dispatch_date': dispatch_date,
+                                        'invoice_no': invoice_no,
+                                        'company': matched_company,
+                                        'party_id': party_id
+                                    })
+            
+            page += 1
+        except Exception as e:
+            print(f"[Auto Sync] Error on page {page}: {e}")
+            break
+    
+    print(f"[Auto Sync] Fetched {len(all_barcodes)} barcodes from MRP API")
+    
+    # Save to database
+    if all_barcodes:
+        try:
+            conn = get_db_connection()
+            with conn.cursor() as cursor:
+                for barcode in all_barcodes:
+                    cursor.execute("""
+                        INSERT INTO mrp_dispatch_cache 
+                        (serial_number, pallet_no, status, dispatch_party, vehicle_no, dispatch_date, invoice_no, company, party_id, synced_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                        ON DUPLICATE KEY UPDATE
+                        pallet_no = VALUES(pallet_no),
+                        status = VALUES(status),
+                        dispatch_party = VALUES(dispatch_party),
+                        vehicle_no = VALUES(vehicle_no),
+                        dispatch_date = VALUES(dispatch_date),
+                        invoice_no = VALUES(invoice_no),
+                        synced_at = NOW()
+                    """, (
+                        barcode['serial_number'],
+                        barcode['pallet_no'],
+                        barcode['status'],
+                        barcode['dispatch_party'],
+                        barcode['vehicle_no'],
+                        barcode['dispatch_date'] if barcode['dispatch_date'] else None,
+                        barcode['invoice_no'],
+                        barcode['company'],
+                        barcode['party_id']
+                    ))
+                conn.commit()
+            conn.close()
+            print(f"[Auto Sync] Saved {len(all_barcodes)} barcodes to local cache")
+        except Exception as e:
+            print(f"[Auto Sync] DB save error: {e}")
+    
+    return len(all_barcodes)
+
+
 def fetch_dispatch_history(company_name):
     """
     Fetch dispatch history from LOCAL CACHE (mrp_dispatch_cache table)
-    Falls back to MRP API if cache is empty.
+    Auto-syncs from MRP API if cache is empty or older than 1 hour.
     Returns mrp_lookup dict: barcode → {status, pallet_no, dispatch_date, vehicle_no, etc.}
     """
+    from datetime import datetime, timedelta
+    
     mrp_party_name = get_mrp_party_name_ftr(company_name)
     lower_name = company_name.strip().lower()
     
@@ -762,7 +883,48 @@ def fetch_dispatch_history(company_name):
     
     mrp_lookup = {}
     
-    # ===== FIRST: Try to fetch from local cache =====
+    # ===== Check if cache needs refresh (empty or older than 1 hour) =====
+    needs_sync = False
+    cache_count = 0
+    last_sync = None
+    
+    try:
+        conn = get_db_connection()
+        with conn.cursor() as cursor:
+            # Check cache count and last sync time
+            cursor.execute("""
+                SELECT COUNT(*) as cnt, MAX(synced_at) as last_sync 
+                FROM mrp_dispatch_cache 
+                WHERE company = %s
+            """, (matched_company,))
+            result = cursor.fetchone()
+            cache_count = result['cnt'] or 0
+            last_sync = result['last_sync']
+        conn.close()
+        
+        if cache_count == 0:
+            needs_sync = True
+            print(f"[Dispatch History] Cache EMPTY - will sync")
+        elif last_sync:
+            # Check if older than 1 hour
+            time_diff = datetime.now() - last_sync
+            if time_diff > timedelta(hours=1):
+                needs_sync = True
+                print(f"[Dispatch History] Cache STALE ({time_diff}) - will sync")
+            else:
+                print(f"[Dispatch History] Cache FRESH (synced {time_diff} ago)")
+        else:
+            needs_sync = True
+            
+    except Exception as e:
+        print(f"[Dispatch History] Cache check error: {e}")
+        needs_sync = True
+    
+    # ===== Auto sync if needed =====
+    if needs_sync:
+        auto_sync_mrp_cache(matched_company, party_id)
+    
+    # ===== Fetch from local cache =====
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
@@ -777,27 +939,26 @@ def fetch_dispatch_history(company_name):
         
         print(f"[Dispatch History] LOCAL CACHE: Found {len(cache_rows)} serials for {matched_company}")
         
-        if cache_rows:
-            for row in cache_rows:
-                barcode = row['serial_number'].strip().upper()
-                mrp_lookup[barcode] = {
-                    'status': row['status'] or 'Dispatched',
-                    'pallet_no': row['pallet_no'] or '',
-                    'dispatch_party': row['dispatch_party'] or '',
-                    'vehicle_no': row['vehicle_no'] or '',
-                    'dispatch_date': str(row['dispatch_date']) if row['dispatch_date'] else '',
-                    'invoice_no': row['invoice_no'] or '',
-                    'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
-                }
-            
-            print(f"[Dispatch History] Using LOCAL CACHE: {len(mrp_lookup)} barcodes")
-            return mrp_lookup, mrp_party_name, party_id
+        for row in cache_rows:
+            barcode = row['serial_number'].strip().upper()
+            mrp_lookup[barcode] = {
+                'status': row['status'] or 'Dispatched',
+                'pallet_no': row['pallet_no'] or '',
+                'dispatch_party': row['dispatch_party'] or '',
+                'vehicle_no': row['vehicle_no'] or '',
+                'dispatch_date': str(row['dispatch_date']) if row['dispatch_date'] else '',
+                'invoice_no': row['invoice_no'] or '',
+                'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
+            }
+        
+        print(f"[Dispatch History] Returning {len(mrp_lookup)} barcodes from cache")
+        return mrp_lookup, mrp_party_name, party_id
             
     except Exception as e:
         print(f"[Dispatch History] Cache read error: {e}")
     
-    # ===== FALLBACK: Fetch from MRP API =====
-    print(f"[Dispatch History] Cache empty, fetching from MRP API...")
+    # ===== FALLBACK: Direct fetch from MRP API =====
+    print(f"[Dispatch History] Fallback to direct MRP API fetch...")
     
     page = 1
     limit = 50
@@ -805,7 +966,6 @@ def fetch_dispatch_history(company_name):
     total_dispatches = 0
     
     # Date range - 1 year back to today
-    from datetime import datetime
     today = datetime.now().strftime('%Y-%m-%d')
     from_date = '2025-01-01'  # Start from 2025
     
