@@ -978,10 +978,22 @@ def get_dispatch_tracking_pdi_wise(company_id):
         for b in mrp_data:
             barcode = b.get('barcode', '')
             if barcode:
+                dispatch_party = b.get('dispatch_party', '') or ''
+                pallet_no = b.get('pallet_no', '') or ''
+                dispatch_party = dispatch_party.strip()
+                pallet_no = pallet_no.strip()
+                
+                if dispatch_party:
+                    status = 'Dispatched'
+                elif pallet_no:
+                    status = 'Packed'
+                else:
+                    status = 'Pending'
+
                 mrp_lookup[barcode] = {
-                    'pallet_no': b.get('pallet_no', ''),
-                    'dispatch_party': b.get('dispatch_party', ''),
-                    'status': 'Dispatched' if b.get('dispatch_party') else 'Packed'
+                    'pallet_no': pallet_no,
+                    'dispatch_party': dispatch_party,
+                    'status': status
                 }
 
         print(f"[PDI Dispatch] MRP lookup size: {len(mrp_lookup)}")
@@ -1004,6 +1016,11 @@ def get_dispatch_tracking_pdi_wise(company_id):
             pending = 0
             dispatch_parties = {}
 
+            # Collect serial details for click-through
+            dispatched_serials = []
+            packed_serials = []
+            pending_serials = []
+
             for serial in serials:
                 if serial in mrp_lookup:
                     info = mrp_lookup[serial]
@@ -1013,10 +1030,27 @@ def get_dispatch_tracking_pdi_wise(company_id):
                         if dp not in dispatch_parties:
                             dispatch_parties[dp] = 0
                         dispatch_parties[dp] += 1
-                    else:
+                        if len(dispatched_serials) < 500:
+                            dispatched_serials.append({
+                                'serial': serial,
+                                'pallet_no': info['pallet_no'],
+                                'dispatch_party': info['dispatch_party']
+                            })
+                    elif info['status'] == 'Packed':
                         packed += 1
+                        if len(packed_serials) < 500:
+                            packed_serials.append({
+                                'serial': serial,
+                                'pallet_no': info['pallet_no']
+                            })
+                    else:
+                        pending += 1
+                        if len(pending_serials) < 200:
+                            pending_serials.append({'serial': serial})
                 else:
                     pending += 1
+                    if len(pending_serials) < 200:
+                        pending_serials.append({'serial': serial})
 
             total = dispatched + packed + pending
             overall_dispatched += dispatched
@@ -1034,7 +1068,10 @@ def get_dispatch_tracking_pdi_wise(company_id):
                 'packed_percent': round((packed / total) * 100) if total > 0 else 0,
                 'pending_percent': round((pending / total) * 100) if total > 0 else 0,
                 'assigned_date': str(assigned_date) if assigned_date else '',
-                'dispatch_parties': [{'party': k, 'count': v} for k, v in sorted(dispatch_parties.items(), key=lambda x: x[1], reverse=True)]
+                'dispatch_parties': [{'party': k, 'count': v} for k, v in sorted(dispatch_parties.items(), key=lambda x: x[1], reverse=True)],
+                'dispatched_serials': dispatched_serials,
+                'packed_serials': packed_serials,
+                'pending_serials': pending_serials
             })
 
         # Calculate overall percentages

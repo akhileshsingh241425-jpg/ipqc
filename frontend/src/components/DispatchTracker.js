@@ -13,6 +13,7 @@ const DispatchTracker = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [showNewCompanyModal, setShowNewCompanyModal] = useState(false);
+  const [serialModal, setSerialModal] = useState(null); // {title, serials, type}
   const [newCompanyData, setNewCompanyData] = useState({
     companyName: '',
     moduleWattage: '',
@@ -65,7 +66,10 @@ const DispatchTracker = () => {
             dispatched: dispatchMap[pdi.pdi_number]?.dispatched || 0,
             packed: dispatchMap[pdi.pdi_number]?.packed || 0,
             dispatch_pending: dispatchMap[pdi.pdi_number]?.pending || 0,
-            dispatch_parties: dispatchMap[pdi.pdi_number]?.dispatch_parties || []
+            dispatch_parties: dispatchMap[pdi.pdi_number]?.dispatch_parties || [],
+            dispatched_serials: dispatchMap[pdi.pdi_number]?.dispatched_serials || [],
+            packed_serials: dispatchMap[pdi.pdi_number]?.packed_serials || [],
+            pending_serials: dispatchMap[pdi.pdi_number]?.pending_serials || []
           }));
         }
         setProductionData(prodResult);
@@ -278,19 +282,31 @@ const DispatchTracker = () => {
                             </td>
                             <td className="module-count">
                               {(pdi.dispatched || 0) > 0
-                                ? <span className="badge">{pdi.dispatched.toLocaleString()}</span>
+                                ? <span className="badge clickable-badge" onClick={() => setSerialModal({
+                                    title: `${pdi.pdi_number} — Dispatched (${pdi.dispatched.toLocaleString()})`,
+                                    serials: pdi.dispatched_serials || [],
+                                    type: 'dispatched'
+                                  })}>{pdi.dispatched.toLocaleString()}</span>
                                 : <span style={{color: '#999'}}>0</span>
                               }
                             </td>
                             <td className="module-count">
                               {(pdi.packed || 0) > 0
-                                ? <span className="badge packed-badge">{pdi.packed.toLocaleString()}</span>
+                                ? <span className="badge packed-badge clickable-badge" onClick={() => setSerialModal({
+                                    title: `${pdi.pdi_number} — Packed (${pdi.packed.toLocaleString()})`,
+                                    serials: pdi.packed_serials || [],
+                                    type: 'packed'
+                                  })}>{pdi.packed.toLocaleString()}</span>
                                 : <span style={{color: '#999'}}>0</span>
                               }
                             </td>
                             <td className="module-count">
                               {(pdi.dispatch_pending || 0) > 0 
-                                ? <span className="badge pending-badge">{pdi.dispatch_pending.toLocaleString()}</span>
+                                ? <span className="badge pending-badge clickable-badge" onClick={() => setSerialModal({
+                                    title: `${pdi.pdi_number} — Dispatch Pending (${pdi.dispatch_pending.toLocaleString()})`,
+                                    serials: pdi.pending_serials || [],
+                                    type: 'pending'
+                                  })}>{pdi.dispatch_pending.toLocaleString()}</span>
                                 : <span style={{color: '#22c55e', fontWeight: 600}}>✓ Done</span>
                               }
                             </td>
@@ -352,6 +368,51 @@ const DispatchTracker = () => {
           )}
         </div>
       </div>
+
+      {/* Serial Detail Modal */}
+      {serialModal && (
+        <div className="modal-overlay" onClick={() => setSerialModal(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{maxWidth: '800px', maxHeight: '80vh', overflow: 'auto'}}>
+            <div className="modal-header">
+              <h2>{serialModal.title}</h2>
+              <button className="close-btn" onClick={() => setSerialModal(null)}>✕</button>
+            </div>
+            <div style={{padding: '16px'}}>
+              {serialModal.serials.length > 0 ? (
+                <table className="pallet-table" style={{fontSize: '12px'}}>
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Barcode / Serial</th>
+                      {serialModal.type === 'dispatched' && <th>Pallet No</th>}
+                      {serialModal.type === 'dispatched' && <th>Dispatch Party</th>}
+                      {serialModal.type === 'packed' && <th>Pallet No</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {serialModal.serials.map((s, i) => (
+                      <tr key={i}>
+                        <td>{i + 1}</td>
+                        <td style={{fontFamily: 'monospace', fontSize: '11px'}}>{s.serial}</td>
+                        {serialModal.type === 'dispatched' && <td><span className="badge packed-badge" style={{fontSize: '10px'}}>{s.pallet_no || '—'}</span></td>}
+                        {serialModal.type === 'dispatched' && <td style={{fontSize: '11px'}}>{s.dispatch_party || '—'}</td>}
+                        {serialModal.type === 'packed' && <td><span className="badge packed-badge" style={{fontSize: '10px'}}>{s.pallet_no || '—'}</span></td>}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p style={{textAlign: 'center', color: '#999'}}>No serial details available (data limited to 500 records)</p>
+              )}
+              {serialModal.serials.length >= 500 && (
+                <p style={{textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: '10px'}}>
+                  Showing first 500 of total serials
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Company Modal */}
       {showNewCompanyModal && (
