@@ -742,3 +742,84 @@
     font-size: 20px;
   }
 }
+
+/* Tab Switcher */
+.tab-switcher {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.tab-btn:hover {
+  color: #3b82f6;
+  background: #f0f7ff;
+  border-radius: 8px 8px 0 0;
+}
+
+.tab-btn.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  background: #eff6ff;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Progress Bar */
+.progress-bar-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.progress-bar {
+  height: 10px;
+  background: #f1f5f9;
+  border-radius: 5px;
+  overflow: hidden;
+  display: flex;
+}
+
+.progress-dispatched {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  height: 100%;
+  transition: width 0.5s ease;
+}
+
+.progress-packed {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  height: 100%;
+  transition: width 0.5s ease;
+}
+
+.progress-text {
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+}
+
+/* PDI Number Column */
+.pdi-number {
+  color: #2563eb;
+}
+
+/* Stat sub text */
+.stat-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 2px;
+}

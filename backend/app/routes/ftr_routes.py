@@ -900,3 +900,170 @@ def get_dispatch_tracking(company_id):
             "success": False,
             "error": str(e)
         }), 500
+
+
+@ftr_bp.route('/dispatch-tracking-pdi/<int:company_id>', methods=['GET'])
+def get_dispatch_tracking_pdi_wise(company_id):
+    """
+    PDI-wise dispatch tracking — cross-references ftr_master_serials with MRP data.
+    Same logic as ai_assistant_routes.py check_pdi_dispatch_status().
+    
+    1. Gets all PDI assignments from ftr_master_serials
+    2. Fetches MRP barcode data for the company
+    3. Cross-references each serial to classify: Dispatched / Packed / Pending
+    4. Returns PDI-wise breakdown
+    """
+    try:
+        # Step 1: Get company info
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM companies WHERE id = %s", (company_id,))
+        company = cursor.fetchone()
+
+        if not company:
+            cursor.close()
+            conn.close()
+            return jsonify({"success": False, "error": "Company not found"}), 404
+
+        company_name = company.get('company_name') or company.get('companyName', '')
+
+        # Step 2: Get all PDI assignments from ftr_master_serials
+        cursor.execute("""
+            SELECT pdi_number, COUNT(*) as total, MIN(assigned_date) as assigned_date
+            FROM ftr_master_serials
+            WHERE company_id = %s AND status = 'assigned' AND pdi_number IS NOT NULL
+            GROUP BY pdi_number
+            ORDER BY assigned_date DESC
+        """, (company_id,))
+        pdi_assignments = cursor.fetchall()
+
+        if not pdi_assignments:
+            cursor.close()
+            conn.close()
+            return jsonify({
+                "success": True,
+                "company_name": company_name,
+                "message": "No PDI assignments found for this company",
+                "summary": {"total": 0, "dispatched": 0, "packed": 0, "pending": 0},
+                "pdi_wise": []
+            })
+
+        # Step 3: Get ALL serials for this company from ftr_master_serials
+        cursor.execute("""
+            SELECT serial_number, pdi_number
+            FROM ftr_master_serials
+            WHERE company_id = %s AND status = 'assigned' AND pdi_number IS NOT NULL
+        """, (company_id,))
+        all_serials_rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+
+        # Build PDI → serials mapping
+        pdi_serials_map = {}
+        for row in all_serials_rows:
+            serial = row['serial_number']
+            pdi = row['pdi_number']
+            if pdi not in pdi_serials_map:
+                pdi_serials_map[pdi] = []
+            pdi_serials_map[pdi].append(serial)
+
+        print(f"\n[PDI Dispatch] Company: {company_name}, PDIs: {list(pdi_serials_map.keys())}, Total serials: {len(all_serials_rows)}")
+
+        # Step 4: Fetch MRP data for this company (same as AI assistant)
+        mrp_data, mrp_party_name = fetch_mrp_barcode_data(company_name)
+        print(f"[PDI Dispatch] MRP records fetched: {len(mrp_data)}")
+
+        # Step 5: Build MRP lookup — barcode → {status, pallet_no, dispatch_party}
+        mrp_lookup = {}
+        for b in mrp_data:
+            barcode = b.get('barcode', '')
+            if barcode:
+                mrp_lookup[barcode] = {
+                    'pallet_no': b.get('pallet_no', ''),
+                    'dispatch_party': b.get('dispatch_party', ''),
+                    'status': 'Dispatched' if b.get('dispatch_party') else 'Packed'
+                }
+
+        print(f"[PDI Dispatch] MRP lookup size: {len(mrp_lookup)}")
+
+        # Step 6: Cross-reference each PDI's serials with MRP data
+        overall_dispatched = 0
+        overall_packed = 0
+        overall_pending = 0
+        overall_total = 0
+        pdi_wise_results = []
+
+        for pdi_info in pdi_assignments:
+            pdi_number = pdi_info['pdi_number']
+            pdi_total = pdi_info['total']
+            assigned_date = pdi_info['assigned_date']
+            serials = pdi_serials_map.get(pdi_number, [])
+
+            dispatched = 0
+            packed = 0
+            pending = 0
+            dispatch_parties = {}
+
+            for serial in serials:
+                if serial in mrp_lookup:
+                    info = mrp_lookup[serial]
+                    if info['status'] == 'Dispatched':
+                        dispatched += 1
+                        dp = info['dispatch_party']
+                        if dp not in dispatch_parties:
+                            dispatch_parties[dp] = 0
+                        dispatch_parties[dp] += 1
+                    else:
+                        packed += 1
+                else:
+                    pending += 1
+
+            total = dispatched + packed + pending
+            overall_dispatched += dispatched
+            overall_packed += packed
+            overall_pending += pending
+            overall_total += total
+
+            pdi_wise_results.append({
+                'pdi_number': pdi_number,
+                'total': total,
+                'dispatched': dispatched,
+                'packed': packed,
+                'pending': pending,
+                'dispatched_percent': round((dispatched / total) * 100) if total > 0 else 0,
+                'packed_percent': round((packed / total) * 100) if total > 0 else 0,
+                'pending_percent': round((pending / total) * 100) if total > 0 else 0,
+                'assigned_date': str(assigned_date) if assigned_date else '',
+                'dispatch_parties': [{'party': k, 'count': v} for k, v in sorted(dispatch_parties.items(), key=lambda x: x[1], reverse=True)]
+            })
+
+        # Calculate overall percentages
+        overall_dispatched_pct = round((overall_dispatched / overall_total) * 100) if overall_total > 0 else 0
+        overall_packed_pct = round((overall_packed / overall_total) * 100) if overall_total > 0 else 0
+        overall_pending_pct = round((overall_pending / overall_total) * 100) if overall_total > 0 else 0
+
+        print(f"[PDI Dispatch] Result: total={overall_total}, dispatched={overall_dispatched}, packed={overall_packed}, pending={overall_pending}")
+
+        return jsonify({
+            "success": True,
+            "company_name": company_name,
+            "mrp_party_name": mrp_party_name,
+            "summary": {
+                "total": overall_total,
+                "dispatched": overall_dispatched,
+                "packed": overall_packed,
+                "pending": overall_pending,
+                "dispatched_percent": overall_dispatched_pct,
+                "packed_percent": overall_packed_pct,
+                "pending_percent": overall_pending_pct
+            },
+            "pdi_wise": pdi_wise_results
+        })
+
+    except http_requests.exceptions.Timeout:
+        return jsonify({"success": False, "error": "MRP API timed out. Please try again."}), 504
+    except Exception as e:
+        print(f"[PDI Dispatch] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
