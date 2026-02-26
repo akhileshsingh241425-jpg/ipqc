@@ -704,19 +704,24 @@ def fetch_dispatch_history(company_name):
     mrp_party_name = get_mrp_party_name_ftr(company_name)
     lower_name = company_name.strip().lower()
     
+    print(f"[Dispatch History] Company: {company_name}, lower_name: {lower_name}")
+    print(f"[Dispatch History] Available PARTY_IDS keys: {list(PARTY_IDS.keys())}")
+    
     # Get party_id from mapping
     party_id = None
     for key, pid in PARTY_IDS.items():
         if key in lower_name or lower_name in key:
+            print(f"[Dispatch History] Match found: key={key}, lower_name={lower_name}")
             party_id = pid
             break
     
     if not party_id:
         party_id = PARTY_IDS.get(lower_name)
+        print(f"[Dispatch History] Direct lookup result: {party_id}")
     
     if not party_id:
         print(f"[Dispatch History] No party_id found for: {company_name}")
-        return {}, mrp_party_name
+        return {}, mrp_party_name, None
     
     print(f"[Dispatch History] Fetching for {company_name}, party_id: {party_id}")
     
@@ -725,16 +730,20 @@ def fetch_dispatch_history(company_name):
     page = 1
     limit = 50
     total_barcodes = 0
+    api_debug = {'pages_fetched': 0, 'total_dispatches': 0, 'api_errors': []}
     
     while True:
         try:
+            print(f"[Dispatch History] Calling API - page {page}, party_id: {party_id}")
             response = http_requests.post(
                 'https://umanmrp.in/api/party-dispatch-history.php',
                 json={'party_id': party_id, 'page': page, 'limit': limit},
                 timeout=60
             )
+            print(f"[Dispatch History] API Response Status: {response.status_code}")
             if response.status_code == 200:
                 data = response.json()
+                print(f"[Dispatch History] API Response: status={data.get('status')}, dispatch_count={len(data.get('dispatch_summary', []))}")
                 if data.get('status') == 'success':
                     dispatch_summary = data.get('dispatch_summary', [])
                     pagination = data.get('pagination', {})
@@ -799,7 +808,7 @@ def fetch_dispatch_history(company_name):
             break
     
     print(f"[Dispatch History] Total dispatched barcodes: {len(mrp_lookup)}, Total dispatches: {len(all_dispatches)}")
-    return mrp_lookup, mrp_party_name
+    return mrp_lookup, mrp_party_name, party_id
 
 
 @ftr_bp.route('/dispatch-tracking/<company_id>', methods=['GET'])
@@ -826,7 +835,7 @@ def get_dispatch_tracking(company_id):
         print(f"\n[Dispatch Tracking] Company ID: {company_id}, Name: {company_name}")
 
         # Fetch dispatch history from new MRP API
-        mrp_lookup, mrp_party_name = fetch_dispatch_history(company_name)
+        mrp_lookup, mrp_party_name, _ = fetch_dispatch_history(company_name)
 
         print(f"[Dispatch Tracking] Dispatch barcodes found: {len(mrp_lookup)}")
 
@@ -1021,7 +1030,7 @@ def get_dispatch_tracking_pdi_wise(company_id):
         print(f"\n[PDI Dispatch] Company: {company_name}, PDIs: {list(pdi_serials_map.keys())}, Total serials: {len(all_serials_rows)}")
 
         # Step 4: Fetch dispatch history from new MRP API
-        mrp_lookup, mrp_party_name = fetch_dispatch_history(company_name)
+        mrp_lookup, mrp_party_name, _ = fetch_dispatch_history(company_name)
         print(f"[PDI Dispatch] Dispatch lookup built: {len(mrp_lookup)} barcodes")
 
         # Step 6: Cross-reference each PDI's serials with MRP data
@@ -1269,9 +1278,10 @@ def get_pdi_production_status(company_id):
         mrp_lookup = {}
         mrp_error = None
         debug_info = {}
+        used_party_id = None
         try:
-            mrp_lookup, mrp_party_name = fetch_dispatch_history(company_name)
-            print(f"[PDI Production] Dispatch lookup built: {len(mrp_lookup)} barcodes for party: {mrp_party_name}")
+            mrp_lookup, mrp_party_name, used_party_id = fetch_dispatch_history(company_name)
+            print(f"[PDI Production] Dispatch lookup built: {len(mrp_lookup)} barcodes for party: {mrp_party_name}, party_id: {used_party_id}")
             
             # DEBUG: Log sample barcodes from MRP
             sample_mrp_barcodes = list(mrp_lookup.keys())[:5]
@@ -1306,7 +1316,9 @@ def get_pdi_production_status(company_id):
                 'sample_local_serials': sample_local_serials,
                 'total_mrp_barcodes': len(mrp_lookup),
                 'total_local_serials': len(all_local_serials),
-                'matches_found': len(matches)
+                'matches_found': len(matches),
+                'party_id_used': used_party_id,
+                'company_name': company_name
             }
         except Exception as e:
             mrp_error = str(e)
