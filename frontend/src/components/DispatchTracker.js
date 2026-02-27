@@ -296,11 +296,14 @@ const DispatchTracker = () => {
                 }}>
                   <div>
                     <span style={{marginRight: '8px'}}>🕐</span>
-                    <strong>Last Data Refresh:</strong> {productionData.debug_info.last_refresh_time}
-                    {productionData.debug_info.cache_age_seconds > 0 && (
+                    <strong>Data Refresh:</strong> {productionData.debug_info.server_current_time || productionData.debug_info.last_refresh_time}
+                    {productionData.debug_info.using_cache && productionData.debug_info.cache_age_seconds > 0 && (
                       <span style={{marginLeft: '8px', color: '#666'}}>
-                        ({Math.floor(productionData.debug_info.cache_age_seconds / 60)}m {productionData.debug_info.cache_age_seconds % 60}s ago)
+                        (cached {Math.floor(productionData.debug_info.cache_age_seconds / 60)}m {productionData.debug_info.cache_age_seconds % 60}s ago)
                       </span>
+                    )}
+                    {!productionData.debug_info.using_cache && (
+                      <span style={{marginLeft: '8px', color: '#16a34a', fontWeight: 600}}>— Just now!</span>
                     )}
                   </div>
                   <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>

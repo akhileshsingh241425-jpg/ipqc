@@ -1803,17 +1803,25 @@ def get_pdi_production_status(company_id):
         mrp_error = None
         
         # Get last refresh timestamp
-        # If fresh data was fetched, get from updated cache
-        # If cached data was used, get from cache
         current_time_stamp = time.time()
-        if party_id and party_id in DISPATCH_CACHE:
-            cache_timestamp = DISPATCH_CACHE[party_id]['timestamp']
-        else:
-            cache_timestamp = current_time_stamp
         
-        cache_age_seconds = int(current_time_stamp - cache_timestamp)
+        # If fresh data was fetched (cache_used=False), use current time
+        # If cached data was used, get from cache
+        if not cache_used:
+            # Fresh fetch just happened - use current time
+            cache_timestamp = current_time_stamp
+            cache_age_seconds = 0
+        else:
+            # Using cached data
+            if party_id and party_id in DISPATCH_CACHE:
+                cache_timestamp = DISPATCH_CACHE[party_id]['timestamp']
+            else:
+                cache_timestamp = current_time_stamp
+            cache_age_seconds = int(current_time_stamp - cache_timestamp)
+        
         last_refresh_time = datetime.fromtimestamp(cache_timestamp).strftime('%Y-%m-%d %H:%M:%S')
-        print(f"[PDI Production] Debug: cache_used={cache_used}, cache_age={cache_age_seconds}s, last_refresh={last_refresh_time}")
+        server_current_time = datetime.fromtimestamp(current_time_stamp).strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[PDI Production] Debug: cache_used={cache_used}, cache_age={cache_age_seconds}s, last_refresh={last_refresh_time}, server_time={server_current_time}")
         
         debug_info = {
             'matched_company': matched_company,
@@ -1824,6 +1832,7 @@ def get_pdi_production_status(company_id):
             'using_cache': cache_used,
             'cache_age_seconds': cache_age_seconds,
             'last_refresh_time': last_refresh_time,
+            'server_current_time': server_current_time,
             'live_dispatch_count': len(dispatched_serials_set),
             'live_packed_count': len(packed_lookup)
         }
