@@ -1695,43 +1695,51 @@ def get_pdi_production_status(company_id):
                             # CORRECT FORMAT: dispatch_summary array with pallet_nos dict
                             items = data.get('dispatch_summary', [])
                         
-                        if not items:
-                            empty_count += 1
-                            if empty_count >= max_empty:
+                            if not items:
+                                empty_count += 1
+                                if empty_count >= max_empty:
+                                    break
+                                continue
+                            
+                            empty_count = 0
+                            page_serial_count = 0
+                            
+                            for item in items:
+                                dispatch_party = item.get('dispatch_party', '')
+                                vehicle_no = item.get('vehicle_no', '')
+                                dispatch_date = item.get('dispatch_date') or item.get('date', '')
+                                pallet_nos = item.get('pallet_nos', {})
+                                
+                                # pallet_nos is dict: {pallet_no: "SERIAL1 SERIAL2 SERIAL3"}
+                                if isinstance(pallet_nos, dict):
+                                    for pallet, serials_str in pallet_nos.items():
+                                        if serials_str and isinstance(serials_str, str):
+                                            # Serials are space-separated
+                                            for serial in serials_str.split():
+                                                serial = serial.strip().upper()
+                                                if serial:
+                                                    dispatched_serials_set.add(serial)
+                                                    dispatched_details[serial] = {
+                                                        'pallet_no': pallet,
+                                                        'dispatch_party': dispatch_party,
+                                                        'vehicle_no': vehicle_no,
+                                                        'date': dispatch_date
+                                                    }
+                                                    page_serial_count += 1
+                            
+                            total_fetched += page_serial_count
+                            
+                            # Print progress every 50 pages
+                            if page % 50 == 0:
+                                print(f"[PDI Production] Dispatch API: page {page}, fetched {total_fetched} serials so far")
+                        
+                        except Exception as page_err:
+                            print(f"[PDI Production] Dispatch API page {page} error: {page_err}")
+                            error_count += 1
+                            if error_count >= max_errors:
+                                print(f"[PDI Production] Too many errors, stopping")
                                 break
                             continue
-                        
-                        empty_count = 0
-                        page_serial_count = 0
-                        
-                        for item in items:
-                            dispatch_party = item.get('dispatch_party', '')
-                            vehicle_no = item.get('vehicle_no', '')
-                            dispatch_date = item.get('dispatch_date') or item.get('date', '')
-                            pallet_nos = item.get('pallet_nos', {})
-                            
-                            # pallet_nos is dict: {pallet_no: "SERIAL1 SERIAL2 SERIAL3"}
-                            if isinstance(pallet_nos, dict):
-                                for pallet, serials_str in pallet_nos.items():
-                                    if serials_str and isinstance(serials_str, str):
-                                        # Serials are space-separated
-                                        for serial in serials_str.split():
-                                            serial = serial.strip().upper()
-                                            if serial:
-                                                dispatched_serials_set.add(serial)
-                                                dispatched_details[serial] = {
-                                                    'pallet_no': pallet,
-                                                    'dispatch_party': dispatch_party,
-                                                    'vehicle_no': vehicle_no,
-                                                    'date': dispatch_date
-                                                }
-                                                page_serial_count += 1
-                        
-                        total_fetched += page_serial_count
-                        
-                        # Print progress every 50 pages
-                        if page % 50 == 0:
-                            print(f"[PDI Production] Dispatch API: page {page}, fetched {total_fetched} serials so far")
                     
                     print(f"[PDI Production] FRESH Dispatch: Total {len(dispatched_serials_set)} dispatched serials fetched")
                     
