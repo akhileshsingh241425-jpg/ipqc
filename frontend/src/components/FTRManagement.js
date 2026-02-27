@@ -384,6 +384,67 @@ const FTRManagement = () => {
     }
   };
 
+  // Delete entire PDI assignment
+  const handleDeletePdiAssignment = async (pdiNumber) => {
+    if (!selectedCompany || !pdiNumber) return;
+    
+    const confirmDelete = window.confirm(
+      `⚠️ Are you sure you want to delete ALL serials from PDI ${pdiNumber}?\n\nThis will reset them to 'available' status.`
+    );
+    
+    if (!confirmDelete) return;
+    
+    try {
+      setLoading(true);
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.delete(
+        `${API_BASE_URL}/api/ftr/delete-pdi-assignment/${selectedCompany.id}/${encodeURIComponent(pdiNumber)}`
+      );
+      
+      if (response.data.success) {
+        alert(`✅ ${response.data.deleted_count} serials removed from PDI ${pdiNumber}`);
+        loadFTRData(selectedCompany.id); // Refresh data
+      } else {
+        alert(`❌ ${response.data.message}`);
+      }
+    } catch (error) {
+      console.error('Failed to delete PDI assignment:', error);
+      alert('❌ Failed to delete PDI assignment: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Delete single serial from PDI
+  const handleDeleteSingleSerial = async (serialNumber) => {
+    if (!selectedCompany || !serialNumber) return;
+    
+    const confirmDelete = window.confirm(
+      `⚠️ Remove serial ${serialNumber} from PDI ${selectedPdiNumber}?`
+    );
+    
+    if (!confirmDelete) return;
+    
+    try {
+      const API_BASE_URL = getAPIBaseURL();
+      const response = await axios.delete(
+        `${API_BASE_URL}/api/ftr/delete-serial/${selectedCompany.id}/${encodeURIComponent(serialNumber)}`
+      );
+      
+      if (response.data.success) {
+        // Refresh the modal list
+        loadPdiSerials(selectedPdiNumber, pdiSerialsSearch, pdiSerialsPage);
+        // Also refresh FTR data to update counts
+        loadFTRData(selectedCompany.id);
+      } else {
+        alert(`❌ ${response.data.message}`);
+      }
+    } catch (error) {
+      console.error('Failed to delete serial:', error);
+      alert('❌ Failed to delete serial: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
   // Load Rejection Serials
   const loadRejectionSerials = async (search = '', page = 1) => {
     if (!selectedCompany) return;
@@ -702,7 +763,7 @@ const FTRManagement = () => {
                 <td>{pdi.pdi_number}</td>
                 <td>{pdi.count.toLocaleString()}</td>
                 <td>{new Date(pdi.date).toLocaleDateString()}</td>
-                <td>
+                <td style={{display: 'flex', gap: '8px', flexWrap: 'wrap'}}>
                   <button 
                     className="btn-view"
                     onClick={() => {
@@ -713,7 +774,14 @@ const FTRManagement = () => {
                       loadPdiSerials(pdi.pdi_number, '', 1);
                     }}
                   >
-                    View Serials
+                    👁️ View
+                  </button>
+                  <button 
+                    className="btn-delete"
+                    style={{background: 'linear-gradient(135deg, #dc3545, #c82333)', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px'}}
+                    onClick={() => handleDeletePdiAssignment(pdi.pdi_number)}
+                  >
+                    🗑️ Delete
                   </button>
                 </td>
               </tr>
@@ -2006,6 +2074,7 @@ const FTRManagement = () => {
                         <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Class</th>
                         <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Status</th>
                         <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'left', color: 'white', fontWeight: '600'}}>Assigned Date</th>
+                        <th style={{padding: '12px', borderBottom: '2px solid #ddd', textAlign: 'center', color: 'white', fontWeight: '600'}}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2040,6 +2109,23 @@ const FTRManagement = () => {
                             </span>
                           </td>
                           <td style={{padding: '10px', fontSize: '11px', color: '#666'}}>{serial.assigned_date || '-'}</td>
+                          <td style={{padding: '10px', textAlign: 'center'}}>
+                            <button
+                              onClick={() => handleDeleteSingleSerial(serial.serial_number)}
+                              style={{
+                                background: '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '11px'
+                              }}
+                              title="Remove from PDI"
+                            >
+                              🗑️
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

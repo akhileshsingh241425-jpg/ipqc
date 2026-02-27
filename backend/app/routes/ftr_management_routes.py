@@ -628,3 +628,83 @@ def get_pdi_serials(company_id, pdi_number):
     except Exception as e:
         print(f"Error fetching PDI serials: {str(e)}")
         return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@ftr_management_bp.route('/ftr/delete-pdi-assignment/<int:company_id>/<pdi_number>', methods=['DELETE'])
+def delete_pdi_assignment(company_id, pdi_number):
+    """Delete all serial assignments for a PDI - resets them to available status"""
+    try:
+        # First count how many will be affected
+        count_result = db.session.execute(text("""
+            SELECT COUNT(*) FROM ftr_master_serials 
+            WHERE company_id = :company_id AND pdi_number = :pdi_number
+        """), {'company_id': company_id, 'pdi_number': pdi_number})
+        count = count_result.scalar() or 0
+        
+        if count == 0:
+            return jsonify({
+                'success': False,
+                'message': f'No serials found for PDI {pdi_number}'
+            }), 404
+        
+        # Reset serials to available
+        db.session.execute(text("""
+            UPDATE ftr_master_serials 
+            SET status = 'available', pdi_number = NULL, assigned_date = NULL
+            WHERE company_id = :company_id AND pdi_number = :pdi_number
+        """), {'company_id': company_id, 'pdi_number': pdi_number})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'{count} serials removed from PDI {pdi_number} and reset to available',
+            'deleted_count': count,
+            'pdi_number': pdi_number
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting PDI assignment: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'message': str(e)}), 500
+
+
+@ftr_management_bp.route('/ftr/delete-serial/<int:company_id>/<serial_number>', methods=['DELETE'])
+def delete_single_serial(company_id, serial_number):
+    """Delete a single serial from a PDI assignment"""
+    try:
+        # Check if serial exists
+        result = db.session.execute(text("""
+            SELECT id, pdi_number, status FROM ftr_master_serials 
+            WHERE company_id = :company_id AND serial_number = :serial_number
+        """), {'company_id': company_id, 'serial_number': serial_number})
+        
+        serial = result.fetchone()
+        if not serial:
+            return jsonify({
+                'success': False,
+                'message': f'Serial {serial_number} not found'
+            }), 404
+        
+        # Reset to available
+        db.session.execute(text("""
+            UPDATE ftr_master_serials 
+            SET status = 'available', pdi_number = NULL, assigned_date = NULL
+            WHERE company_id = :company_id AND serial_number = :serial_number
+        """), {'company_id': company_id, 'serial_number': serial_number})
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Serial {serial_number} removed from PDI and reset to available',
+            'serial_number': serial_number,
+            'previous_pdi': serial[1]
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting serial: {str(e)}")
+        return jsonify({'success': False, 'message': str(e)}), 500
