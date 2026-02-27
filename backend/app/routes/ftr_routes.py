@@ -1776,17 +1776,9 @@ def get_pdi_production_status(company_id):
         current_time_stamp = time.time()
         server_current_time = datetime.fromtimestamp(current_time_stamp).strftime('%Y-%m-%d %H:%M:%S')
         
-        # Use db_cache_time if available (from mrp_dispatch_cache)
-        if db_cache_time:
-            last_refresh_time = str(db_cache_time)
-            # Calculate age from db_cache_time
-            try:
-                cache_age_seconds = int((datetime.now() - db_cache_time).total_seconds())
-            except:
-                cache_age_seconds = 0
-        else:
-            last_refresh_time = server_current_time
-            cache_age_seconds = 0
+        # No cache: Always use server time as last_refresh_time
+        last_refresh_time = server_current_time
+        cache_age_seconds = 0
         
         print(f"[PDI Production] Debug: cache_used={cache_used}, cache_age={cache_age_seconds}s, last_refresh={last_refresh_time}, server_time={server_current_time}")
         
