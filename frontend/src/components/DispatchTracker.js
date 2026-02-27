@@ -39,13 +39,17 @@ const DispatchTracker = () => {
     }
   };
 
-  const loadProductionData = async (company) => {
+  const loadProductionData = async (company, forceRefresh = false) => {
     try {
       setLoading(true);
       setError(null);
       setExpandedPdi(null);
       
-      const res = await fetch(`${API_BASE_URL}/ftr/pdi-production-status/${company.id}`);
+      const url = forceRefresh 
+        ? `${API_BASE_URL}/ftr/pdi-production-status/${company.id}?force_refresh=true`
+        : `${API_BASE_URL}/ftr/pdi-production-status/${company.id}`;
+      
+      const res = await fetch(url);
       const result = await res.json();
       console.log('PDI Production + Dispatch Status:', result);
       
@@ -279,6 +283,51 @@ const DispatchTracker = () => {
               {productionData?.mrp_lookup_size === 0 && !productionData?.mrp_error && (
                 <div style={{background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', fontSize: '13px', color: '#92400e'}}>
                   ⚠️ MRP returned 0 records — Company name may not match MRP party name
+                </div>
+              )}
+
+              {/* Last Refresh Time Indicator */}
+              {productionData?.debug_info?.last_refresh_time && (
+                <div style={{
+                  background: productionData.debug_info.using_cache ? '#fef3c7' : '#dcfce7', 
+                  border: `1px solid ${productionData.debug_info.using_cache ? '#f59e0b' : '#22c55e'}`,
+                  borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', fontSize: '13px', 
+                  display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                }}>
+                  <div>
+                    <span style={{marginRight: '8px'}}>🕐</span>
+                    <strong>Last Data Refresh:</strong> {productionData.debug_info.last_refresh_time}
+                    {productionData.debug_info.cache_age_seconds > 0 && (
+                      <span style={{marginLeft: '8px', color: '#666'}}>
+                        ({Math.floor(productionData.debug_info.cache_age_seconds / 60)}m {productionData.debug_info.cache_age_seconds % 60}s ago)
+                      </span>
+                    )}
+                  </div>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                    <span style={{fontSize: '11px'}}>
+                      {productionData.debug_info.using_cache 
+                        ? <span style={{color: '#b45309'}}>📦 Cached data</span>
+                        : <span style={{color: '#16a34a'}}>✅ Fresh data</span>
+                      }
+                    </span>
+                    <button
+                      onClick={() => loadProductionData(selectedCompany, true)}
+                      disabled={loading}
+                      style={{
+                        padding: '6px 12px', 
+                        background: '#2563eb', 
+                        color: '#fff', 
+                        border: 'none', 
+                        borderRadius: '6px', 
+                        cursor: loading ? 'not-allowed' : 'pointer',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                        opacity: loading ? 0.6 : 1
+                      }}
+                    >
+                      🔄 Refresh Now
+                    </button>
+                  </div>
                 </div>
               )}
 

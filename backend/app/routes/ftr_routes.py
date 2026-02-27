@@ -1407,7 +1407,13 @@ def get_pdi_production_status(company_id):
     - Production output per PDI (from production_records)
     - Planned qty per PDI (from pdi_batches + master_orders)
     - Pending = planned - produced
+    
+    Query params:
+    - force_refresh=true: Bypass cache and fetch fresh data
     """
+    # Check if force refresh requested
+    force_refresh = request.args.get('force_refresh', '').lower() == 'true'
+    
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -1609,17 +1615,19 @@ def get_pdi_production_status(company_id):
         cache_used = False
         
         if party_id:
-            # Check cache first
+            # Check cache first (unless force_refresh)
             cache_entry = DISPATCH_CACHE.get(party_id)
             current_time = time.time()
             
-            if cache_entry and (current_time - cache_entry['timestamp']) < DISPATCH_CACHE_TTL:
+            if not force_refresh and cache_entry and (current_time - cache_entry['timestamp']) < DISPATCH_CACHE_TTL:
                 # Use cached data
                 dispatched_serials_set = cache_entry['set'].copy()
                 dispatched_details = cache_entry['data'].copy()
                 cache_used = True
                 print(f"[PDI Production] Using CACHED dispatch data: {len(dispatched_serials_set)} serials (age: {int(current_time - cache_entry['timestamp'])}s)")
             else:
+                if force_refresh:
+                    print(f"[PDI Production] FORCE REFRESH requested - bypassing cache")
                 # Fetch fresh data from API
                 try:
                     from datetime import timedelta
@@ -1793,6 +1801,13 @@ def get_pdi_production_status(company_id):
         # 7. Build debug info
         total_dispatched_in_result = sum(d.get('dispatched', 0) + d.get('packed', 0) for d in pdi_dispatch_data.values())
         mrp_error = None
+        
+        # Calculate cache age
+        cache_entry = DISPATCH_CACHE.get(party_id) if party_id else None
+        cache_timestamp = cache_entry['timestamp'] if cache_entry else time.time()
+        cache_age_seconds = int(time.time() - cache_timestamp)
+        last_refresh_time = datetime.fromtimestamp(cache_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        
         debug_info = {
             'matched_company': matched_company,
             'total_pdi_with_dispatch': len(pdi_dispatch_data),
@@ -1800,6 +1815,8 @@ def get_pdi_production_status(company_id):
             'company_name': company_name,
             'using_live_api': True,
             'using_cache': cache_used,
+            'cache_age_seconds': cache_age_seconds,
+            'last_refresh_time': last_refresh_time,
             'live_dispatch_count': len(dispatched_serials_set),
             'live_packed_count': len(packed_lookup)
         }
