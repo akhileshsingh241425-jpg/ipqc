@@ -1802,11 +1802,18 @@ def get_pdi_production_status(company_id):
         total_dispatched_in_result = sum(d.get('dispatched', 0) + d.get('packed', 0) for d in pdi_dispatch_data.values())
         mrp_error = None
         
-        # Calculate cache age
-        cache_entry = DISPATCH_CACHE.get(party_id) if party_id else None
-        cache_timestamp = cache_entry['timestamp'] if cache_entry else time.time()
-        cache_age_seconds = int(time.time() - cache_timestamp)
+        # Get last refresh timestamp
+        # If fresh data was fetched, get from updated cache
+        # If cached data was used, get from cache
+        current_time_stamp = time.time()
+        if party_id and party_id in DISPATCH_CACHE:
+            cache_timestamp = DISPATCH_CACHE[party_id]['timestamp']
+        else:
+            cache_timestamp = current_time_stamp
+        
+        cache_age_seconds = int(current_time_stamp - cache_timestamp)
         last_refresh_time = datetime.fromtimestamp(cache_timestamp).strftime('%Y-%m-%d %H:%M:%S')
+        print(f"[PDI Production] Debug: cache_used={cache_used}, cache_age={cache_age_seconds}s, last_refresh={last_refresh_time}")
         
         debug_info = {
             'matched_company': matched_company,
