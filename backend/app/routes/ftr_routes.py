@@ -1570,6 +1570,7 @@ def get_pdi_production_status(company_id):
                                 packed_lookup[barcode] = {
                                     'pallet_no': item.get('pallet_no', ''),
                                     'running_order': item.get('running_order', ''),
+                                    'party_name': party_name,
                                     'status': 'Packed'
                                 }
                         if items:
@@ -1760,6 +1761,7 @@ def get_pdi_production_status(company_id):
                     pdi_dispatch_data[pdi]['packed_serials'].append({
                         'serial': serial,
                         'pallet_no': packing_info.get('pallet_no', ''),
+                        'party_name': packing_info.get('party_name', ''),
                         'status': 'Packed'
                     })
                     # Add to pallet group

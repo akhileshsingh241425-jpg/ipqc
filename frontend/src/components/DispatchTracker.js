@@ -782,12 +782,25 @@ const DispatchTracker = () => {
               <div style={{marginBottom: '12px', display: 'flex', justifyContent: 'flex-end'}}>
                 <button 
                   onClick={() => {
-                    const data = serialModal.serials.map((s, i) => ({
-                      'S.No': i + 1,
-                      'Serial Number': s.serial,
-                      'Pallet No': s.pallet_no || '',
-                      'Status': serialModal.type === 'dispatched' ? 'Dispatched' : serialModal.type === 'packed' ? 'Packed' : 'Not Packed'
-                    }));
+                    const data = serialModal.serials.map((s, i) => {
+                      const row = {
+                        'S.No': i + 1,
+                        'Serial Number': s.serial,
+                        'Pallet No': s.pallet_no || ''
+                      };
+                      if (serialModal.type === 'dispatched') {
+                        row['Vehicle No'] = s.vehicle_no || '';
+                        row['Dispatch Party'] = s.dispatch_party || '';
+                      }
+                      if (serialModal.type === 'packed') {
+                        row['Party'] = s.party_name || '';
+                      }
+                      row['Status'] = serialModal.type === 'dispatched' ? 'Dispatched' : serialModal.type === 'packed' ? 'Packed' : 'Not Packed';
+                      if (s.date && serialModal.type !== 'not_packed') {
+                        row['Date'] = s.date;
+                      }
+                      return row;
+                    });
                     const ws = XLSX.utils.json_to_sheet(data);
                     const wb = XLSX.utils.book_new();
                     XLSX.utils.book_append_sheet(wb, ws, 'Serials');
@@ -806,6 +819,7 @@ const DispatchTracker = () => {
                       <th>Barcode / Serial</th>
                       <th>Pallet No</th>
                       {serialModal.type === 'dispatched' && <th>Vehicle No</th>}
+                      {serialModal.type === 'packed' && <th>Party</th>}
                       {serialModal.type !== 'not_packed' && <th>Date</th>}
                     </tr>
                   </thead>
@@ -816,6 +830,7 @@ const DispatchTracker = () => {
                         <td style={{fontFamily: 'monospace', fontSize: '11px'}}>{s.serial}</td>
                         <td><span className="badge" style={{background:'#e0e7ff', color:'#3730a3', fontSize:'10px'}}>{s.pallet_no || '—'}</span></td>
                         {serialModal.type === 'dispatched' && <td style={{fontSize: '11px'}}>{s.dispatch_party || '—'}</td>}
+                        {serialModal.type === 'packed' && <td style={{fontSize: '11px'}}>{s.party_name || '—'}</td>}
                         {serialModal.type !== 'not_packed' && <td style={{fontSize: '11px'}}>{s.date || '—'}</td>}
                       </tr>
                     ))}
