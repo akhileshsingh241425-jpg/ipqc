@@ -1619,8 +1619,16 @@ def get_pdi_production_status(company_id):
         if party_id:
             # FIRST: Try to get from DATABASE cache (mrp_dispatch_cache) - this is fast
             try:
+                # Get MAX sync time first
                 cursor.execute("""
-                    SELECT serial_number, pallet_no, dispatch_party, vehicle_no, dispatch_date, synced_at
+                    SELECT MAX(synced_at) as max_sync FROM mrp_dispatch_cache WHERE party_id = %s
+                """, (party_id,))
+                max_sync_row = cursor.fetchone()
+                if max_sync_row and max_sync_row['max_sync']:
+                    db_cache_time = max_sync_row['max_sync']
+                
+                cursor.execute("""
+                    SELECT serial_number, pallet_no, dispatch_party, vehicle_no, dispatch_date
                     FROM mrp_dispatch_cache 
                     WHERE party_id = %s
                 """, (party_id,))
@@ -1638,8 +1646,6 @@ def get_pdi_production_status(company_id):
                                 'vehicle_no': row['vehicle_no'] or '',
                                 'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
                             }
-                        if not db_cache_time and row['synced_at']:
-                            db_cache_time = row['synced_at']
                     cache_used = True
                     print(f"[PDI Production] DB cache loaded: {len(dispatched_serials_set)} unique serials, synced: {db_cache_time}")
             except Exception as db_err:
