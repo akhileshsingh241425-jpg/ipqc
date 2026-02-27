@@ -1638,13 +1638,9 @@ def get_pdi_production_status(company_id):
                     # Log response structure on first page
                     if page == 1:
                         print(f"[PDI Production] Dispatch API response keys: {list(data.keys())}")
-                        if 'data' in data:
-                            print(f"[PDI Production] data is list: {isinstance(data.get('data'), list)}, len: {len(data.get('data', []))}")
-                        elif isinstance(data, list):
-                            print(f"[PDI Production] Response is direct list, len: {len(data)}")
                     
-                    # Handle both {data: [...]} and direct [...] response formats
-                    items = data.get('data', []) if isinstance(data, dict) else data
+                    # CORRECT FORMAT: dispatch_summary array with pallet_nos dict
+                    items = data.get('dispatch_summary', [])
                     
                     if not items:
                         empty_count += 1
@@ -1653,27 +1649,36 @@ def get_pdi_production_status(company_id):
                         continue
                     
                     empty_count = 0
-                    total_fetched += len(items)
-                    
-                    # Log first item fields on page 1
-                    if page == 1 and items:
-                        print(f"[PDI Production] Dispatch API first item keys: {list(items[0].keys())}")
+                    page_serial_count = 0
                     
                     for item in items:
-                        # Try multiple field names for serial number
-                        barcode = (item.get('panel_serial_no') or item.get('barcode') or item.get('serial_no') or '').strip().upper()
-                        if barcode:
-                            dispatched_serials_set.add(barcode)
-                            dispatched_details[barcode] = {
-                                'pallet_no': item.get('pallet_no', ''),
-                                'dispatch_party': item.get('party_name') or item.get('dispatch_party', ''),
-                                'vehicle_no': item.get('vehicle_no', ''),
-                                'date': item.get('dispatch_date') or item.get('date', '')
-                            }
+                        dispatch_party = item.get('dispatch_party', '')
+                        vehicle_no = item.get('vehicle_no', '')
+                        dispatch_date = item.get('dispatch_date') or item.get('date', '')
+                        pallet_nos = item.get('pallet_nos', {})
+                        
+                        # pallet_nos is dict: {pallet_no: "SERIAL1 SERIAL2 SERIAL3"}
+                        if isinstance(pallet_nos, dict):
+                            for pallet, serials_str in pallet_nos.items():
+                                if serials_str and isinstance(serials_str, str):
+                                    # Serials are space-separated
+                                    for serial in serials_str.split():
+                                        serial = serial.strip().upper()
+                                        if serial:
+                                            dispatched_serials_set.add(serial)
+                                            dispatched_details[serial] = {
+                                                'pallet_no': pallet,
+                                                'dispatch_party': dispatch_party,
+                                                'vehicle_no': vehicle_no,
+                                                'date': dispatch_date
+                                            }
+                                            page_serial_count += 1
+                    
+                    total_fetched += page_serial_count
                     
                     # Print progress every 50 pages
                     if page % 50 == 0:
-                        print(f"[PDI Production] Dispatch API: page {page}, fetched {total_fetched} so far")
+                        print(f"[PDI Production] Dispatch API: page {page}, fetched {total_fetched} serials so far")
                 
                 print(f"[PDI Production] LIVE Dispatch: Total {len(dispatched_serials_set)} dispatched serials fetched")
                 
