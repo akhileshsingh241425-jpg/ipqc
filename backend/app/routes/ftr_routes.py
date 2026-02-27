@@ -1573,29 +1573,99 @@ def get_pdi_production_status(company_id):
         
         print(f"[PDI Production] Total packed serials: {len(packed_lookup)}")
 
-        # 6c. Get dispatch status via SQL JOIN with local cache
+        # 6c. Get LIVE dispatch data from MRP Dispatch API (party-dispatch-history.php)
         pdi_dispatch_data = {}  # pdi -> {dispatched: count, packed: count, serials: [...]}
+        
+        # Party ID mapping for dispatch API
+        PARTY_IDS = {
+            'rays': '931db2c5-b016-4914-b378-69e9f22562a7',
+            'l&t': 'a005562f-568a-46e9-bf2e-700affb171e8',
+            'larsen': 'a005562f-568a-46e9-bf2e-700affb171e8',
+            'lnt': 'a005562f-568a-46e9-bf2e-700affb171e8',
+            'sterling': '141b81a0-2bab-4790-b825-3c8734d41484',
+            'sterlin': '141b81a0-2bab-4790-b825-3c8734d41484',
+            's&w': '141b81a0-2bab-4790-b825-3c8734d41484'
+        }
+        
+        # Find party_id for this company
+        party_id = None
         matched_company = None
+        for key, pid in PARTY_IDS.items():
+            if key in lower_name:
+                party_id = pid
+                matched_company = key.upper()
+                break
         
-        if 'rays' in lower_name:
-            matched_company = 'Rays Power'
-        elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
-            matched_company = 'L&T'
-        elif 'sterling' in lower_name or 'sterlin' in lower_name or 's&w' in lower_name:
-            matched_company = 'Sterling'
-        
-        # Build dispatched serials set from cache
+        # Fetch LIVE dispatched serials from Dispatch API
         dispatched_serials_set = set()
-        if matched_company:
+        dispatched_details = {}  # serial -> {pallet_no, dispatch_party, vehicle_no, date}
+        
+        if party_id:
             try:
-                cursor.execute("""
-                    SELECT serial_number FROM mrp_dispatch_cache WHERE company = %s
-                """, (matched_company,))
-                for row in cursor.fetchall():
-                    dispatched_serials_set.add(row['serial_number'].strip().upper())
-                print(f"[PDI Production] Dispatched serials in cache: {len(dispatched_serials_set)}")
+                from datetime import timedelta
+                to_date = datetime.now().strftime('%Y-%m-%d')
+                from_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')  # Last 2 years
+                
+                print(f"[PDI Production] Fetching LIVE dispatch data: party_id={party_id}, {from_date} to {to_date}")
+                
+                # Loop through pages to get ALL dispatch data
+                limit = 100
+                empty_count = 0
+                max_empty = 5
+                total_fetched = 0
+                
+                for page in range(1, 2001):  # Max 2000 pages
+                    payload = {
+                        "party_id": party_id,
+                        "from_date": from_date,
+                        "to_date": to_date,
+                        "page": page,
+                        "limit": limit
+                    }
+                    
+                    response = http_requests.post(
+                        "https://umanmrp.in/api/party-dispatch-history.php",
+                        json=payload,
+                        timeout=60
+                    )
+                    
+                    if response.status_code != 200:
+                        print(f"[PDI Production] Dispatch API error page {page}: {response.status_code}")
+                        break
+                    
+                    data = response.json()
+                    items = data.get('data', [])
+                    
+                    if not items:
+                        empty_count += 1
+                        if empty_count >= max_empty:
+                            break
+                        continue
+                    
+                    empty_count = 0
+                    total_fetched += len(items)
+                    
+                    for item in items:
+                        barcode = item.get('barcode', '').strip().upper()
+                        if barcode:
+                            dispatched_serials_set.add(barcode)
+                            dispatched_details[barcode] = {
+                                'pallet_no': item.get('pallet_no', ''),
+                                'dispatch_party': item.get('dispatch_party', ''),
+                                'vehicle_no': item.get('vehicle_no', ''),
+                                'date': item.get('dispatch_date', '')
+                            }
+                    
+                    # Print progress every 50 pages
+                    if page % 50 == 0:
+                        print(f"[PDI Production] Dispatch API: page {page}, fetched {total_fetched} so far")
+                
+                print(f"[PDI Production] LIVE Dispatch: Total {len(dispatched_serials_set)} dispatched serials fetched")
+                
             except Exception as e:
-                print(f"[PDI Production] Dispatch cache query error: {e}")
+                print(f"[PDI Production] Dispatch API error: {e}")
+                import traceback
+                traceback.print_exc()
         
         # 6d. Now categorize each PDI's serials into 3 categories
         for pdi, serials in pdi_serials_map.items():
@@ -1613,21 +1683,26 @@ def get_pdi_production_status(company_id):
                 serial_upper = serial.strip().upper()
                 
                 if serial_upper in dispatched_serials_set:
-                    # DISPATCHED - in dispatch cache
+                    # DISPATCHED - in live dispatch API
                     pdi_dispatch_data[pdi]['dispatched'] += 1
+                    dispatch_info = dispatched_details.get(serial_upper, {})
                     packing_info = packed_lookup.get(serial_upper, {})
+                    pallet_no = dispatch_info.get('pallet_no') or packing_info.get('pallet_no') or ''
                     pdi_dispatch_data[pdi]['dispatched_serials'].append({
                         'serial': serial,
-                        'pallet_no': packing_info.get('pallet_no', ''),
+                        'pallet_no': pallet_no,
+                        'dispatch_party': dispatch_info.get('dispatch_party', ''),
+                        'vehicle_no': dispatch_info.get('vehicle_no', ''),
+                        'date': dispatch_info.get('date', ''),
                         'status': 'Dispatched'
                     })
                     # Add to pallet group
-                    pallet_no = packing_info.get('pallet_no') or 'Unknown'
-                    if pallet_no not in pdi_dispatch_data[pdi]['pallet_groups']:
-                        pdi_dispatch_data[pdi]['pallet_groups'][pallet_no] = {
-                            'pallet_no': pallet_no, 'status': 'Dispatched', 'count': 0, 'serials': []
+                    pallet_key = pallet_no or 'Unknown'
+                    if pallet_key not in pdi_dispatch_data[pdi]['pallet_groups']:
+                        pdi_dispatch_data[pdi]['pallet_groups'][pallet_key] = {
+                            'pallet_no': pallet_key, 'status': 'Dispatched', 'count': 0, 'serials': []
                         }
-                    pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['count'] += 1
+                    pdi_dispatch_data[pdi]['pallet_groups'][pallet_key]['count'] += 1
                     if len(pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials']) < 50:
                         pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials'].append(serial)
                         
@@ -1674,7 +1749,9 @@ def get_pdi_production_status(company_id):
             'total_pdi_with_dispatch': len(pdi_dispatch_data),
             'total_dispatched_serials': total_dispatched_in_result,
             'company_name': company_name,
-            'using_sql_join': True
+            'using_live_api': True,
+            'live_dispatch_count': len(dispatched_serials_set),
+            'live_packed_count': len(packed_lookup)
         }
 
         # 8. Build combined PDI-wise results
