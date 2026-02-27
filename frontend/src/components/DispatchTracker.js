@@ -45,11 +45,17 @@ const DispatchTracker = () => {
       setError(null);
       setExpandedPdi(null);
       
+      // Add timestamp to prevent browser caching
+      const timestamp = Date.now();
       const url = forceRefresh 
-        ? `${API_BASE_URL}/ftr/pdi-production-status/${company.id}?force_refresh=true`
-        : `${API_BASE_URL}/ftr/pdi-production-status/${company.id}`;
+        ? `${API_BASE_URL}/ftr/pdi-production-status/${company.id}?force_refresh=true&t=${timestamp}`
+        : `${API_BASE_URL}/ftr/pdi-production-status/${company.id}?t=${timestamp}`;
       
-      const res = await fetch(url);
+      console.log('Fetching URL:', url);
+      const res = await fetch(url, {
+        cache: 'no-store',  // Prevent browser caching
+        headers: { 'Cache-Control': 'no-cache' }
+      });
       const result = await res.json();
       console.log('PDI Production + Dispatch Status:', result);
       

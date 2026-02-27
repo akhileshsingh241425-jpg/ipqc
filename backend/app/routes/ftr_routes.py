@@ -1413,6 +1413,7 @@ def get_pdi_production_status(company_id):
     """
     # Check if force refresh requested
     force_refresh = request.args.get('force_refresh', '').lower() == 'true'
+    print(f"[PDI Production] === API CALLED === force_refresh={force_refresh}, time={datetime.now().strftime('%H:%M:%S')}")
     
     try:
         conn = get_db_connection()
