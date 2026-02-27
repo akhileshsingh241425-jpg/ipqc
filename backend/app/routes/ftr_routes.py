@@ -1610,157 +1610,88 @@ def get_pdi_production_status(company_id):
                 matched_company = key.upper()
                 break
         
-        # Fetch LIVE dispatched serials from Dispatch API (with caching)
+        # Always fetch LIVE dispatched serials from Dispatch API (no cache)
         dispatched_serials_set = set()
         dispatched_details = {}  # serial -> {pallet_no, dispatch_party, vehicle_no, date}
-        cache_used = False
-        db_cache_time = None
-        
         if party_id:
-            # FIRST: Try to get from DATABASE cache (mrp_dispatch_cache) - this is fast
             try:
-                # Get MAX sync time first
-                cursor.execute("""
-                    SELECT MAX(synced_at) as max_sync FROM mrp_dispatch_cache WHERE party_id = %s
-                """, (party_id,))
-                max_sync_row = cursor.fetchone()
-                if max_sync_row and max_sync_row['max_sync']:
-                    db_cache_time = max_sync_row['max_sync']
-                
-                cursor.execute("""
-                    SELECT serial_number, pallet_no, dispatch_party, vehicle_no, dispatch_date
-                    FROM mrp_dispatch_cache 
-                    WHERE party_id = %s
-                """, (party_id,))
-                db_cache_rows = cursor.fetchall()
-                
-                if db_cache_rows:
-                    print(f"[PDI Production] Using DB cache: {len(db_cache_rows)} dispatch records")
-                    for row in db_cache_rows:
-                        serial = row['serial_number'].strip().upper() if row['serial_number'] else ''
-                        if serial:
-                            dispatched_serials_set.add(serial)
-                            dispatched_details[serial] = {
-                                'pallet_no': row['pallet_no'] or '',
-                                'dispatch_party': row['dispatch_party'] or '',
-                                'vehicle_no': row['vehicle_no'] or '',
-                                'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
-                            }
-                    cache_used = True
-                    print(f"[PDI Production] DB cache loaded: {len(dispatched_serials_set)} unique serials, synced: {db_cache_time}")
-            except Exception as db_err:
-                print(f"[PDI Production] DB cache error: {db_err}")
-            
-            # FALLBACK: If DB cache empty and force_refresh, try live API (but this is slow)
-            if not dispatched_serials_set and force_refresh:
-                try:
-                    from datetime import timedelta
-                    to_date = datetime.now().strftime('%Y-%m-%d')
-                    from_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')  # Last 2 years
-                    
-                    print(f"[PDI Production] DB cache empty, fetching FRESH from API: party_id={party_id}")
-                    
-                    # Loop through pages to get ALL dispatch data
-                    limit = 100
-                    empty_count = 0
-                    max_empty = 3  # Reduced to speed up
-                    total_fetched = 0
-                    error_count = 0
-                    max_errors = 5
-                    
-                    for page in range(1, 2001):  # Max 2000 pages
-                        try:
-                            payload = {
-                                "party_id": party_id,
-                                "from_date": from_date,
-                                "to_date": to_date,
-                                "page": page,
-                                "limit": limit
-                            }
-                            
-                            response = http_requests.post(
-                                "https://umanmrp.in/api/party-dispatch-history.php",
-                                json=payload,
-                                timeout=30  # Reduced timeout per page
-                            )
-                            
-                            if response.status_code != 200:
-                                print(f"[PDI Production] Dispatch API error page {page}: {response.status_code}")
-                                error_count += 1
-                                if error_count >= max_errors:
-                                    print(f"[PDI Production] Too many errors, stopping at page {page}")
-                                    break
-                                continue
-                            
-                            data = response.json()
-                            
-                            # Log response structure on first page
-                            if page == 1:
-                                print(f"[PDI Production] Dispatch API response keys: {list(data.keys())}")
-                            
-                            # CORRECT FORMAT: dispatch_summary array with pallet_nos dict
-                            items = data.get('dispatch_summary', [])
-                        
-                            if not items:
-                                empty_count += 1
-                                if empty_count >= max_empty:
-                                    break
-                                continue
-                            
-                            empty_count = 0
-                            page_serial_count = 0
-                            
-                            for item in items:
-                                dispatch_party = item.get('dispatch_party', '')
-                                vehicle_no = item.get('vehicle_no', '')
-                                dispatch_date = item.get('dispatch_date') or item.get('date', '')
-                                pallet_nos = item.get('pallet_nos', {})
-                                
-                                # pallet_nos is dict: {pallet_no: "SERIAL1 SERIAL2 SERIAL3"}
-                                if isinstance(pallet_nos, dict):
-                                    for pallet, serials_str in pallet_nos.items():
-                                        if serials_str and isinstance(serials_str, str):
-                                            # Serials are space-separated
-                                            for serial in serials_str.split():
-                                                serial = serial.strip().upper()
-                                                if serial:
-                                                    dispatched_serials_set.add(serial)
-                                                    dispatched_details[serial] = {
-                                                        'pallet_no': pallet,
-                                                        'dispatch_party': dispatch_party,
-                                                        'vehicle_no': vehicle_no,
-                                                        'date': dispatch_date
-                                                    }
-                                                    page_serial_count += 1
-                            
-                            total_fetched += page_serial_count
-                            
-                            # Print progress every 50 pages
-                            if page % 50 == 0:
-                                print(f"[PDI Production] Dispatch API: page {page}, fetched {total_fetched} serials so far")
-                        
-                        except Exception as page_err:
-                            print(f"[PDI Production] Dispatch API page {page} error: {page_err}")
+                from datetime import timedelta
+                import time
+                to_date = datetime.now().strftime('%Y-%m-%d')
+                from_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')  # Last 2 years
+                print(f"[PDI Production] Fetching LIVE from API: party_id={party_id}")
+                limit = 100
+                empty_count = 0
+                max_empty = 3
+                total_fetched = 0
+                error_count = 0
+                max_errors = 5
+                for page in range(1, 2001):
+                    try:
+                        payload = {
+                            "party_id": party_id,
+                            "from_date": from_date,
+                            "to_date": to_date,
+                            "page": page,
+                            "limit": limit
+                        }
+                        response = http_requests.post(
+                            "https://umanmrp.in/api/party-dispatch-history.php",
+                            json=payload,
+                            timeout=30
+                        )
+                        if response.status_code != 200:
+                            print(f"[PDI Production] Dispatch API error page {page}: {response.status_code}")
                             error_count += 1
                             if error_count >= max_errors:
-                                print(f"[PDI Production] Too many errors, stopping")
+                                print(f"[PDI Production] Too many errors, stopping at page {page}")
                                 break
                             continue
-                    
-                    print(f"[PDI Production] FRESH Dispatch: Total {len(dispatched_serials_set)} dispatched serials fetched")
-                    
-                    # Save to cache
-                    DISPATCH_CACHE[party_id] = {
-                        'set': dispatched_serials_set.copy(),
-                        'data': dispatched_details.copy(),
-                        'timestamp': time.time()
-                    }
-                    print(f"[PDI Production] Dispatch data cached for 10 minutes")
-                    
-                except Exception as e:
-                    print(f"[PDI Production] Dispatch API error: {e}")
-                    import traceback
-                    traceback.print_exc()
+                        data = response.json()
+                        if page == 1:
+                            print(f"[PDI Production] Dispatch API response keys: {list(data.keys())}")
+                        items = data.get('dispatch_summary', [])
+                        if not items:
+                            empty_count += 1
+                            if empty_count >= max_empty:
+                                break
+                            continue
+                        empty_count = 0
+                        page_serial_count = 0
+                        for item in items:
+                            dispatch_party = item.get('dispatch_party', '')
+                            vehicle_no = item.get('vehicle_no', '')
+                            dispatch_date = item.get('dispatch_date') or item.get('date', '')
+                            pallet_nos = item.get('pallet_nos', {})
+                            if isinstance(pallet_nos, dict):
+                                for pallet, serials_str in pallet_nos.items():
+                                    if serials_str and isinstance(serials_str, str):
+                                        for serial in serials_str.split():
+                                            serial = serial.strip().upper()
+                                            if serial:
+                                                dispatched_serials_set.add(serial)
+                                                dispatched_details[serial] = {
+                                                    'pallet_no': pallet,
+                                                    'dispatch_party': dispatch_party,
+                                                    'vehicle_no': vehicle_no,
+                                                    'date': dispatch_date
+                                                }
+                                                page_serial_count += 1
+                        total_fetched += page_serial_count
+                        if page % 50 == 0:
+                            print(f"[PDI Production] Dispatch API: page {page}, fetched {total_fetched} serials so far")
+                    except Exception as page_err:
+                        print(f"[PDI Production] Dispatch API page {page} error: {page_err}")
+                        error_count += 1
+                        if error_count >= max_errors:
+                            print(f"[PDI Production] Too many errors, stopping")
+                            break
+                        continue
+                print(f"[PDI Production] LIVE Dispatch: Total {len(dispatched_serials_set)} dispatched serials fetched")
+            except Exception as e:
+                print(f"[PDI Production] Dispatch API error: {e}")
+                import traceback
+                traceback.print_exc()
         
         # 6d. Now categorize each PDI's serials into 3 categories
         for pdi, serials in pdi_serials_map.items():
