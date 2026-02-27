@@ -1614,62 +1614,86 @@ def get_pdi_production_status(company_id):
         dispatched_serials_set = set()
         dispatched_details = {}  # serial -> {pallet_no, dispatch_party, vehicle_no, date}
         cache_used = False
+        db_cache_time = None
         
         if party_id:
-            # Check cache first (unless force_refresh)
-            cache_entry = DISPATCH_CACHE.get(party_id)
-            current_time = time.time()
+            # FIRST: Try to get from DATABASE cache (mrp_dispatch_cache) - this is fast
+            try:
+                cursor.execute("""
+                    SELECT serial_number, pallet_no, dispatch_party, vehicle_no, dispatch_date, synced_at
+                    FROM mrp_dispatch_cache 
+                    WHERE party_id = %s
+                """, (party_id,))
+                db_cache_rows = cursor.fetchall()
+                
+                if db_cache_rows:
+                    print(f"[PDI Production] Using DB cache: {len(db_cache_rows)} dispatch records")
+                    for row in db_cache_rows:
+                        serial = row['serial_number'].strip().upper() if row['serial_number'] else ''
+                        if serial:
+                            dispatched_serials_set.add(serial)
+                            dispatched_details[serial] = {
+                                'pallet_no': row['pallet_no'] or '',
+                                'dispatch_party': row['dispatch_party'] or '',
+                                'vehicle_no': row['vehicle_no'] or '',
+                                'date': str(row['dispatch_date']) if row['dispatch_date'] else ''
+                            }
+                        if not db_cache_time and row['synced_at']:
+                            db_cache_time = row['synced_at']
+                    cache_used = True
+                    print(f"[PDI Production] DB cache loaded: {len(dispatched_serials_set)} unique serials, synced: {db_cache_time}")
+            except Exception as db_err:
+                print(f"[PDI Production] DB cache error: {db_err}")
             
-            if not force_refresh and cache_entry and (current_time - cache_entry['timestamp']) < DISPATCH_CACHE_TTL:
-                # Use cached data
-                dispatched_serials_set = cache_entry['set'].copy()
-                dispatched_details = cache_entry['data'].copy()
-                cache_used = True
-                print(f"[PDI Production] Using CACHED dispatch data: {len(dispatched_serials_set)} serials (age: {int(current_time - cache_entry['timestamp'])}s)")
-            else:
-                if force_refresh:
-                    print(f"[PDI Production] FORCE REFRESH requested - bypassing cache")
-                # Fetch fresh data from API
+            # FALLBACK: If DB cache empty and force_refresh, try live API (but this is slow)
+            if not dispatched_serials_set and force_refresh:
                 try:
                     from datetime import timedelta
                     to_date = datetime.now().strftime('%Y-%m-%d')
                     from_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')  # Last 2 years
                     
-                    print(f"[PDI Production] Fetching FRESH dispatch data: party_id={party_id}, {from_date} to {to_date}")
+                    print(f"[PDI Production] DB cache empty, fetching FRESH from API: party_id={party_id}")
                     
                     # Loop through pages to get ALL dispatch data
                     limit = 100
                     empty_count = 0
-                    max_empty = 5
+                    max_empty = 3  # Reduced to speed up
                     total_fetched = 0
+                    error_count = 0
+                    max_errors = 5
                     
                     for page in range(1, 2001):  # Max 2000 pages
-                        payload = {
-                            "party_id": party_id,
-                            "from_date": from_date,
-                            "to_date": to_date,
-                            "page": page,
-                            "limit": limit
-                        }
-                        
-                        response = http_requests.post(
-                            "https://umanmrp.in/api/party-dispatch-history.php",
-                            json=payload,
-                            timeout=60
-                        )
-                        
-                        if response.status_code != 200:
-                            print(f"[PDI Production] Dispatch API error page {page}: {response.status_code}")
-                            break
-                        
-                        data = response.json()
-                        
-                        # Log response structure on first page
-                        if page == 1:
-                            print(f"[PDI Production] Dispatch API response keys: {list(data.keys())}")
-                        
-                        # CORRECT FORMAT: dispatch_summary array with pallet_nos dict
-                        items = data.get('dispatch_summary', [])
+                        try:
+                            payload = {
+                                "party_id": party_id,
+                                "from_date": from_date,
+                                "to_date": to_date,
+                                "page": page,
+                                "limit": limit
+                            }
+                            
+                            response = http_requests.post(
+                                "https://umanmrp.in/api/party-dispatch-history.php",
+                                json=payload,
+                                timeout=30  # Reduced timeout per page
+                            )
+                            
+                            if response.status_code != 200:
+                                print(f"[PDI Production] Dispatch API error page {page}: {response.status_code}")
+                                error_count += 1
+                                if error_count >= max_errors:
+                                    print(f"[PDI Production] Too many errors, stopping at page {page}")
+                                    break
+                                continue
+                            
+                            data = response.json()
+                            
+                            # Log response structure on first page
+                            if page == 1:
+                                print(f"[PDI Production] Dispatch API response keys: {list(data.keys())}")
+                            
+                            # CORRECT FORMAT: dispatch_summary array with pallet_nos dict
+                            items = data.get('dispatch_summary', [])
                         
                         if not items:
                             empty_count += 1
@@ -1805,23 +1829,20 @@ def get_pdi_production_status(company_id):
         
         # Get last refresh timestamp
         current_time_stamp = time.time()
-        
-        # If fresh data was fetched (cache_used=False), use current time
-        # If cached data was used, get from cache
-        if not cache_used:
-            # Fresh fetch just happened - use current time
-            cache_timestamp = current_time_stamp
-            cache_age_seconds = 0
-        else:
-            # Using cached data
-            if party_id and party_id in DISPATCH_CACHE:
-                cache_timestamp = DISPATCH_CACHE[party_id]['timestamp']
-            else:
-                cache_timestamp = current_time_stamp
-            cache_age_seconds = int(current_time_stamp - cache_timestamp)
-        
-        last_refresh_time = datetime.fromtimestamp(cache_timestamp).strftime('%Y-%m-%d %H:%M:%S')
         server_current_time = datetime.fromtimestamp(current_time_stamp).strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Use db_cache_time if available (from mrp_dispatch_cache)
+        if db_cache_time:
+            last_refresh_time = str(db_cache_time)
+            # Calculate age from db_cache_time
+            try:
+                cache_age_seconds = int((datetime.now() - db_cache_time).total_seconds())
+            except:
+                cache_age_seconds = 0
+        else:
+            last_refresh_time = server_current_time
+            cache_age_seconds = 0
+        
         print(f"[PDI Production] Debug: cache_used={cache_used}, cache_age={cache_age_seconds}s, last_refresh={last_refresh_time}, server_time={server_current_time}")
         
         debug_info = {
