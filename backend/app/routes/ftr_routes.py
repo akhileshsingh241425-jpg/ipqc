@@ -1706,8 +1706,8 @@ def get_pdi_production_status(company_id):
                             'pallet_no': pallet_key, 'status': 'Dispatched', 'count': 0, 'serials': []
                         }
                     pdi_dispatch_data[pdi]['pallet_groups'][pallet_key]['count'] += 1
-                    if len(pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials']) < 50:
-                        pdi_dispatch_data[pdi]['pallet_groups'][pallet_no]['serials'].append(serial)
+                    if len(pdi_dispatch_data[pdi]['pallet_groups'][pallet_key]['serials']) < 50:
+                        pdi_dispatch_data[pdi]['pallet_groups'][pallet_key]['serials'].append(serial)
                         
                 elif serial_upper in packed_lookup:
                     # PACKED (NOT DISPATCHED) - in packing API but not dispatch cache
