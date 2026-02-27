@@ -345,18 +345,22 @@ const DispatchTracker = () => {
                 <div style={{background: '#e0f2fe', border: '1px solid #0ea5e9', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '12px', color: '#0369a1'}}>
                   <strong>🔍 Debug Info (Serial Matching):</strong>
                   <div style={{marginTop: '8px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px'}}>
-                    <div>MRP Barcodes: <strong>{productionData.debug_info.total_mrp_barcodes}</strong></div>
-                    <div>Local Serials: <strong>{productionData.debug_info.total_local_serials}</strong></div>
-                    <div style={{color: productionData.debug_info.matches_found > 0 ? '#16a34a' : '#dc2626'}}>
-                      Matches: <strong>{productionData.debug_info.matches_found}</strong>
+                    <div>MRP Barcodes: <strong>{productionData.debug_info.mrp_barcodes_total || productionData.debug_info.live_dispatch_count || 0}</strong></div>
+                    <div>Local Serials: <strong>{productionData.debug_info.local_serials_total || 0}</strong></div>
+                    <div style={{color: (productionData.debug_info.dispatch_matches || 0) > 0 ? '#16a34a' : '#dc2626'}}>
+                      Matches: <strong>{productionData.debug_info.dispatch_matches || 0}</strong>
                     </div>
                   </div>
-                  {productionData.debug_info.sample_mrp_barcodes?.length > 0 && (
+                  {(productionData.debug_info.sample_mrp_barcodes?.length > 0 || productionData.debug_info.sample_local_serials?.length > 0) && (
                     <div style={{marginTop: '8px'}}>
-                      <div>Sample MRP: <code style={{background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px'}}>{productionData.debug_info.sample_mrp_barcodes[0]}</code></div>
+                      <div>Sample MRP: <code style={{background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px'}}>{productionData.debug_info.sample_mrp_barcodes?.[0] || 'N/A'}</code></div>
                       <div>Sample Local: <code style={{background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px'}}>{productionData.debug_info.sample_local_serials?.[0] || 'N/A'}</code></div>
                     </div>
                   )}
+                  <div style={{marginTop: '8px', color: '#6b7280', fontSize: '11px'}}>
+                    Packed API: <strong>{productionData.debug_info.live_packed_count || 0}</strong> | 
+                    Packed Matches: <strong>{productionData.debug_info.packed_matches || 0}</strong>
+                  </div>
                 </div>
               )}
 

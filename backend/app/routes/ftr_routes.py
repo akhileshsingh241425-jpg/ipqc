@@ -1853,6 +1853,20 @@ def get_pdi_production_status(company_id):
         
         print(f"[PDI Production] Debug: cache_used={cache_used}, cache_age={cache_age_seconds}s, last_refresh={last_refresh_time}, server_time={server_current_time}")
         
+        # Collect sample serials for debugging format mismatches
+        all_local_serials = []
+        for pdi, serials in pdi_serials_map.items():
+            all_local_serials.extend([s.strip().upper() for s in serials])
+        
+        sample_mrp_barcodes = list(dispatched_serials_set)[:5] if dispatched_serials_set else []
+        sample_packed_barcodes = list(packed_lookup.keys())[:5] if packed_lookup else []
+        sample_local_serials = all_local_serials[:5] if all_local_serials else []
+        
+        # Count exact matches
+        local_set = set(all_local_serials)
+        dispatch_matches = len(local_set.intersection(dispatched_serials_set))
+        packed_matches = len(local_set.intersection(set(packed_lookup.keys())))
+        
         debug_info = {
             'matched_company': matched_company,
             'total_pdi_with_dispatch': len(pdi_dispatch_data),
@@ -1864,7 +1878,16 @@ def get_pdi_production_status(company_id):
             'last_refresh_time': last_refresh_time,
             'server_current_time': server_current_time,
             'live_dispatch_count': len(dispatched_serials_set),
-            'live_packed_count': len(packed_lookup)
+            'live_packed_count': len(packed_lookup),
+            # NEW diagnostic fields
+            'mrp_barcodes_total': len(dispatched_serials_set),
+            'packed_barcodes_total': len(packed_lookup),
+            'local_serials_total': len(all_local_serials),
+            'dispatch_matches': dispatch_matches,
+            'packed_matches': packed_matches,
+            'sample_mrp_barcodes': sample_mrp_barcodes,
+            'sample_packed_barcodes': sample_packed_barcodes,
+            'sample_local_serials': sample_local_serials
         }
 
         # 8. Build combined PDI-wise results
