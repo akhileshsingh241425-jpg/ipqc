@@ -1639,18 +1639,22 @@ def get_pdi_production_status(company_id):
                     data = response.json()
                     if data.get('status') == 'success':
                         barcodes = data.get('barcodes', [])
-                        print(f"[PDI Production] NEW API returned {len(barcodes)} barcodes")
-                        for barcode in barcodes:
-                            if barcode:
-                                serial = barcode.strip().upper()
-                                if serial:
-                                    dispatched_serials_set.add(serial)
-                                    dispatched_details[serial] = {
-                                        'pallet_no': '',
-                                        'dispatch_party': '',
-                                        'vehicle_no': '',
-                                        'date': ''
-                                    }
+                        print(f"[PDI Production] NEW API returned {len(barcodes)} barcode entries")
+                        # Each entry in barcodes is a SPACE-SEPARATED string of multiple serials
+                        for barcode_str in barcodes:
+                            if barcode_str and isinstance(barcode_str, str):
+                                individual_serials = barcode_str.strip().split()
+                                for serial in individual_serials:
+                                    serial = serial.strip().upper()
+                                    if serial:
+                                        dispatched_serials_set.add(serial)
+                                        dispatched_details[serial] = {
+                                            'pallet_no': '',
+                                            'dispatch_party': '',
+                                            'vehicle_no': '',
+                                            'date': ''
+                                        }
+                        print(f"[PDI Production] After splitting: {len(dispatched_serials_set)} individual serials")
                     else:
                         dispatch_api_error = data.get('message', 'API returned error')
                         print(f"[PDI Production] NEW API error: {dispatch_api_error}")
