@@ -39,7 +39,7 @@ const DispatchTracker = () => {
     }
   };
 
-  const loadProductionData = async (company, forceRefresh = false) => {
+  const loadProductionData = async (company) => {
     try {
       setLoading(true);
       setError(null);
@@ -47,13 +47,11 @@ const DispatchTracker = () => {
       
       // Add timestamp to prevent browser caching
       const timestamp = Date.now();
-      const url = forceRefresh 
-        ? `${API_BASE_URL}/ftr/pdi-production-status/${company.id}?force_refresh=true&t=${timestamp}`
-        : `${API_BASE_URL}/ftr/pdi-production-status/${company.id}?t=${timestamp}`;
+      const url = `${API_BASE_URL}/ftr/pdi-production-status/${company.id}?t=${timestamp}`;
       
       console.log('Fetching URL:', url);
       const res = await fetch(url, {
-        cache: 'no-store',  // Prevent browser caching
+        cache: 'no-store',
         headers: { 'Cache-Control': 'no-cache' }
       });
       const result = await res.json();
@@ -295,32 +293,20 @@ const DispatchTracker = () => {
               {/* Last Refresh Time Indicator */}
               {productionData?.debug_info?.last_refresh_time && (
                 <div style={{
-                  background: productionData.debug_info.using_cache ? '#fef3c7' : '#dcfce7', 
-                  border: `1px solid ${productionData.debug_info.using_cache ? '#f59e0b' : '#22c55e'}`,
+                  background: '#dcfce7', 
+                  border: '1px solid #22c55e',
                   borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', fontSize: '13px', 
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                 }}>
                   <div>
                     <span style={{marginRight: '8px'}}>🕐</span>
                     <strong>Data Refresh:</strong> {productionData.debug_info.server_current_time || productionData.debug_info.last_refresh_time}
-                    {productionData.debug_info.using_cache && productionData.debug_info.cache_age_seconds > 0 && (
-                      <span style={{marginLeft: '8px', color: '#666'}}>
-                        (cached {Math.floor(productionData.debug_info.cache_age_seconds / 60)}m {productionData.debug_info.cache_age_seconds % 60}s ago)
-                      </span>
-                    )}
-                    {!productionData.debug_info.using_cache && (
-                      <span style={{marginLeft: '8px', color: '#16a34a', fontWeight: 600}}>— Just now!</span>
-                    )}
+                    <span style={{marginLeft: '8px', color: '#16a34a', fontWeight: 600}}>— LIVE Data</span>
                   </div>
                   <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
-                    <span style={{fontSize: '11px'}}>
-                      {productionData.debug_info.using_cache 
-                        ? <span style={{color: '#b45309'}}>📦 Cached data</span>
-                        : <span style={{color: '#16a34a'}}>✅ Fresh data</span>
-                      }
-                    </span>
+                    <span style={{fontSize: '11px', color: '#16a34a'}}>✅ LIVE API</span>
                     <button
-                      onClick={() => loadProductionData(selectedCompany, true)}
+                      onClick={() => loadProductionData(selectedCompany)}
                       disabled={loading}
                       style={{
                         padding: '6px 12px', 
