@@ -1634,7 +1634,17 @@ def get_pdi_production_status(company_id):
                         break
                     
                     data = response.json()
-                    items = data.get('data', [])
+                    
+                    # Log response structure on first page
+                    if page == 1:
+                        print(f"[PDI Production] Dispatch API response keys: {list(data.keys())}")
+                        if 'data' in data:
+                            print(f"[PDI Production] data is list: {isinstance(data.get('data'), list)}, len: {len(data.get('data', []))}")
+                        elif isinstance(data, list):
+                            print(f"[PDI Production] Response is direct list, len: {len(data)}")
+                    
+                    # Handle both {data: [...]} and direct [...] response formats
+                    items = data.get('data', []) if isinstance(data, dict) else data
                     
                     if not items:
                         empty_count += 1
@@ -1645,15 +1655,20 @@ def get_pdi_production_status(company_id):
                     empty_count = 0
                     total_fetched += len(items)
                     
+                    # Log first item fields on page 1
+                    if page == 1 and items:
+                        print(f"[PDI Production] Dispatch API first item keys: {list(items[0].keys())}")
+                    
                     for item in items:
-                        barcode = item.get('barcode', '').strip().upper()
+                        # Try multiple field names for serial number
+                        barcode = (item.get('panel_serial_no') or item.get('barcode') or item.get('serial_no') or '').strip().upper()
                         if barcode:
                             dispatched_serials_set.add(barcode)
                             dispatched_details[barcode] = {
                                 'pallet_no': item.get('pallet_no', ''),
-                                'dispatch_party': item.get('dispatch_party', ''),
+                                'dispatch_party': item.get('party_name') or item.get('dispatch_party', ''),
                                 'vehicle_no': item.get('vehicle_no', ''),
-                                'date': item.get('dispatch_date', '')
+                                'date': item.get('dispatch_date') or item.get('date', '')
                             }
                     
                     # Print progress every 50 pages
