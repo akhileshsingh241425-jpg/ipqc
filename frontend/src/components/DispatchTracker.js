@@ -363,8 +363,8 @@ const DispatchTracker = () => {
                 <div className="stat-card" style={{borderLeft: '4px solid #8b5cf6'}}>
                   <div className="stat-icon">🔬</div>
                   <div className="stat-content">
-                    <div className="stat-label">FTR Tested</div>
-                    <div className="stat-value">{(productionData?.total_ftr_ok || 0).toLocaleString()}</div>
+                    <div className="stat-label">FTR Assigned</div>
+                    <div className="stat-value">{totalFtrAssigned.toLocaleString()}</div>
                     <div className="stat-sub">OK: {(productionData?.total_ftr_ok || 0).toLocaleString()} | Rej: {(productionData?.total_rejected || 0).toLocaleString()}</div>
                   </div>
                 </div>
