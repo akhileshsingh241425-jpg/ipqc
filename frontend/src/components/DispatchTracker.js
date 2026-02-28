@@ -205,6 +205,7 @@ const DispatchTracker = () => {
   const totalDispatched = summary.total_dispatched || 0;
   const totalPacked = summary.total_packed || 0;
   const totalDispPending = summary.total_dispatch_pending || 0;
+  const extraDispatched = productionData?.extra_dispatched || { count: 0, serials: [], pallet_groups: [] };
 
   return (
     <div className="dispatch-tracker">
@@ -392,6 +393,20 @@ const DispatchTracker = () => {
                     <div className="stat-sub">Produced but not packed</div>
                   </div>
                 </div>
+                {extraDispatched.count > 0 && (
+                  <div className="stat-card" style={{borderLeft: '4px solid #d946ef', cursor: 'pointer'}} onClick={() => setSerialModal({
+                    title: `Extra Dispatched — Not in any PDI (${extraDispatched.count.toLocaleString()})`,
+                    serials: extraDispatched.serials || [],
+                    type: 'dispatched'
+                  })}>
+                    <div className="stat-icon">🔀</div>
+                    <div className="stat-content">
+                      <div className="stat-label">Extra Dispatched</div>
+                      <div className="stat-value" style={{color: '#d946ef'}}>{extraDispatched.count.toLocaleString()}</div>
+                      <div className="stat-sub">Dispatched but not in any PDI</div>
+                    </div>
+                  </div>
+                )}
                 {totalPending > 0 && (
                   <div className="stat-card" style={{borderLeft: '4px solid #6b7280'}}>
                     <div className="stat-icon">📋</div>
@@ -684,6 +699,68 @@ const DispatchTracker = () => {
                             </span>
                           </td>
                         </tr>
+                        {/* Extra Dispatched Row */}
+                        {extraDispatched.count > 0 && (
+                          <tr style={{background: '#fdf4ff', borderTop: '2px dashed #d946ef'}}>
+                            <td style={{color: '#d946ef', fontWeight: 700}}>🔀</td>
+                            <td style={{fontWeight: 700, color: '#a21caf'}}>EXTRA DISPATCHED</td>
+                            <td colSpan="2" style={{fontSize: '11px', color: '#a21caf'}}>Not in any PDI</td>
+                            <td>
+                              <span className="badge clickable-badge" style={{background:'#f5d0fe', color:'#86198f', cursor: 'pointer', fontWeight: 700}} onClick={() => setSerialModal({
+                                title: `Extra Dispatched — Not in any PDI (${extraDispatched.count.toLocaleString()})`,
+                                serials: extraDispatched.serials || [],
+                                type: 'dispatched'
+                              })}>{extraDispatched.count.toLocaleString()}</span>
+                            </td>
+                            <td colSpan="2" style={{fontSize: '11px', color: '#a21caf'}}>
+                              {(extraDispatched.pallet_groups || []).length} pallets
+                            </td>
+                            <td>
+                              {(extraDispatched.pallet_groups || []).length > 0 ? (
+                                <span className="badge clickable-badge" style={{background:'#f5d0fe', color:'#86198f', cursor:'pointer'}} onClick={() => togglePdiExpand('__extra__')}>
+                                  {(extraDispatched.pallet_groups || []).length} pallets {expandedPdi === '__extra__' ? '▲' : '▼'}
+                                </span>
+                              ) : <span style={{color:'#ccc'}}>—</span>}
+                            </td>
+                            <td></td>
+                          </tr>
+                        )}
+                        {/* Expanded Extra Dispatched Pallet Detail */}
+                        {expandedPdi === '__extra__' && (extraDispatched.pallet_groups || []).length > 0 && (
+                          <tr>
+                            <td colSpan="9" style={{padding: 0, background: '#fdf4ff'}}>
+                              <div style={{padding: '12px 20px'}}>
+                                <h4 style={{margin: '0 0 10px', fontSize: '13px', color: '#86198f'}}>
+                                  🔀 Extra Dispatched Pallet Details ({(extraDispatched.pallet_groups || []).length} pallets, {extraDispatched.count.toLocaleString()} serials)
+                                </h4>
+                                <table className="pallet-table" style={{fontSize: '12px', margin: 0}}>
+                                  <thead>
+                                    <tr>
+                                      <th>#</th>
+                                      <th>Pallet No</th>
+                                      <th>Status</th>
+                                      <th>Modules</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(extraDispatched.pallet_groups || []).map((pg, pi) => (
+                                      <tr key={pi}>
+                                        <td>{pi + 1}</td>
+                                        <td><strong>{pg.pallet_no}</strong></td>
+                                        <td>
+                                          <span className="badge" style={{background: '#f5d0fe', color: '#86198f', fontSize: '11px'}}>
+                                            🔀 Extra Dispatched
+                                          </span>
+                                        </td>
+                                        <td><strong>{pg.count}</strong></td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>

@@ -1836,6 +1836,37 @@ def get_pdi_production_status(company_id):
         dispatch_matches = len(local_set.intersection(dispatched_serials_set))
         packed_matches = len(local_set.intersection(set(packed_lookup.keys())))
         
+        # 7a. Extra Dispatched — serials dispatched to party but NOT in any local PDI
+        extra_dispatched_set = dispatched_serials_set - local_set
+        extra_dispatched_serials = []
+        extra_pallet_groups = {}
+        for serial in sorted(extra_dispatched_set):
+            detail = dispatched_details.get(serial, {})
+            pallet_no = detail.get('pallet_no', '')
+            packing_info = packed_lookup.get(serial, {})
+            if not pallet_no:
+                pallet_no = packing_info.get('pallet_no', '')
+            extra_dispatched_serials.append({
+                'serial': serial,
+                'pallet_no': pallet_no,
+                'dispatch_party': detail.get('dispatch_party', ''),
+                'vehicle_no': detail.get('vehicle_no', ''),
+                'date': detail.get('date', ''),
+                'status': 'Extra Dispatched'
+            })
+            pallet_key = pallet_no or 'Unknown'
+            if pallet_key not in extra_pallet_groups:
+                extra_pallet_groups[pallet_key] = {
+                    'pallet_no': pallet_key, 'status': 'Extra Dispatched', 'count': 0, 'serials': []
+                }
+            extra_pallet_groups[pallet_key]['count'] += 1
+            if len(extra_pallet_groups[pallet_key]['serials']) < 50:
+                extra_pallet_groups[pallet_key]['serials'].append(serial)
+        
+        extra_dispatched_count = len(extra_dispatched_set)
+        extra_pallet_list = sorted(extra_pallet_groups.values(), key=lambda x: str(x['pallet_no']))
+        print(f"[PDI Production] Extra Dispatched (not in any PDI): {extra_dispatched_count} serials, {len(extra_pallet_list)} pallets")
+        
         debug_info = {
             'matched_company': matched_company,
             'total_pdi_with_dispatch': len(pdi_dispatch_data),
@@ -1968,9 +1999,15 @@ def get_pdi_production_status(company_id):
                 "total_dispatched": grand_dispatched,
                 "total_packed": grand_packed,
                 "total_not_packed": grand_disp_pending,
-                "total_dispatch_pending": grand_disp_pending
+                "total_dispatch_pending": grand_disp_pending,
+                "extra_dispatched": extra_dispatched_count
             },
-            "pdi_wise": pdi_wise
+            "pdi_wise": pdi_wise,
+            "extra_dispatched": {
+                "count": extra_dispatched_count,
+                "serials": extra_dispatched_serials[:500],
+                "pallet_groups": extra_pallet_list
+            }
         })
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         resp.headers['Pragma'] = 'no-cache'
