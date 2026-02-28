@@ -1610,7 +1610,9 @@ def get_pdi_production_status(company_id):
                 matched_company = key.upper()
                 break
         
-        # 6c. Fetch LIVE dispatched serials from NEW fast Dispatch API (barcodes_only mode)
+        # 6c. Fetch LIVE dispatched serials using BOTH APIs for maximum freshness
+        # OLD API = real-time with pallet/vehicle/date details (limit=10000)
+        # NEW API = historical backup for older data (barcodes_only)
         dispatched_serials_set = set()
         dispatched_details = {}  # serial -> {pallet_no, dispatch_party, vehicle_no, date}
         dispatch_api_error = None
@@ -1621,48 +1623,98 @@ def get_pdi_production_status(company_id):
                 to_date = datetime.now().strftime('%Y-%m-%d')
                 from_date = (datetime.now() - timedelta(days=730)).strftime('%Y-%m-%d')
                 
-                print(f"[PDI Production] Fetching LIVE dispatch from NEW API: party_id={party_id}")
-                
-                # Use NEW fast API with barcodes_only mode (single request)
-                response = http_requests.post(
-                    'https://umanmrp.in/api/party-dispatch-history1.php',
-                    json={
-                        'party_id': party_id,
-                        'from_date': from_date,
-                        'to_date': to_date,
-                        'barcodes_only': True
-                    },
-                    timeout=300
-                )
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get('status') == 'success':
-                        barcodes = data.get('barcodes', [])
-                        print(f"[PDI Production] NEW API returned {len(barcodes)} barcode entries")
-                        # Each entry in barcodes is a SPACE-SEPARATED string of multiple serials
-                        for barcode_str in barcodes:
-                            if barcode_str and isinstance(barcode_str, str):
-                                individual_serials = barcode_str.strip().split()
-                                for serial in individual_serials:
-                                    serial = serial.strip().upper()
-                                    if serial:
-                                        dispatched_serials_set.add(serial)
-                                        dispatched_details[serial] = {
-                                            'pallet_no': '',
-                                            'dispatch_party': '',
-                                            'vehicle_no': '',
-                                            'date': ''
-                                        }
-                        print(f"[PDI Production] After splitting: {len(dispatched_serials_set)} individual serials")
+                # STEP 1: OLD API (LIVE, real-time) — has pallet, vehicle, date details
+                print(f"[PDI Production] STEP 1: Fetching LIVE dispatch from OLD API (detailed)...")
+                try:
+                    old_response = http_requests.post(
+                        'https://umanmrp.in/api/party-dispatch-history.php',
+                        json={
+                            'party_id': party_id,
+                            'from_date': from_date,
+                            'to_date': to_date,
+                            'page': 1,
+                            'limit': 10000
+                        },
+                        timeout=120,
+                        headers={'Cache-Control': 'no-cache', 'Pragma': 'no-cache'}
+                    )
+                    
+                    if old_response.status_code == 200:
+                        old_data = old_response.json()
+                        dispatch_summary = old_data.get('dispatch_summary', [])
+                        print(f"[PDI Production] OLD API returned {len(dispatch_summary)} dispatch entries")
+                        
+                        for dispatch in dispatch_summary:
+                            dispatch_date = dispatch.get('dispatch_date', '')
+                            vehicle_no = dispatch.get('vehicle_no', '')
+                            invoice_no = dispatch.get('invoice_no', '')
+                            pallet_nos = dispatch.get('pallet_nos', {})
+                            
+                            if isinstance(pallet_nos, dict):
+                                for pallet_no, barcodes_str in pallet_nos.items():
+                                    if isinstance(barcodes_str, str):
+                                        serials = barcodes_str.strip().split()
+                                        for serial in serials:
+                                            serial = serial.strip().upper()
+                                            if serial:
+                                                dispatched_serials_set.add(serial)
+                                                dispatched_details[serial] = {
+                                                    'pallet_no': pallet_no,
+                                                    'dispatch_party': invoice_no,
+                                                    'vehicle_no': vehicle_no,
+                                                    'date': dispatch_date
+                                                }
+                        
+                        print(f"[PDI Production] OLD API: {len(dispatched_serials_set)} serials with full details")
                     else:
-                        dispatch_api_error = data.get('message', 'API returned error')
-                        print(f"[PDI Production] NEW API error: {dispatch_api_error}")
-                else:
-                    dispatch_api_error = f"HTTP {response.status_code}"
-                    print(f"[PDI Production] NEW API HTTP error: {response.status_code}")
+                        print(f"[PDI Production] OLD API HTTP error: {old_response.status_code}")
+                except Exception as e:
+                    print(f"[PDI Production] OLD API error: {e}")
                 
-                print(f"[PDI Production] LIVE Dispatch: {len(dispatched_serials_set)} dispatched serials")
+                # STEP 2: NEW API (barcodes_only) — for any older serials not in OLD API
+                print(f"[PDI Production] STEP 2: Fetching from NEW API (barcodes_only) for historical data...")
+                try:
+                    new_response = http_requests.post(
+                        'https://umanmrp.in/api/party-dispatch-history1.php',
+                        json={
+                            'party_id': party_id,
+                            'from_date': from_date,
+                            'to_date': to_date,
+                            'barcodes_only': True
+                        },
+                        timeout=300,
+                        headers={'Cache-Control': 'no-cache', 'Pragma': 'no-cache'}
+                    )
+                    
+                    if new_response.status_code == 200:
+                        new_data = new_response.json()
+                        if new_data.get('status') == 'success':
+                            barcodes = new_data.get('barcodes', [])
+                            new_count = 0
+                            for barcode_str in barcodes:
+                                if barcode_str and isinstance(barcode_str, str):
+                                    individual_serials = barcode_str.strip().split()
+                                    for serial in individual_serials:
+                                        serial = serial.strip().upper()
+                                        if serial and serial not in dispatched_serials_set:
+                                            # Only add if not already from OLD API (which has better details)
+                                            dispatched_serials_set.add(serial)
+                                            dispatched_details[serial] = {
+                                                'pallet_no': '',
+                                                'dispatch_party': '',
+                                                'vehicle_no': '',
+                                                'date': ''
+                                            }
+                                            new_count += 1
+                            print(f"[PDI Production] NEW API added {new_count} additional historical serials")
+                        else:
+                            print(f"[PDI Production] NEW API error: {new_data.get('message', 'unknown')}")
+                    else:
+                        print(f"[PDI Production] NEW API HTTP error: {new_response.status_code}")
+                except Exception as e:
+                    print(f"[PDI Production] NEW API error: {e}")
+                
+                print(f"[PDI Production] TOTAL LIVE Dispatch: {len(dispatched_serials_set)} dispatched serials")
                 
             except Exception as e:
                 dispatch_api_error = str(e)
