@@ -1933,7 +1933,7 @@ def get_pdi_production_status(company_id):
         grand_pending = max(0, grand_planned - grand_produced) if grand_planned > 0 else 0
         grand_progress = round((grand_produced / grand_planned) * 100, 1) if grand_planned > 0 else (100 if grand_produced > 0 else 0)
 
-        return jsonify({
+        resp = jsonify({
             "success": True,
             "company": company['company_name'],
             "order_number": order_number,
@@ -1958,6 +1958,10 @@ def get_pdi_production_status(company_id):
             },
             "pdi_wise": pdi_wise
         })
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        resp.headers['Pragma'] = 'no-cache'
+        resp.headers['Expires'] = '0'
+        return resp
 
     except Exception as e:
         print(f"[PDI Production] Error: {e}")
