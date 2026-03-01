@@ -27,20 +27,21 @@ except ImportError:
 
 pdi_doc_bp = Blueprint('pdi_documentation', __name__)
 
-# ==================== STYLES ====================
-thin_border = Border(
-    left=Side(style='thin'), right=Side(style='thin'),
-    top=Side(style='thin'), bottom=Side(style='thin')
-)
-header_fill = PatternFill(start_color="1565C0", end_color="1565C0", fill_type="solid")
-header_font = Font(bold=True, color="FFFFFF", size=11)
-title_fill = PatternFill(start_color="0D47A1", end_color="0D47A1", fill_type="solid")
-title_font = Font(bold=True, color="FFFFFF", size=14)
-sub_header_fill = PatternFill(start_color="E3F2FD", end_color="E3F2FD", fill_type="solid")
-green_fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
-yellow_fill = PatternFill(start_color="FFF8E1", end_color="FFF8E1", fill_type="solid")
-red_fill = PatternFill(start_color="FFEBEE", end_color="FFEBEE", fill_type="solid")
-mom_header_fill = PatternFill(start_color="1B5E20", end_color="1B5E20", fill_type="solid")
+# ==================== STYLES (only if openpyxl available) ====================
+if EXCEL_AVAILABLE:
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+    header_fill = PatternFill(start_color="1565C0", end_color="1565C0", fill_type="solid")
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    title_fill = PatternFill(start_color="0D47A1", end_color="0D47A1", fill_type="solid")
+    title_font = Font(bold=True, color="FFFFFF", size=14)
+    sub_header_fill = PatternFill(start_color="E3F2FD", end_color="E3F2FD", fill_type="solid")
+    green_fill = PatternFill(start_color="E8F5E9", end_color="E8F5E9", fill_type="solid")
+    yellow_fill = PatternFill(start_color="FFF8E1", end_color="FFF8E1", fill_type="solid")
+    red_fill = PatternFill(start_color="FFEBEE", end_color="FFEBEE", fill_type="solid")
+    mom_header_fill = PatternFill(start_color="1B5E20", end_color="1B5E20", fill_type="solid")
 
 # ==================== MODULE DATABASE ====================
 MODULE_SPECS = {
