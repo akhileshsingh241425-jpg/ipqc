@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
+// Same URL pattern as FTRManagement, DispatchTracker, WitnessReport
 const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
+
+// v3 - uses existing /api/companies, /api/ftr/company, /api/ftr/pdi-serials 
+console.log('[PDI Docs v3] Loaded. API Base:', getAPIBaseURL() || '(empty - production)');
 
 // Module types available
 const MODULE_TYPES = {
