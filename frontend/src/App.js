@@ -12,6 +12,7 @@ import WitnessReport from './components/WitnessReport';
 import CalibrationDashboard from './components/CalibrationDashboard';
 import QMSDashboard from './components/QMSDashboard';
 import DispatchTracker from './components/DispatchTracker';
+import PDIDocGenerator from './components/PDIDocGenerator';
 import Login from './components/Login';
 import './styles/Navbar.css';
 import './App.css';
@@ -291,7 +292,7 @@ function App() {
   const roleAccess = {
     super_admin: ['all'], // Full access
     user: ['all'], // Full access for normal users too
-    ftr_only: ['ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report', 'dispatch-tracker'],
+    ftr_only: ['ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report', 'dispatch-tracker', 'pdi-docs'],
     ipqc_only: ['ipqc', 'daily-report', 'dispatch-tracker'],
     coc_only: ['coc-dashboard']
   };
@@ -383,6 +384,8 @@ function App() {
         return <CalibrationDashboard />;
       case 'qms':
         return <QMSDashboard />;
+      case 'pdi-docs':
+        return <PDIDocGenerator />;
       default:
         return <IPQCForm />;
     }
@@ -567,6 +570,16 @@ function App() {
             >
               <span className="icon material-symbols-outlined">verified</span>
               {!sidebarCollapsed && <span className="label">QMS</span>}
+            </li>
+          )}
+          {hasAccess('pdi-docs') && (
+            <li 
+              className={activeSection === 'pdi-docs' ? 'active' : ''}
+              onClick={() => handleMenuItemClick('pdi-docs')}
+              title="PDI Documentation Generator"
+            >
+              <span className="icon material-symbols-outlined">description</span>
+              {!sidebarCollapsed && <span className="label">PDI Docs</span>}
             </li>
           )}
           <li 
