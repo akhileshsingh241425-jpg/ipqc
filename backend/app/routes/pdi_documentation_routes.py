@@ -32,6 +32,7 @@ except ImportError:
     EXCEL_AVAILABLE = False
 
 pdi_doc_bp = Blueprint('pdi_documentation', __name__)
+print(f"[PDI Docs] Blueprint created. EXCEL_AVAILABLE={EXCEL_AVAILABLE}, CALIBRATION_MODEL={CALIBRATION_MODEL_AVAILABLE}")
 
 # ==================== STYLES (only if openpyxl available) ====================
 if EXCEL_AVAILABLE:
@@ -254,13 +255,15 @@ IPQC_STAGES = [
 
 
 # ==================== HELPER FUNCTIONS ====================
-def style_cell(ws, row, col, value, font=None, fill=None, alignment=None, border=thin_border):
+def style_cell(ws, row, col, value, font=None, fill=None, alignment=None, border='_default_'):
     """Style a cell with given properties"""
     cell = ws.cell(row=row, column=col, value=value)
     if font: cell.font = font
     if fill: cell.fill = fill
     if alignment: cell.alignment = alignment
     else: cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    if border == '_default_':
+        border = thin_border if EXCEL_AVAILABLE else None
     if border: cell.border = border
     return cell
 
@@ -457,12 +460,21 @@ def generate_pdi_documentation():
         
         filename = f"PDI_Documentation_{pdi_number}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
         
-        return send_file(
-            buffer,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=filename
-        )
+        try:
+            return send_file(
+                buffer,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                download_name=filename
+            )
+        except TypeError:
+            # Flask < 2.0 compatibility
+            return send_file(
+                buffer,
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                as_attachment=True,
+                attachment_filename=filename
+            )
         
     except Exception as e:
         print(f"[PDI Docs] Error: {e}")
