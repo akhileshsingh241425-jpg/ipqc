@@ -48,17 +48,17 @@ const PDIDocGenerator = () => {
   const [productionDays, setProductionDays] = useState([]);
   const [autoSplitPerDay, setAutoSplitPerDay] = useState(500); // modules per day default
 
-  // Load companies
+  // Load companies - using existing /api/companies endpoint (same as FTR Management)
   useEffect(() => {
     loadCompanies();
   }, []);
 
   const loadCompanies = async () => {
     try {
-      const response = await axios.get(`${getAPIBaseURL()}/api/pdi-docs/companies`);
-      if (response.data.success) {
-        setCompanies(response.data.companies);
-      }
+      const response = await axios.get(`${getAPIBaseURL()}/api/companies`);
+      // /api/companies returns array directly
+      const data = Array.isArray(response.data) ? response.data : (response.data.companies || []);
+      setCompanies(data);
     } catch (error) {
       console.error('Error loading companies:', error);
     }
@@ -74,9 +74,13 @@ const PDIDocGenerator = () => {
     
     try {
       setLoading(true);
-      const response = await axios.get(`${getAPIBaseURL()}/api/pdi-docs/pdi-list/${companyId}`);
-      if (response.data.success) {
-        setPdiList(response.data.pdis);
+      // Use existing FTR company API to get PDI assignments
+      const response = await axios.get(`${getAPIBaseURL()}/api/ftr/company/${companyId}`);
+      if (response.data.pdi_assignments) {
+        setPdiList(response.data.pdi_assignments.map(p => ({
+          pdi_number: p.pdi_number,
+          count: p.count
+        })));
       }
     } catch (error) {
       console.error('Error loading PDIs:', error);
@@ -91,11 +95,15 @@ const PDIDocGenerator = () => {
     
     try {
       setLoading(true);
-      const response = await axios.get(`${getAPIBaseURL()}/api/pdi-docs/serials/${selectedCompany.id}/${pdiNumber}`);
-      if (response.data.success) {
-        setSerials(response.data.serials);
+      // Use existing FTR pdi-serials API - fetch all serials (large page_size)
+      const response = await axios.get(
+        `${getAPIBaseURL()}/api/ftr/pdi-serials/${selectedCompany.id}/${encodeURIComponent(pdiNumber)}?page=1&page_size=100000`
+      );
+      if (response.data.success && response.data.serials) {
+        const serialNumbers = response.data.serials.map(s => s.serial_number);
+        setSerials(serialNumbers);
         // Auto-generate production days
-        autoGenerateProductionDays(response.data.serials.length);
+        autoGenerateProductionDays(serialNumbers.length);
       }
     } catch (error) {
       console.error('Error loading serials:', error);
@@ -164,7 +172,7 @@ const PDIDocGenerator = () => {
     try {
       const payload = {
         company_id: selectedCompany.id,
-        company_name: selectedCompany.name || 'Gautam Solar Private Limited',
+        company_name: selectedCompany.companyName || selectedCompany.name || 'Gautam Solar Private Limited',
         party_name: partyName,
         pdi_number: selectedPdi,
         module_type: moduleType,
@@ -253,7 +261,7 @@ const PDIDocGenerator = () => {
               style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px'}}>
               <option value="">-- Select Company --</option>
               {companies.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.wattage}W • {c.cells} cells • {c.serials || 0} serials)</option>
+                <option key={c.id} value={c.id}>{c.companyName || c.name} ({c.moduleWattage || c.wattage}W • {c.cellsPerModule || c.cells} cells)</option>
               ))}
             </select>
           </div>
@@ -507,7 +515,7 @@ const PDIDocGenerator = () => {
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px'
           }}>
             {[
-              {label: 'Company', value: selectedCompany?.name, icon: '🏢'},
+              {label: 'Company', value: selectedCompany?.companyName || selectedCompany?.name, icon: '🏢'},
               {label: 'PDI Number', value: selectedPdi, icon: '📋'},
               {label: 'Party', value: partyName || '—', icon: '🤝'},
               {label: 'Module', value: MODULE_TYPES[moduleType]?.name, icon: '☀️'},
