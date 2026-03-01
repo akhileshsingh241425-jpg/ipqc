@@ -4,8 +4,8 @@ import axios from 'axios';
 // Same URL pattern as FTRManagement, DispatchTracker, WitnessReport
 const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
 
-// v3 - uses existing /api/companies, /api/ftr/company, /api/ftr/pdi-serials 
-console.log('[PDI Docs v3] Loaded. API Base:', getAPIBaseURL() || '(empty - production)');
+// v4 - robust error handling + debug info
+console.log('[PDI Docs v4] Component loaded. Host:', window.location.hostname, 'API Base:', getAPIBaseURL() || '(production - same origin)');
 
 // Module types available
 const MODULE_TYPES = {
@@ -36,6 +36,9 @@ const PDIDocGenerator = () => {
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [step, setStep] = useState(1); // 1: Select, 2: Configure, 3: Production Days, 4: Generate
+  const [errorMsg, setErrorMsg] = useState('');
+  const [companiesLoading, setCompaniesLoading] = useState(true);
+  const [backendStatus, setBackendStatus] = useState('checking'); // checking, ok, error
   
   // Config state
   const [moduleType, setModuleType] = useState('G2G580');
@@ -52,19 +55,46 @@ const PDIDocGenerator = () => {
   const [productionDays, setProductionDays] = useState([]);
   const [autoSplitPerDay, setAutoSplitPerDay] = useState(500); // modules per day default
 
-  // Load companies - using existing /api/companies endpoint (same as FTR Management)
+  // Load companies + check backend on mount
   useEffect(() => {
     loadCompanies();
+    checkBackendHealth();
   }, []);
 
-  const loadCompanies = async () => {
+  const checkBackendHealth = async () => {
+    const API = getAPIBaseURL();
     try {
-      const response = await axios.get(`${getAPIBaseURL()}/api/companies`);
-      // /api/companies returns array directly
+      const res = await axios.get(`${API}/api/pdi-docs/health`, { timeout: 5000 });
+      console.log('[PDI Docs v4] Health check:', res.data);
+      setBackendStatus(res.data.success ? 'ok' : 'error');
+    } catch (err) {
+      console.warn('[PDI Docs v4] Health check failed:', err.message);
+      setBackendStatus('error');
+    }
+  };
+
+  const loadCompanies = async () => {
+    const API = getAPIBaseURL();
+    const url = `${API}/api/companies`;
+    console.log('[PDI Docs v4] Loading companies from:', url);
+    setCompaniesLoading(true);
+    setErrorMsg('');
+    try {
+      const response = await axios.get(url, { timeout: 15000 });
+      console.log('[PDI Docs v4] Companies response:', typeof response.data, Array.isArray(response.data) ? response.data.length + ' items' : response.data);
       const data = Array.isArray(response.data) ? response.data : (response.data.companies || []);
       setCompanies(data);
+      if (data.length === 0) {
+        setErrorMsg('No companies found in database. Please add a company first in FTR Management.');
+      }
     } catch (error) {
-      console.error('Error loading companies:', error);
+      const msg = error.response 
+        ? `Server error ${error.response.status}: ${JSON.stringify(error.response.data).substring(0, 200)}`
+        : error.message || 'Network error';
+      console.error('[PDI Docs v4] Companies load error:', msg);
+      setErrorMsg(`Failed to load companies: ${msg}`);
+    } finally {
+      setCompaniesLoading(false);
     }
   };
 
@@ -75,19 +105,30 @@ const PDIDocGenerator = () => {
     setSelectedPdi('');
     setSerials([]);
     setPdiList([]);
+    setErrorMsg('');
     
+    const API = getAPIBaseURL();
+    const url = `${API}/api/ftr/company/${companyId}`;
+    console.log('[PDI Docs v4] Loading PDIs from:', url);
     try {
       setLoading(true);
-      // Use existing FTR company API to get PDI assignments
-      const response = await axios.get(`${getAPIBaseURL()}/api/ftr/company/${companyId}`);
+      const response = await axios.get(url, { timeout: 15000 });
+      console.log('[PDI Docs v4] PDI response:', response.data);
       if (response.data.pdi_assignments) {
         setPdiList(response.data.pdi_assignments.map(p => ({
           pdi_number: p.pdi_number,
           count: p.count
         })));
+        if (response.data.pdi_assignments.length === 0) {
+          setErrorMsg('No PDI assignments found for this company. Assign PDIs first in FTR Management.');
+        }
+      } else {
+        setErrorMsg('No PDI data in response. Check FTR Management.');
       }
     } catch (error) {
-      console.error('Error loading PDIs:', error);
+      const msg = error.response ? `Error ${error.response.status}` : error.message;
+      console.error('[PDI Docs v4] PDI load error:', msg);
+      setErrorMsg(`Failed to load PDI list: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -95,22 +136,27 @@ const PDIDocGenerator = () => {
 
   const handlePdiSelect = async (pdiNumber) => {
     setSelectedPdi(pdiNumber);
+    setErrorMsg('');
     if (!pdiNumber || !selectedCompany) return;
     
+    const API = getAPIBaseURL();
+    const url = `${API}/api/ftr/pdi-serials/${selectedCompany.id}/${encodeURIComponent(pdiNumber)}?page=1&page_size=100000`;
+    console.log('[PDI Docs v4] Loading serials from:', url);
     try {
       setLoading(true);
-      // Use existing FTR pdi-serials API - fetch all serials (large page_size)
-      const response = await axios.get(
-        `${getAPIBaseURL()}/api/ftr/pdi-serials/${selectedCompany.id}/${encodeURIComponent(pdiNumber)}?page=1&page_size=100000`
-      );
+      const response = await axios.get(url, { timeout: 30000 });
+      console.log('[PDI Docs v4] Serials response:', response.data.total, 'total');
       if (response.data.success && response.data.serials) {
         const serialNumbers = response.data.serials.map(s => s.serial_number);
         setSerials(serialNumbers);
-        // Auto-generate production days
         autoGenerateProductionDays(serialNumbers.length);
+      } else {
+        setErrorMsg('No serials found for this PDI.');
       }
     } catch (error) {
-      console.error('Error loading serials:', error);
+      const msg = error.response ? `Error ${error.response.status}` : error.message;
+      console.error('[PDI Docs v4] Serials load error:', msg);
+      setErrorMsg(`Failed to load serials: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -168,11 +214,13 @@ const PDIDocGenerator = () => {
 
   const handleGenerate = async () => {
     if (!selectedCompany || !selectedPdi || serials.length === 0) {
-      alert('Please select a company and PDI with serials first.');
+      setErrorMsg('Please select a company and PDI with serials first.');
       return;
     }
     
     setGenerating(true);
+    setErrorMsg('');
+    const API = getAPIBaseURL();
     try {
       const payload = {
         company_id: selectedCompany.id,
@@ -191,9 +239,19 @@ const PDIDocGenerator = () => {
         production_days: productionDays
       };
 
-      const response = await axios.post(`${getAPIBaseURL()}/api/pdi-docs/generate`, payload, {
-        responseType: 'blob'
+      console.log('[PDI Docs v4] Generating...', `${API}/api/pdi-docs/generate`, 'serials:', serials.length);
+      const response = await axios.post(`${API}/api/pdi-docs/generate`, payload, {
+        responseType: 'blob',
+        timeout: 120000
       });
+
+      // Check if response is actually an error (JSON returned as blob)
+      if (response.data.type === 'application/json') {
+        const text = await response.data.text();
+        const errData = JSON.parse(text);
+        setErrorMsg(`Generation failed: ${errData.error || 'Unknown error'}`);
+        return;
+      }
 
       // Download file
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -205,8 +263,22 @@ const PDIDocGenerator = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Generation error:', error);
-      alert('Error generating documentation. Please try again.');
+      let msg;
+      if (error.response) {
+        if (error.response.data instanceof Blob) {
+          try {
+            const text = await error.response.data.text();
+            const errData = JSON.parse(text);
+            msg = errData.error || `Server error ${error.response.status}`;
+          } catch { msg = `Server error ${error.response.status}`; }
+        } else {
+          msg = error.response.data?.error || `Server error ${error.response.status}`;
+        }
+      } else {
+        msg = error.message || 'Network error';
+      }
+      console.error('[PDI Docs v4] Generate error:', msg);
+      setErrorMsg(`Generation error: ${msg}. Make sure PM2 backend is restarted on server.`);
     } finally {
       setGenerating(false);
     }
@@ -220,11 +292,53 @@ const PDIDocGenerator = () => {
         background: 'linear-gradient(135deg, #0D47A1, #1565C0, #1976D2)',
         borderRadius: '16px', padding: '24px 30px', marginBottom: '24px', color: '#fff'
       }}>
-        <h1 style={{margin: 0, fontSize: '24px', fontWeight: 700}}>📋 PDI Documentation Generator</h1>
-        <p style={{margin: '6px 0 0', opacity: 0.9, fontSize: '14px'}}>
-          Auto-generate complete PDI package — IPQC, Witness Report, Calibration, Sampling Plan & MOM
-        </p>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+          <div>
+            <h1 style={{margin: 0, fontSize: '24px', fontWeight: 700}}>📋 PDI Documentation Generator</h1>
+            <p style={{margin: '6px 0 0', opacity: 0.9, fontSize: '14px'}}>
+              Auto-generate complete PDI package — IPQC, Witness Report, Calibration, Sampling Plan & MOM
+            </p>
+          </div>
+          <div style={{textAlign: 'right', fontSize: '11px', opacity: 0.8}}>
+            <div>v4</div>
+            <div style={{
+              display: 'inline-block', padding: '2px 8px', borderRadius: '10px', marginTop: '4px',
+              background: backendStatus === 'ok' ? '#4caf50' : backendStatus === 'error' ? '#f44336' : '#ff9800',
+              fontSize: '10px', fontWeight: 600
+            }}>
+              {backendStatus === 'ok' ? 'Backend OK' : backendStatus === 'error' ? 'Backend Not Ready' : 'Checking...'}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Error Display */}
+      {errorMsg && (
+        <div style={{
+          background: '#fff3f3', border: '1px solid #ffcdd2', borderRadius: '10px',
+          padding: '14px 18px', marginBottom: '16px', color: '#c62828', fontSize: '13px'
+        }}>
+          <strong>⚠️ Error:</strong> {errorMsg}
+          <button onClick={() => setErrorMsg('')} style={{
+            float: 'right', background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontWeight: 700
+          }}>✕</button>
+        </div>
+      )}
+
+      {/* Backend Not Ready Warning */}
+      {backendStatus === 'error' && (
+        <div style={{
+          background: '#fff8e1', border: '1px solid #ffe082', borderRadius: '10px',
+          padding: '14px 18px', marginBottom: '16px', color: '#f57f17', fontSize: '13px'
+        }}>
+          <strong>⚠️ Backend PDI Docs endpoint not available.</strong> Run on server: <code style={{background: '#fff', padding: '2px 6px', borderRadius: '4px'}}>pm2 restart pdi-backend</code>
+          <br/>Companies will still load (uses existing API), but Generate will fail until pm2 is restarted.
+          <button onClick={checkBackendHealth} style={{
+            marginLeft: '12px', padding: '4px 12px', background: '#f57f17', color: '#fff',
+            border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px'
+          }}>Retry</button>
+        </div>
+      )}
 
       {/* Step Indicator */}
       <div style={{
@@ -260,14 +374,22 @@ const PDIDocGenerator = () => {
           
           {/* Company Select */}
           <div style={{marginBottom: '16px'}}>
-            <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Company</label>
-            <select value={selectedCompany?.id || ''} onChange={(e) => handleCompanySelect(e.target.value)}
-              style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px'}}>
-              <option value="">-- Select Company --</option>
-              {companies.map(c => (
-                <option key={c.id} value={c.id}>{c.companyName || c.name} ({c.moduleWattage || c.wattage}W • {c.cellsPerModule || c.cells} cells)</option>
-              ))}
-            </select>
+            <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>
+              Company {companiesLoading ? '(loading...)' : `(${companies.length} found)`}
+            </label>
+            {companiesLoading ? (
+              <div style={{padding: '12px', background: '#f8fafc', borderRadius: '8px', color: '#64748b', textAlign: 'center'}}>
+                Loading companies...
+              </div>
+            ) : (
+              <select value={selectedCompany?.id || ''} onChange={(e) => handleCompanySelect(e.target.value)}
+                style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px'}}>
+                <option value="">-- Select Company ({companies.length} available) --</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.companyName || c.name} ({c.moduleWattage || c.wattage}W • {c.cellsPerModule || c.cells} cells)</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* PDI Select */}
