@@ -10,12 +10,18 @@ All in one combined Excel workbook — ZERO manual work required.
 """
 from flask import Blueprint, request, jsonify, send_file
 from app.models.database import db
-from app.models.calibration_data import CalibrationInstrument
 from sqlalchemy import text
 import io
 import random
 import math
 from datetime import datetime, timedelta
+
+# Import CalibrationInstrument safely
+try:
+    from app.models.calibration_data import CalibrationInstrument
+    CALIBRATION_MODEL_AVAILABLE = True
+except Exception:
+    CALIBRATION_MODEL_AVAILABLE = False
 
 try:
     import openpyxl
@@ -279,6 +285,17 @@ def add_title_block(ws, title, company_name, party_name, pdi_number, total_qty, 
 
 
 # ==================== API ROUTES ====================
+
+@pdi_doc_bp.route('/pdi-docs/health', methods=['GET'])
+def pdi_docs_health():
+    """Health check endpoint to verify blueprint is loaded"""
+    return jsonify({
+        'success': True, 
+        'message': 'PDI Documentation blueprint loaded',
+        'excel_available': EXCEL_AVAILABLE,
+        'calibration_model': CALIBRATION_MODEL_AVAILABLE
+    })
+
 
 @pdi_doc_bp.route('/pdi-docs/generate', methods=['POST'])
 def generate_pdi_documentation():

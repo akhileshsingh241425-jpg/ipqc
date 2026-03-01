@@ -70,7 +70,13 @@ def create_app():
     from app.routes.witness_report_routes import witness_report_bp
     from app.routes.calibration_routes import calibration_bp
     from app.routes.qms_routes import qms_bp
-    from app.routes.pdi_documentation_routes import pdi_doc_bp
+    
+    try:
+        from app.routes.pdi_documentation_routes import pdi_doc_bp
+        _pdi_doc_available = True
+    except Exception as e:
+        print(f"[WARNING] PDI Documentation routes failed to import: {e}")
+        _pdi_doc_available = False
     
     app.register_blueprint(ipqc_bp, url_prefix='/api/ipqc')
     app.register_blueprint(production_bp)
@@ -91,7 +97,9 @@ def create_app():
     app.register_blueprint(witness_report_bp, url_prefix='/api')
     app.register_blueprint(calibration_bp)
     app.register_blueprint(qms_bp)
-    app.register_blueprint(pdi_doc_bp, url_prefix='/api')
+    
+    if _pdi_doc_available:
+        app.register_blueprint(pdi_doc_bp, url_prefix='/api')
     
     # Serve uploaded files (IPQC PDFs, FTR documents, BOM images)
     @app.route('/uploads/<path:filename>')
