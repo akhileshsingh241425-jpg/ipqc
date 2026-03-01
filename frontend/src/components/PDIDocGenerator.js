@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
 
 // Module types available
 const MODULE_TYPES = {
@@ -55,7 +55,7 @@ const PDIDocGenerator = () => {
 
   const loadCompanies = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/pdi-docs/companies`);
+      const response = await axios.get(`${getAPIBaseURL()}/api/pdi-docs/companies`);
       if (response.data.success) {
         setCompanies(response.data.companies);
       }
@@ -74,7 +74,7 @@ const PDIDocGenerator = () => {
     
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/api/pdi-docs/pdi-list/${companyId}`);
+      const response = await axios.get(`${getAPIBaseURL()}/api/pdi-docs/pdi-list/${companyId}`);
       if (response.data.success) {
         setPdiList(response.data.pdis);
       }
@@ -91,7 +91,7 @@ const PDIDocGenerator = () => {
     
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/api/pdi-docs/serials/${selectedCompany.id}/${pdiNumber}`);
+      const response = await axios.get(`${getAPIBaseURL()}/api/pdi-docs/serials/${selectedCompany.id}/${pdiNumber}`);
       if (response.data.success) {
         setSerials(response.data.serials);
         // Auto-generate production days
@@ -179,7 +179,7 @@ const PDIDocGenerator = () => {
         production_days: productionDays
       };
 
-      const response = await axios.post(`${API_BASE_URL}/api/pdi-docs/generate`, payload, {
+      const response = await axios.post(`${getAPIBaseURL()}/api/pdi-docs/generate`, payload, {
         responseType: 'blob'
       });
 

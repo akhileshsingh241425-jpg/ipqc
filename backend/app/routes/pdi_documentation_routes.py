@@ -1126,18 +1126,29 @@ def create_mom_sheet(ws, company_name, party_name, pdi_number, total_qty, report
 def get_pdi_doc_companies():
     """Get all companies (with or without FTR data)"""
     try:
-        result = db.session.execute(text("""
-            SELECT c.id, c.company_name, c.module_wattage, c.cells_per_module,
-                   COALESCE(ftr.serial_count, 0) as serial_count
-            FROM companies c
-            LEFT JOIN (
-                SELECT company_id, COUNT(*) as serial_count
-                FROM ftr_master_serials
-                GROUP BY company_id
-            ) ftr ON c.id = ftr.company_id
-            ORDER BY c.company_name
-        """))
-        companies = [{'id': row[0], 'name': row[1], 'wattage': row[2], 'cells': row[3], 'serials': row[4]} for row in result.fetchall()]
+        # First try with FTR serial count
+        try:
+            result = db.session.execute(text("""
+                SELECT c.id, c.company_name, c.module_wattage, c.cells_per_module,
+                       COALESCE(ftr.serial_count, 0) as serial_count
+                FROM companies c
+                LEFT JOIN (
+                    SELECT company_id, COUNT(*) as serial_count
+                    FROM ftr_master_serials
+                    GROUP BY company_id
+                ) ftr ON c.id = ftr.company_id
+                ORDER BY c.company_name
+            """))
+            companies = [{'id': row[0], 'name': row[1], 'wattage': row[2], 'cells': row[3], 'serials': row[4]} for row in result.fetchall()]
+        except Exception:
+            # Fallback: just get companies without FTR join
+            db.session.rollback()
+            result = db.session.execute(text("""
+                SELECT id, company_name, module_wattage, cells_per_module
+                FROM companies
+                ORDER BY company_name
+            """))
+            companies = [{'id': row[0], 'name': row[1], 'wattage': row[2], 'cells': row[3], 'serials': 0} for row in result.fetchall()]
         return jsonify({'success': True, 'companies': companies})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
