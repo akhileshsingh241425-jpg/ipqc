@@ -1124,15 +1124,20 @@ def create_mom_sheet(ws, company_name, party_name, pdi_number, total_qty, report
 
 @pdi_doc_bp.route('/pdi-docs/companies', methods=['GET'])
 def get_pdi_doc_companies():
-    """Get companies with FTR data"""
+    """Get all companies (with or without FTR data)"""
     try:
         result = db.session.execute(text("""
-            SELECT DISTINCT c.id, c.company_name, c.module_wattage, c.cells_per_module
+            SELECT c.id, c.company_name, c.module_wattage, c.cells_per_module,
+                   COALESCE(ftr.serial_count, 0) as serial_count
             FROM companies c
-            JOIN ftr_master_serials fms ON c.id = fms.company_id
+            LEFT JOIN (
+                SELECT company_id, COUNT(*) as serial_count
+                FROM ftr_master_serials
+                GROUP BY company_id
+            ) ftr ON c.id = ftr.company_id
             ORDER BY c.company_name
         """))
-        companies = [{'id': row[0], 'name': row[1], 'wattage': row[2], 'cells': row[3]} for row in result.fetchall()]
+        companies = [{'id': row[0], 'name': row[1], 'wattage': row[2], 'cells': row[3], 'serials': row[4]} for row in result.fetchall()]
         return jsonify({'success': True, 'companies': companies})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500

@@ -253,7 +253,7 @@ const PDIDocGenerator = () => {
               style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px'}}>
               <option value="">-- Select Company --</option>
               {companies.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.wattage}W • {c.cells} cells)</option>
+                <option key={c.id} value={c.id}>{c.name} ({c.wattage}W • {c.cells} cells • {c.serials || 0} serials)</option>
               ))}
             </select>
           </div>
