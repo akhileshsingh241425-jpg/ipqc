@@ -134,11 +134,12 @@ def get_all_mrp_data(company):
     # Party names to fetch from
     party_names_to_fetch = [mrp_party_name]
     
-    # For Sterling and Wilson, also fetch from "S&W" party
+    # For Sterling and Wilson, also fetch from "S&W" and "S&W - NTPC" parties
     if is_sterling_wilson:
         party_names_to_fetch = [
             'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
-            'S&W'
+            'S&W',
+            'S&W - NTPC'
         ]
     
     try:
@@ -153,6 +154,9 @@ def get_all_mrp_data(company):
                     data = response.json()
                     if data.get('status') == 'success':
                         party_data = data.get('data', [])
+                        # Tag each record with sub_party name
+                        for item in party_data:
+                            item['sub_party'] = party_name
                         all_data.extend(party_data)
                         print(f"✅ Fetched {len(party_data)} records from party: {party_name}")
             except Exception as e:

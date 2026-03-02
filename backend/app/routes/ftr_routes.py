@@ -1552,7 +1552,7 @@ def get_pdi_production_status(company_id):
         elif 'larsen' in lower_name or 'l&t' in lower_name or 'lnt' in lower_name:
             packing_party_names = ['LARSEN & TOUBRO LIMITED', 'LARSEN & TOUBRO LIMITED, CONSTRUCTION', 'LARSEN AND TOUBRO']
         elif 'sterling' in lower_name or 'sterlin' in lower_name or 's&w' in lower_name:
-            packing_party_names = ['STERLING AND WILSON RENEWABLE ENERGY LIMITED', 'STERLING AND WILSON', 'S&W']
+            packing_party_names = ['STERLING AND WILSON RENEWABLE ENERGY LIMITED', 'STERLING AND WILSON', 'S&W', 'S&W - NTPC']
         
         # Fetch packed serials from packing API
         packed_lookup = {}  # serial -> {pallet_no, running_order, ...}
@@ -1763,6 +1763,7 @@ def get_pdi_production_status(company_id):
                         'dispatch_party': dispatch_info.get('dispatch_party', ''),
                         'vehicle_no': dispatch_info.get('vehicle_no', ''),
                         'date': dispatch_info.get('date', ''),
+                        'sub_party': packing_info.get('party_name', ''),
                         'status': 'Dispatched'
                     })
                     # Add to pallet group
@@ -1783,6 +1784,7 @@ def get_pdi_production_status(company_id):
                         'serial': serial,
                         'pallet_no': packing_info.get('pallet_no', ''),
                         'party_name': packing_info.get('party_name', ''),
+                        'sub_party': packing_info.get('party_name', ''),
                         'status': 'Packed'
                     })
                     # Add to pallet group
@@ -1852,6 +1854,7 @@ def get_pdi_production_status(company_id):
                 'dispatch_party': detail.get('dispatch_party', ''),
                 'vehicle_no': detail.get('vehicle_no', ''),
                 'date': detail.get('date', ''),
+                'sub_party': packing_info.get('party_name', ''),
                 'status': 'Extra Dispatched'
             })
             pallet_key = pallet_no or 'Unknown'
@@ -1866,6 +1869,35 @@ def get_pdi_production_status(company_id):
         extra_dispatched_count = len(extra_dispatched_set)
         extra_pallet_list = sorted(extra_pallet_groups.values(), key=lambda x: str(x['pallet_no']))
         print(f"[PDI Production] Extra Dispatched (not in any PDI): {extra_dispatched_count} serials, {len(extra_pallet_list)} pallets")
+        
+        # 7b. Extra Packed — serials packed but NOT in any local PDI (and not dispatched)
+        packed_serials_set = set(packed_lookup.keys())
+        extra_packed_set = packed_serials_set - local_set - dispatched_serials_set
+        extra_packed_serials = []
+        extra_packed_pallet_groups = {}
+        for serial in sorted(extra_packed_set):
+            packing_info = packed_lookup.get(serial, {})
+            pallet_no = packing_info.get('pallet_no', '')
+            extra_packed_serials.append({
+                'serial': serial,
+                'pallet_no': pallet_no,
+                'party_name': packing_info.get('party_name', ''),
+                'sub_party': packing_info.get('party_name', ''),
+                'running_order': packing_info.get('running_order', ''),
+                'status': 'Extra Packed'
+            })
+            pallet_key = pallet_no or 'Unknown'
+            if pallet_key not in extra_packed_pallet_groups:
+                extra_packed_pallet_groups[pallet_key] = {
+                    'pallet_no': pallet_key, 'status': 'Extra Packed', 'count': 0, 'serials': []
+                }
+            extra_packed_pallet_groups[pallet_key]['count'] += 1
+            if len(extra_packed_pallet_groups[pallet_key]['serials']) < 50:
+                extra_packed_pallet_groups[pallet_key]['serials'].append(serial)
+        
+        extra_packed_count = len(extra_packed_set)
+        extra_packed_pallet_list = sorted(extra_packed_pallet_groups.values(), key=lambda x: str(x['pallet_no']))
+        print(f"[PDI Production] Extra Packed (not in any PDI): {extra_packed_count} serials, {len(extra_packed_pallet_list)} pallets")
         
         debug_info = {
             'matched_company': matched_company,
@@ -2000,13 +2032,19 @@ def get_pdi_production_status(company_id):
                 "total_packed": grand_packed,
                 "total_not_packed": grand_disp_pending,
                 "total_dispatch_pending": grand_disp_pending,
-                "extra_dispatched": extra_dispatched_count
+                "extra_dispatched": extra_dispatched_count,
+                "extra_packed": extra_packed_count
             },
             "pdi_wise": pdi_wise,
             "extra_dispatched": {
                 "count": extra_dispatched_count,
                 "serials": extra_dispatched_serials[:500],
                 "pallet_groups": extra_pallet_list
+            },
+            "extra_packed": {
+                "count": extra_packed_count,
+                "serials": extra_packed_serials[:500],
+                "pallet_groups": extra_packed_pallet_list
             }
         })
         resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
@@ -2067,7 +2105,8 @@ def export_not_packed_serials(company_id):
             'larsen': 'LARSEN & TOUBRO LIMITED CONSTRUCTION',
             'lnt': 'LARSEN & TOUBRO LIMITED CONSTRUCTION',
             'sterling': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
-            's&w': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED'
+            's&w': 'STERLING AND WILSON RENEWABLE ENERGY LIMITED',
+            'ntpc': 'S&W - NTPC'
         }
         
         # Find matching party names
@@ -2076,6 +2115,12 @@ def export_not_packed_serials(company_id):
             if key in lower_name:
                 if party_name not in matching_party_names:
                     matching_party_names.append(party_name)
+        
+        # For Sterling/S&W, always include all sub-party names
+        if any(k in lower_name for k in ['sterling', 'sterlin', 's&w']):
+            for extra_name in ['STERLING AND WILSON RENEWABLE ENERGY LIMITED', 'STERLING AND WILSON', 'S&W', 'S&W - NTPC']:
+                if extra_name not in matching_party_names:
+                    matching_party_names.append(extra_name)
         
         # Fetch from Packing API
         packed_serials_set = set()

@@ -206,6 +206,7 @@ const DispatchTracker = () => {
   const totalPacked = summary.total_packed || 0;
   const totalDispPending = summary.total_dispatch_pending || 0;
   const extraDispatched = productionData?.extra_dispatched || { count: 0, serials: [], pallet_groups: [] };
+  const extraPacked = productionData?.extra_packed || { count: 0, serials: [], pallet_groups: [] };
 
   return (
     <div className="dispatch-tracker">
@@ -407,6 +408,20 @@ const DispatchTracker = () => {
                     </div>
                   </div>
                 )}
+                {extraPacked.count > 0 && (
+                  <div className="stat-card" style={{borderLeft: '4px solid #06b6d4', cursor: 'pointer'}} onClick={() => setSerialModal({
+                    title: `Extra Packed — Not in any PDI (${extraPacked.count.toLocaleString()})`,
+                    serials: extraPacked.serials || [],
+                    type: 'packed'
+                  })}>
+                    <div className="stat-icon">📦</div>
+                    <div className="stat-content">
+                      <div className="stat-label">Extra Packed</div>
+                      <div className="stat-value" style={{color: '#06b6d4'}}>{extraPacked.count.toLocaleString()}</div>
+                      <div className="stat-sub">Packed but not in any PDI</div>
+                    </div>
+                  </div>
+                )}
                 {totalPending > 0 && (
                   <div className="stat-card" style={{borderLeft: '4px solid #6b7280'}}>
                     <div className="stat-icon">📋</div>
@@ -542,6 +557,12 @@ const DispatchTracker = () => {
                   onClick={() => setActiveTab('pallets')}
                 >
                   📦 Pallet-wise Report
+                </button>
+                <button 
+                  className={`tab-btn ${activeTab === 'modulepack' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('modulepack')}
+                >
+                  📦 Module Pack
                 </button>
               </div>
 
@@ -761,6 +782,69 @@ const DispatchTracker = () => {
                             </td>
                           </tr>
                         )}
+                        {/* Extra Packed Row */}
+                        {extraPacked.count > 0 && (
+                          <tr style={{background: '#ecfeff', borderTop: '2px dashed #06b6d4'}}>
+                            <td style={{color: '#06b6d4', fontWeight: 700}}>📦</td>
+                            <td style={{fontWeight: 700, color: '#0e7490'}}>EXTRA PACKED</td>
+                            <td colSpan="2" style={{fontSize: '11px', color: '#0e7490'}}>Not in any PDI</td>
+                            <td></td>
+                            <td>
+                              <span className="badge clickable-badge" style={{background:'#a5f3fc', color:'#0e7490', cursor: 'pointer', fontWeight: 700}} onClick={() => setSerialModal({
+                                title: `Extra Packed — Not in any PDI (${extraPacked.count.toLocaleString()})`,
+                                serials: extraPacked.serials || [],
+                                type: 'packed'
+                              })}>{extraPacked.count.toLocaleString()}</span>
+                            </td>
+                            <td colSpan="1" style={{fontSize: '11px', color: '#0e7490'}}>
+                              {(extraPacked.pallet_groups || []).length} pallets
+                            </td>
+                            <td>
+                              {(extraPacked.pallet_groups || []).length > 0 ? (
+                                <span className="badge clickable-badge" style={{background:'#a5f3fc', color:'#0e7490', cursor:'pointer'}} onClick={() => togglePdiExpand('__extra_packed__')}>
+                                  {(extraPacked.pallet_groups || []).length} pallets {expandedPdi === '__extra_packed__' ? '▲' : '▼'}
+                                </span>
+                              ) : <span style={{color:'#ccc'}}>—</span>}
+                            </td>
+                            <td></td>
+                          </tr>
+                        )}
+                        {/* Expanded Extra Packed Pallet Detail */}
+                        {expandedPdi === '__extra_packed__' && (extraPacked.pallet_groups || []).length > 0 && (
+                          <tr>
+                            <td colSpan="9" style={{padding: 0, background: '#ecfeff'}}>
+                              <div style={{padding: '12px 20px'}}>
+                                <h4 style={{margin: '0 0 10px', fontSize: '13px', color: '#0e7490'}}>
+                                  📦 Extra Packed Pallet Details ({(extraPacked.pallet_groups || []).length} pallets, {extraPacked.count.toLocaleString()} serials)
+                                </h4>
+                                <table className="pallet-table" style={{fontSize: '12px', margin: 0}}>
+                                  <thead>
+                                    <tr>
+                                      <th>#</th>
+                                      <th>Pallet No</th>
+                                      <th>Status</th>
+                                      <th>Modules</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(extraPacked.pallet_groups || []).map((pg, pi) => (
+                                      <tr key={pi}>
+                                        <td>{pi + 1}</td>
+                                        <td><strong>{pg.pallet_no}</strong></td>
+                                        <td>
+                                          <span className="badge" style={{background: '#a5f3fc', color: '#0e7490', fontSize: '11px'}}>
+                                            📦 Extra Packed
+                                          </span>
+                                        </td>
+                                        <td><strong>{pg.count}</strong></td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -880,6 +964,331 @@ const DispatchTracker = () => {
                 </div>
               )}
 
+              {/* ==================== TAB 3: Module Pack ==================== */}
+              {activeTab === 'modulepack' && (() => {
+                // Consolidate all packing data across PDIs
+                const allPallets = {}; // pallet_no -> {pdi, count, serials, status, dispatch_party, vehicle_no, date}
+                const pdiPackSummary = []; // [{pdi_number, total_packed, total_dispatched, total_not_packed, pallets}]
+
+                pdiWise.forEach(pdi => {
+                  let pdiPacked = 0;
+                  let pdiDispatched = 0;
+                  let pdiNotPacked = 0;
+                  const pdiPalletSet = new Set();
+
+                  // From dispatched serials (packed + dispatched)
+                  (pdi.dispatched_serials || []).forEach(s => {
+                    pdiDispatched++;
+                    const palletNo = s.pallet_no || 'Unknown';
+                    pdiPalletSet.add(palletNo);
+                    if (!allPallets[palletNo]) {
+                      allPallets[palletNo] = { pallet_no: palletNo, pdi_list: new Set(), count: 0, serials: [], status: 'Dispatched', dispatch_party: s.dispatch_party || '', vehicle_no: s.vehicle_no || '', date: s.date || '', sub_party: s.sub_party || '' };
+                    }
+                    allPallets[palletNo].pdi_list.add(pdi.pdi_number);
+                    allPallets[palletNo].count++;
+                    if (allPallets[palletNo].serials.length < 20) allPallets[palletNo].serials.push(s.serial);
+                    if (allPallets[palletNo].status !== 'Dispatched') allPallets[palletNo].status = 'Dispatched';
+                    if (!allPallets[palletNo].dispatch_party && s.dispatch_party) allPallets[palletNo].dispatch_party = s.dispatch_party;
+                    if (!allPallets[palletNo].vehicle_no && s.vehicle_no) allPallets[palletNo].vehicle_no = s.vehicle_no;
+                    if (!allPallets[palletNo].date && s.date) allPallets[palletNo].date = s.date;
+                    if (!allPallets[palletNo].sub_party && s.sub_party) allPallets[palletNo].sub_party = s.sub_party;
+                  });
+
+                  // From packed serials (packed only, not dispatched)
+                  (pdi.packed_serials || []).forEach(s => {
+                    pdiPacked++;
+                    const palletNo = s.pallet_no || 'Unknown';
+                    pdiPalletSet.add(palletNo);
+                    if (!allPallets[palletNo]) {
+                      allPallets[palletNo] = { pallet_no: palletNo, pdi_list: new Set(), count: 0, serials: [], status: 'Packed', dispatch_party: '', vehicle_no: '', date: '', sub_party: s.sub_party || s.party_name || '' };
+                    }
+                    allPallets[palletNo].pdi_list.add(pdi.pdi_number);
+                    allPallets[palletNo].count++;
+                    if (allPallets[palletNo].serials.length < 20) allPallets[palletNo].serials.push(s.serial);
+                  });
+
+                  // Not packed count
+                  pdiNotPacked = pdi.not_packed || pdi.dispatch_pending || 0;
+
+                  pdiPackSummary.push({
+                    pdi_number: pdi.pdi_number,
+                    total_packed: pdiPacked,
+                    total_dispatched: pdiDispatched,
+                    total_not_packed: pdiNotPacked,
+                    total_modules: pdiPacked + pdiDispatched + pdiNotPacked,
+                    pallets: pdiPalletSet.size
+                  });
+                });
+
+                // Convert to sorted array
+                const palletList = Object.values(allPallets).map(p => ({ ...p, pdi_list: Array.from(p.pdi_list) }));
+                palletList.sort((a, b) => {
+                  const aNum = parseInt(a.pallet_no) || 0;
+                  const bNum = parseInt(b.pallet_no) || 0;
+                  return aNum - bNum || a.pallet_no.localeCompare(b.pallet_no);
+                });
+
+                const totalAllPacked = palletList.filter(p => p.status === 'Packed').reduce((sum, p) => sum + p.count, 0);
+                const totalAllDispatched = palletList.filter(p => p.status === 'Dispatched').reduce((sum, p) => sum + p.count, 0);
+                const totalAllModules = palletList.reduce((sum, p) => sum + p.count, 0);
+                const dispatchedPallets = palletList.filter(p => p.status === 'Dispatched');
+                const packedPallets = palletList.filter(p => p.status === 'Packed');
+
+                return (
+                  <div className="section">
+                    <h3>📦 Module Pack — Consolidated View</h3>
+                    <p style={{fontSize: '13px', color: '#64748b', marginBottom: '16px'}}>All PDI packing & dispatch data in one place</p>
+
+                    {/* Module Pack Summary Cards */}
+                    <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '20px'}}>
+                      <div style={{background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '14px 16px', textAlign: 'center'}}>
+                        <div style={{fontSize: '12px', color: '#166534', fontWeight: 600}}>Total Modules in Pallets</div>
+                        <div style={{fontSize: '28px', fontWeight: 700, color: '#15803d'}}>{totalAllModules.toLocaleString()}</div>
+                      </div>
+                      <div style={{background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '10px', padding: '14px 16px', textAlign: 'center'}}>
+                        <div style={{fontSize: '12px', color: '#1e40af', fontWeight: 600}}>Total Pallets</div>
+                        <div style={{fontSize: '28px', fontWeight: 700, color: '#2563eb'}}>{palletList.length}</div>
+                      </div>
+                      <div style={{background: '#dcfce7', border: '1px solid #86efac', borderRadius: '10px', padding: '14px 16px', textAlign: 'center'}}>
+                        <div style={{fontSize: '12px', color: '#166534', fontWeight: 600}}>🚚 Dispatched</div>
+                        <div style={{fontSize: '28px', fontWeight: 700, color: '#16a34a'}}>{totalAllDispatched.toLocaleString()}</div>
+                        <div style={{fontSize: '11px', color: '#15803d'}}>{dispatchedPallets.length} pallets</div>
+                      </div>
+                      <div style={{background: '#fef9c3', border: '1px solid #fde047', borderRadius: '10px', padding: '14px 16px', textAlign: 'center'}}>
+                        <div style={{fontSize: '12px', color: '#854d0e', fontWeight: 600}}>📦 Packed Only</div>
+                        <div style={{fontSize: '28px', fontWeight: 700, color: '#d97706'}}>{totalAllPacked.toLocaleString()}</div>
+                        <div style={{fontSize: '11px', color: '#92400e'}}>{packedPallets.length} pallets</div>
+                      </div>
+                      <div style={{background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: '10px', padding: '14px 16px', textAlign: 'center'}}>
+                        <div style={{fontSize: '12px', color: '#991b1b', fontWeight: 600}}>⏳ Not Packed</div>
+                        <div style={{fontSize: '28px', fontWeight: 700, color: '#dc2626'}}>{totalDispPending.toLocaleString()}</div>
+                      </div>
+                    </div>
+
+                    {/* PDI-wise Packing Summary */}
+                    <div style={{marginBottom: '24px'}}>
+                      <h4 style={{fontSize: '14px', color: '#334155', marginBottom: '10px'}}>📋 PDI-wise Packing Summary</h4>
+                      <div className="pallet-table-container">
+                        <table className="pallet-table" style={{fontSize: '12px'}}>
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>PDI Number</th>
+                              <th>Total Modules</th>
+                              <th style={{background: '#dcfce7', color: '#166534'}}>Dispatched</th>
+                              <th style={{background: '#fef9c3', color: '#854d0e'}}>Packed</th>
+                              <th style={{background: '#fee2e2', color: '#991b1b'}}>Not Packed</th>
+                              <th>Pallets</th>
+                              <th>Pack %</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pdiPackSummary.map((pdi, idx) => {
+                              const packPct = pdi.total_modules > 0 ? Math.round(((pdi.total_dispatched + pdi.total_packed) / pdi.total_modules) * 100) : 0;
+                              return (
+                                <tr key={idx}>
+                                  <td>{idx + 1}</td>
+                                  <td><strong>{pdi.pdi_number}</strong></td>
+                                  <td><span className="badge">{pdi.total_modules.toLocaleString()}</span></td>
+                                  <td>
+                                    {pdi.total_dispatched > 0
+                                      ? <span className="badge" style={{background:'#dcfce7', color:'#166534'}}>{pdi.total_dispatched.toLocaleString()}</span>
+                                      : <span style={{color: '#ccc'}}>0</span>
+                                    }
+                                  </td>
+                                  <td>
+                                    {pdi.total_packed > 0
+                                      ? <span className="badge" style={{background:'#fef9c3', color:'#854d0e'}}>{pdi.total_packed.toLocaleString()}</span>
+                                      : <span style={{color: '#ccc'}}>0</span>
+                                    }
+                                  </td>
+                                  <td>
+                                    {pdi.total_not_packed > 0
+                                      ? <span className="badge" style={{background:'#fee2e2', color:'#991b1b'}}>{pdi.total_not_packed.toLocaleString()}</span>
+                                      : <span style={{color: '#22c55e', fontWeight: 600}}>✓</span>
+                                    }
+                                  </td>
+                                  <td><span className="badge" style={{background:'#e0e7ff', color:'#3730a3'}}>{pdi.pallets}</span></td>
+                                  <td>
+                                    <div style={{display: 'flex', alignItems: 'center', gap: '6px'}}>
+                                      <div style={{height: '8px', borderRadius: '4px', background: '#f1f5f9', overflow: 'hidden', display: 'flex', width: '60px'}}>
+                                        <div style={{width: `${packPct}%`, background: packPct === 100 ? '#22c55e' : '#f59e0b', transition: 'width 0.3s'}}></div>
+                                      </div>
+                                      <span style={{fontSize:'11px', fontWeight: 600, color: packPct === 100 ? '#16a34a' : '#d97706'}}>{packPct}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {/* Total Row */}
+                            <tr style={{fontWeight: 'bold', background: '#f0f7ff', borderTop: '2px solid #2563eb'}}>
+                              <td></td>
+                              <td>TOTAL</td>
+                              <td><span className="badge">{(totalAllDispatched + totalAllPacked + totalDispPending).toLocaleString()}</span></td>
+                              <td><span className="badge" style={{background:'#dcfce7', color:'#166534'}}>{totalAllDispatched.toLocaleString()}</span></td>
+                              <td><span className="badge" style={{background:'#fef9c3', color:'#854d0e'}}>{totalAllPacked.toLocaleString()}</span></td>
+                              <td>{totalDispPending > 0 ? <span className="badge" style={{background:'#fee2e2', color:'#991b1b'}}>{totalDispPending.toLocaleString()}</span> : <span style={{color:'#22c55e'}}>✓</span>}</td>
+                              <td><span className="badge" style={{background:'#e0e7ff', color:'#3730a3'}}>{palletList.length}</span></td>
+                              <td></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Full Pallet Listing */}
+                    <div style={{marginBottom: '24px'}}>
+                      <h4 style={{fontSize: '14px', color: '#334155', marginBottom: '10px'}}>📦 All Pallets — Complete Listing ({palletList.length} pallets, {totalAllModules.toLocaleString()} modules)</h4>
+                      
+                      {/* Dispatched Pallets Section */}
+                      {dispatchedPallets.length > 0 && (
+                        <div style={{marginBottom: '16px'}}>
+                          <h5 style={{margin: '0 0 8px', fontSize: '13px', color: '#166534', display:'flex', alignItems:'center', gap:'6px'}}>
+                            <span style={{width:'10px', height:'10px', borderRadius:'2px', background:'#22c55e', display:'inline-block'}}></span>
+                            🚚 Dispatched Pallets ({dispatchedPallets.length} pallets, {totalAllDispatched.toLocaleString()} modules)
+                          </h5>
+                          <div className="pallet-table-container">
+                            <table className="pallet-table" style={{fontSize: '12px'}}>
+                              <thead>
+                                <tr style={{background: '#dcfce7'}}>
+                                  <th>#</th>
+                                  <th>Pallet No</th>
+                                  <th>Modules</th>
+                                  <th>PDI(s)</th>
+                                  <th>Sub Party</th>
+                                  <th>Vehicle / Party</th>
+                                  <th>Date</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {dispatchedPallets.map((p, i) => (
+                                  <tr key={i}>
+                                    <td>{i + 1}</td>
+                                    <td><strong>{p.pallet_no}</strong></td>
+                                    <td><span className="badge" style={{background:'#dcfce7', color:'#166534'}}>{p.count}</span></td>
+                                    <td style={{fontSize: '11px'}}>{p.pdi_list.join(', ')}</td>
+                                    <td><span className="badge" style={{background: p.sub_party?.includes('NTPC') ? '#fef3c7' : '#e0e7ff', color: p.sub_party?.includes('NTPC') ? '#92400e' : '#3730a3', fontSize: '10px'}}>{p.sub_party || '—'}</span></td>
+                                    <td style={{fontSize: '11px'}}>{p.dispatch_party || p.vehicle_no || '—'}</td>
+                                    <td style={{fontSize: '11px'}}>{p.date || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Packed Only Pallets Section */}
+                      {packedPallets.length > 0 && (
+                        <div style={{marginBottom: '16px'}}>
+                          <h5 style={{margin: '0 0 8px', fontSize: '13px', color: '#854d0e', display:'flex', alignItems:'center', gap:'6px'}}>
+                            <span style={{width:'10px', height:'10px', borderRadius:'2px', background:'#f59e0b', display:'inline-block'}}></span>
+                            📦 Packed — Awaiting Dispatch ({packedPallets.length} pallets, {totalAllPacked.toLocaleString()} modules)
+                          </h5>
+                          <div className="pallet-table-container">
+                            <table className="pallet-table" style={{fontSize: '12px'}}>
+                              <thead>
+                                <tr style={{background: '#fef9c3'}}>
+                                  <th>#</th>
+                                  <th>Pallet No</th>
+                                  <th>Modules</th>
+                                  <th>PDI(s)</th>
+                                  <th>Sub Party</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {packedPallets.map((p, i) => (
+                                  <tr key={i}>
+                                    <td>{i + 1}</td>
+                                    <td><strong>{p.pallet_no}</strong></td>
+                                    <td><span className="badge" style={{background:'#fef9c3', color:'#854d0e'}}>{p.count}</span></td>
+                                    <td style={{fontSize: '11px'}}>{p.pdi_list.join(', ')}</td>
+                                    <td><span className="badge" style={{background: p.sub_party?.includes('NTPC') ? '#fef3c7' : '#e0e7ff', color: p.sub_party?.includes('NTPC') ? '#92400e' : '#3730a3', fontSize: '10px'}}>{p.sub_party || '—'}</span></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Not Packed Summary */}
+                      {totalDispPending > 0 && (
+                        <div style={{padding: '12px 16px', background: '#fef2f2', borderRadius: '8px', border: '1px solid #fecaca', fontSize: '13px', color: '#991b1b'}}>
+                          ⏳ <strong>{totalDispPending.toLocaleString()}</strong> modules across all PDIs are not yet packed
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Extra Packed in Module Pack view */}
+                    {extraPacked.count > 0 && (
+                      <div style={{marginBottom: '16px', border: '2px dashed #06b6d4', borderRadius: '12px', padding: '16px'}}>
+                        <h5 style={{margin: '0 0 10px', fontSize: '13px', color: '#0e7490', display:'flex', alignItems:'center', gap:'6px'}}>
+                          📦 Extra Packed — Not in any PDI ({extraPacked.count.toLocaleString()} modules, {(extraPacked.pallet_groups || []).length} pallets)
+                        </h5>
+                        {(extraPacked.pallet_groups || []).length > 0 && (
+                          <div className="pallet-table-container">
+                            <table className="pallet-table" style={{fontSize: '12px'}}>
+                              <thead>
+                                <tr style={{background: '#ecfeff'}}>
+                                  <th>#</th>
+                                  <th>Pallet No</th>
+                                  <th>Modules</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(extraPacked.pallet_groups || []).map((pg, i) => (
+                                  <tr key={i}>
+                                    <td>{i + 1}</td>
+                                    <td><strong>{pg.pallet_no}</strong></td>
+                                    <td><span className="badge" style={{background:'#a5f3fc', color:'#0e7490'}}>{pg.count}</span></td>
+                                    <td><span className="badge" style={{background:'#a5f3fc', color:'#0e7490', fontSize:'11px'}}>📦 Extra Packed</span></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Extra Dispatched in Module Pack view */}
+                    {extraDispatched.count > 0 && (
+                      <div style={{marginBottom: '16px', border: '2px dashed #d946ef', borderRadius: '12px', padding: '16px'}}>
+                        <h5 style={{margin: '0 0 10px', fontSize: '13px', color: '#a21caf', display:'flex', alignItems:'center', gap:'6px'}}>
+                          🔀 Extra Dispatched — Not in any PDI ({extraDispatched.count.toLocaleString()} modules, {(extraDispatched.pallet_groups || []).length} pallets)
+                        </h5>
+                        {(extraDispatched.pallet_groups || []).length > 0 && (
+                          <div className="pallet-table-container">
+                            <table className="pallet-table" style={{fontSize: '12px'}}>
+                              <thead>
+                                <tr style={{background: '#fdf4ff'}}>
+                                  <th>#</th>
+                                  <th>Pallet No</th>
+                                  <th>Modules</th>
+                                  <th>Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(extraDispatched.pallet_groups || []).map((pg, i) => (
+                                  <tr key={i}>
+                                    <td>{i + 1}</td>
+                                    <td><strong>{pg.pallet_no}</strong></td>
+                                    <td><span className="badge" style={{background:'#f5d0fe', color:'#86198f'}}>{pg.count}</span></td>
+                                    <td><span className="badge" style={{background:'#f5d0fe', color:'#86198f', fontSize:'11px'}}>🔀 Extra Dispatched</span></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Empty state */}
               {pdiWise.length === 0 && (
                 <div className="section">
@@ -921,6 +1330,9 @@ const DispatchTracker = () => {
                         row['Party'] = s.party_name || '';
                       }
                       row['Status'] = serialModal.type === 'dispatched' ? 'Dispatched' : serialModal.type === 'packed' ? 'Packed' : 'Not Packed';
+                      if (s.sub_party || s.party_name) {
+                        row['Sub Party'] = s.sub_party || s.party_name || '';
+                      }
                       if (s.date && serialModal.type !== 'not_packed') {
                         row['Date'] = s.date;
                       }
@@ -945,6 +1357,7 @@ const DispatchTracker = () => {
                       <th>Pallet No</th>
                       {serialModal.type === 'dispatched' && <th>Vehicle No</th>}
                       {serialModal.type === 'packed' && <th>Party</th>}
+                      {serialModal.type !== 'not_packed' && <th>Sub Party</th>}
                       {serialModal.type !== 'not_packed' && <th>Date</th>}
                     </tr>
                   </thead>
@@ -956,6 +1369,7 @@ const DispatchTracker = () => {
                         <td><span className="badge" style={{background:'#e0e7ff', color:'#3730a3', fontSize:'10px'}}>{s.pallet_no || '—'}</span></td>
                         {serialModal.type === 'dispatched' && <td style={{fontSize: '11px'}}>{s.dispatch_party || '—'}</td>}
                         {serialModal.type === 'packed' && <td style={{fontSize: '11px'}}>{s.party_name || '—'}</td>}
+                        {serialModal.type !== 'not_packed' && <td><span className="badge" style={{background: (s.sub_party || s.party_name || '')?.includes('NTPC') ? '#fef3c7' : '#e0e7ff', color: (s.sub_party || s.party_name || '')?.includes('NTPC') ? '#92400e' : '#3730a3', fontSize:'10px'}}>{s.sub_party || s.party_name || '—'}</span></td>}
                         {serialModal.type !== 'not_packed' && <td style={{fontSize: '11px'}}>{s.date || '—'}</td>}
                       </tr>
                     ))}
