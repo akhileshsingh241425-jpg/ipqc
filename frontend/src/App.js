@@ -292,7 +292,7 @@ function App() {
   const roleAccess = {
     super_admin: ['all'], // Full access
     user: ['all'], // Full access for normal users too
-    ftr_only: ['ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report', 'dispatch-tracker'],
+    ftr_only: ['ftr-management', 'test-report', 'graph-manager', 'ai-assistant', 'ftr-dashboard', 'witness-report', 'dispatch-tracker', 'pdi-docs'],
     ipqc_only: ['ipqc', 'daily-report', 'dispatch-tracker'],
     coc_only: ['coc-dashboard']
   };

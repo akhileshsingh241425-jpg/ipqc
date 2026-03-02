@@ -1,402 +1,717 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import '../styles/PDIDocGenerator.css';
+import axios from 'axios';
 
-const API_BASE_URL = (process.env.REACT_APP_API_URL ||
-  (window.location.hostname === 'localhost'
-    ? 'http://localhost:5003/api'
-    : '/api')).trim();
+// Same URL pattern as FTRManagement, DispatchTracker, WitnessReport
+const getAPIBaseURL = () => window.location.hostname === 'localhost' ? 'http://localhost:5003' : '';
+
+// v4 - robust error handling + debug info
+console.log('[PDI Docs v4] Component loaded. Host:', window.location.hostname, 'API Base:', getAPIBaseURL() || '(production - same origin)');
+
+// Module types available
+const MODULE_TYPES = {
+  "G2G570": { name: "G2G1740-HAD 570W", cells: 144, size: "2278x1134x30" },
+  "G2G575": { name: "G2G1740-HAD 575W", cells: 144, size: "2278x1134x30" },
+  "G2G580": { name: "G2G1740-HAD 580W", cells: 144, size: "2278x1134x30" },
+  "G2G585": { name: "G2G1740-HAD 585W", cells: 144, size: "2278x1134x30" },
+  "G2G590": { name: "G2G1740-HAD 590W", cells: 144, size: "2278x1134x30" },
+  "G2G595": { name: "G2G1740-HAD 595W", cells: 144, size: "2278x1134x30" },
+  "G2G600": { name: "G2G1740-HAD 600W", cells: 144, size: "2278x1134x30" },
+  "G2G605": { name: "G2G1740-HAD 605W", cells: 144, size: "2278x1134x30" },
+  "G2G610": { name: "G2G1740-HAD 610W", cells: 144, size: "2278x1134x30" },
+  "G3G615": { name: "G3G2340-HAD 615W", cells: 132, size: "2382x1134x30" },
+  "G3G620": { name: "G3G2340-HAD 620W", cells: 132, size: "2382x1134x30" },
+  "G3G625": { name: "G3G2340-HAD 625W", cells: 132, size: "2382x1134x30" },
+  "G3G630": { name: "G3G2340-HAD 630W", cells: 132, size: "2382x1134x30" },
+  "G3G635": { name: "G3G2340-HAD 635W", cells: 132, size: "2382x1134x30" },
+  "G3G640": { name: "G3G2340-HAD 640W", cells: 132, size: "2382x1134x30" },
+};
 
 const PDIDocGenerator = () => {
-  const [step, setStep] = useState(1);
+  // State
   const [companies, setCompanies] = useState([]);
-  const [selectedCompany, setSelectedCompany] = useState('');
-  const [pdis, setPdis] = useState([]);
-  const [selectedPdi, setSelectedPdi] = useState(null);
-  const [serialNumbers, setSerialNumbers] = useState([]);
-  const [productionDays, setProductionDays] = useState(3);
-  const [moduleType, setModuleType] = useState('G2G580');
-  const [reportDate, setReportDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedCompany, setSelectedCompany] = useState(null);
+  const [pdiList, setPdiList] = useState([]);
+  const [selectedPdi, setSelectedPdi] = useState('');
+  const [serials, setSerials] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [backendReady, setBackendReady] = useState(null);
-  const [templateInfo, setTemplateInfo] = useState(null);
-  const [error, setError] = useState('');
-  const [downloadStatus, setDownloadStatus] = useState({});
+  const [generating, setGenerating] = useState(false);
+  const [step, setStep] = useState(1); // 1: Select, 2: Configure, 3: Production Days, 4: Generate
+  const [errorMsg, setErrorMsg] = useState('');
+  const [companiesLoading, setCompaniesLoading] = useState(true);
+  const [backendStatus, setBackendStatus] = useState('checking'); // checking, ok, error
+  
+  // Config state
+  const [moduleType, setModuleType] = useState('G2G580');
+  const [partyName, setPartyName] = useState('');
+  const [inspectorName, setInspectorName] = useState('');
+  const [inspectorDesignation, setInspectorDesignation] = useState('QC Engineer');
+  const [manufacturerRep, setManufacturerRep] = useState('');
+  const [manufacturerDesignation, setManufacturerDesignation] = useState('QA Manager');
+  const [cellManufacturer, setCellManufacturer] = useState('Solar Space');
+  const [cellEfficiency, setCellEfficiency] = useState('25.7');
+  const [reportDate, setReportDate] = useState(new Date().toISOString().slice(0, 10));
+  
+  // Production days
+  const [productionDays, setProductionDays] = useState([]);
+  const [autoSplitPerDay, setAutoSplitPerDay] = useState(500); // modules per day default
 
-  // Document types
-  const docTypes = [
-    { id: 'ipqc', name: 'IPQC Report', icon: '📋', ext: 'xlsx', desc: 'IPQC inspection with all stages & checkpoints' },
-    { id: 'witness', name: 'Witness Report', icon: '👁️', ext: 'xlsx', desc: 'FTR, Visual, EL, Safety, Dimension sheets' },
-    { id: 'sampling', name: 'Sampling Plan', icon: '📊', ext: 'xlsx', desc: 'IS 2500 / ISO 2859 AQL sampling plan' },
-    { id: 'calibration', name: 'Calibration List', icon: '🔧', ext: 'xlsx', desc: 'All instruments with calibration status' },
-    { id: 'mom', name: 'MOM (PDF)', icon: '📝', ext: 'pdf', desc: 'Minutes of Meeting with FTR summary' },
-  ];
-
-  const moduleTypes = [
-    'G2B510', 'G2B520', 'G2B530', 'G2B540', 'G2X550', 'G2X560',
-    'G2G570', 'G2G575', 'G2G580', 'G2G585', 'G2G590', 'G2G595', 'G2G600', 'G2G605', 'G2G610',
-    'G3G615', 'G3G620', 'G3G625', 'G3G630', 'G3G635', 'G3G640',
-    'G12R622', 'G12R652'
-  ];
-
-  // Health check
-  const checkBackend = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/pdi-docs/health`);
-      if (res.ok) { setBackendReady(true); return true; }
-      setBackendReady(false); return false;
-    } catch { setBackendReady(false); return false; }
-  }, []);
-
-  // Load companies
-  const loadCompanies = useCallback(async () => {
-    try {
-      let res = await fetch(`${API_BASE_URL}/pdi-docs/companies`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.companies && data.companies.length > 0) {
-          setCompanies(data.companies);
-          return;
-        }
-      }
-      res = await fetch(`${API_BASE_URL}/companies`);
-      if (res.ok) {
-        const data = await res.json();
-        const list = data.companies || data.data || [];
-        setCompanies(list.map(c => ({
-          id: c.id || c.company_id || c.name,
-          name: c.name || c.company_name || c.id
-        })));
-      }
-    } catch (err) { console.error('Failed to load companies:', err); }
-  }, []);
-
-  const loadPdis = async (companyId) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/pdi-docs/pdis/${encodeURIComponent(companyId)}`);
-      if (res.ok) { const data = await res.json(); setPdis(data.pdis || []); }
-    } catch (err) { console.error('Failed to load PDIs:', err); }
-    finally { setLoading(false); }
-  };
-
-  const loadSerials = async (pdiId) => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/pdi-docs/serials/${pdiId}`);
-      if (res.ok) { const data = await res.json(); setSerialNumbers(data.serials || []); }
-    } catch (err) { console.error('Failed to load serials:', err); }
-    finally { setLoading(false); }
-  };
-
-  const loadTemplateInfo = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/pdi-docs/template-info`);
-      if (res.ok) { const data = await res.json(); setTemplateInfo(data); }
-    } catch { /* ignore */ }
-  }, []);
-
+  // Load companies + check backend on mount
   useEffect(() => {
-    checkBackend();
     loadCompanies();
-    loadTemplateInfo();
-  }, [checkBackend, loadCompanies, loadTemplateInfo]);
+    checkBackendHealth();
+  }, []);
 
-  const handleCompanySelect = (companyId) => {
-    setSelectedCompany(companyId);
-    setSelectedPdi(null);
-    setSerialNumbers([]);
-    setDownloadStatus({});
-    if (companyId) loadPdis(companyId);
-    else setPdis([]);
+  const checkBackendHealth = async () => {
+    const API = getAPIBaseURL();
+    try {
+      const res = await axios.get(`${API}/api/pdi-docs/health`, { timeout: 5000 });
+      console.log('[PDI Docs v4] Health check:', res.data);
+      setBackendStatus(res.data.success ? 'ok' : 'error');
+    } catch (err) {
+      console.warn('[PDI Docs v4] Health check failed:', err.message);
+      setBackendStatus('error');
+    }
   };
 
-  const handlePdiSelect = (pdiId) => {
-    const pdi = pdis.find(p => p.id === parseInt(pdiId));
-    setSelectedPdi(pdi);
-    setDownloadStatus({});
-    if (pdiId) loadSerials(pdiId);
-    else setSerialNumbers([]);
+  const loadCompanies = async () => {
+    const API = getAPIBaseURL();
+    const url = `${API}/api/companies`;
+    console.log('[PDI Docs v4] Loading companies from:', url);
+    setCompaniesLoading(true);
+    setErrorMsg('');
+    try {
+      const response = await axios.get(url, { timeout: 15000 });
+      console.log('[PDI Docs v4] Companies response:', typeof response.data, Array.isArray(response.data) ? response.data.length + ' items' : response.data);
+      const data = Array.isArray(response.data) ? response.data : (response.data.companies || []);
+      setCompanies(data);
+      if (data.length === 0) {
+        setErrorMsg('No companies found in database. Please add a company first in FTR Management.');
+      }
+    } catch (error) {
+      const msg = error.response 
+        ? `Server error ${error.response.status}: ${JSON.stringify(error.response.data).substring(0, 200)}`
+        : error.message || 'Network error';
+      console.error('[PDI Docs v4] Companies load error:', msg);
+      setErrorMsg(`Failed to load companies: ${msg}`);
+    } finally {
+      setCompaniesLoading(false);
+    }
   };
 
-  const formatDisplayDate = (dateStr) => {
-    if (!dateStr) return '';
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const handleCompanySelect = async (companyId) => {
+    if (!companyId) return;
+    const company = companies.find(c => c.id === parseInt(companyId));
+    setSelectedCompany(company);
+    setSelectedPdi('');
+    setSerials([]);
+    setPdiList([]);
+    setErrorMsg('');
+    
+    const API = getAPIBaseURL();
+    const url = `${API}/api/ftr/company/${companyId}`;
+    console.log('[PDI Docs v4] Loading PDIs from:', url);
+    try {
+      setLoading(true);
+      const response = await axios.get(url, { timeout: 15000 });
+      console.log('[PDI Docs v4] PDI response:', response.data);
+      if (response.data.pdi_assignments) {
+        setPdiList(response.data.pdi_assignments.map(p => ({
+          pdi_number: p.pdi_number,
+          count: p.count
+        })));
+        if (response.data.pdi_assignments.length === 0) {
+          setErrorMsg('No PDI assignments found for this company. Assign PDIs first in FTR Management.');
+        }
+      } else {
+        setErrorMsg('No PDI data in response. Check FTR Management.');
+      }
+    } catch (error) {
+      const msg = error.response ? `Error ${error.response.status}` : error.message;
+      console.error('[PDI Docs v4] PDI load error:', msg);
+      setErrorMsg(`Failed to load PDI list: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Download individual document
-  const handleDownload = async (docType) => {
-    if (!selectedCompany || !selectedPdi || serialNumbers.length === 0) {
-      setError('Please select company, PDI and ensure serials are loaded');
+  const handlePdiSelect = async (pdiNumber) => {
+    setSelectedPdi(pdiNumber);
+    setErrorMsg('');
+    if (!pdiNumber || !selectedCompany) return;
+    
+    const API = getAPIBaseURL();
+    const url = `${API}/api/ftr/pdi-serials/${selectedCompany.id}/${encodeURIComponent(pdiNumber)}?page=1&page_size=100000`;
+    console.log('[PDI Docs v4] Loading serials from:', url);
+    try {
+      setLoading(true);
+      const response = await axios.get(url, { timeout: 30000 });
+      console.log('[PDI Docs v4] Serials response:', response.data.total, 'total');
+      if (response.data.success && response.data.serials) {
+        const serialNumbers = response.data.serials.map(s => s.serial_number);
+        setSerials(serialNumbers);
+        autoGenerateProductionDays(serialNumbers.length);
+      } else {
+        setErrorMsg('No serials found for this PDI.');
+      }
+    } catch (error) {
+      const msg = error.response ? `Error ${error.response.status}` : error.message;
+      console.error('[PDI Docs v4] Serials load error:', msg);
+      setErrorMsg(`Failed to load serials: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const autoGenerateProductionDays = useCallback((totalSerials) => {
+    const perDay = autoSplitPerDay || 500;
+    const numDays = Math.ceil(totalSerials / perDay);
+    const days = [];
+    let remaining = totalSerials;
+    const baseDate = new Date(reportDate);
+    
+    for (let i = 0; i < numDays; i++) {
+      const dayDate = new Date(baseDate);
+      dayDate.setDate(dayDate.getDate() - (numDays - 1 - i));
+      const dayProduction = Math.min(remaining, perDay);
+      // Split 60/40 day/night
+      const dayShift = Math.round(dayProduction * 0.6);
+      const nightShift = dayProduction - dayShift;
+      
+      days.push({
+        date: dayDate.toISOString().slice(0, 10),
+        day_production: dayShift,
+        night_production: nightShift
+      });
+      remaining -= dayProduction;
+    }
+    setProductionDays(days);
+  }, [autoSplitPerDay, reportDate]);
+
+  const updateProductionDay = (index, field, value) => {
+    const updated = [...productionDays];
+    updated[index][field] = field === 'date' ? value : parseInt(value) || 0;
+    setProductionDays(updated);
+  };
+
+  const addProductionDay = () => {
+    const lastDate = productionDays.length > 0 
+      ? new Date(productionDays[productionDays.length - 1].date) 
+      : new Date(reportDate);
+    lastDate.setDate(lastDate.getDate() + 1);
+    
+    setProductionDays([...productionDays, {
+      date: lastDate.toISOString().slice(0, 10),
+      day_production: 0,
+      night_production: 0
+    }]);
+  };
+
+  const removeProductionDay = (index) => {
+    setProductionDays(productionDays.filter((_, i) => i !== index));
+  };
+
+  const totalProductionDaysQty = productionDays.reduce((sum, d) => sum + (d.day_production || 0) + (d.night_production || 0), 0);
+
+  const handleGenerate = async () => {
+    if (!selectedCompany || !selectedPdi || serials.length === 0) {
+      setErrorMsg('Please select a company and PDI with serials first.');
       return;
     }
-
-    setDownloadStatus(prev => ({ ...prev, [docType.id]: 'downloading' }));
-    setError('');
-
+    
+    setGenerating(true);
+    setErrorMsg('');
+    const API = getAPIBaseURL();
     try {
-      const res = await fetch(`${API_BASE_URL}/pdi-docs/download/${docType.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_id: selectedCompany,
-          company_name: companies.find(c => c.id === selectedCompany)?.name || selectedCompany,
-          pdi_id: selectedPdi.id,
-          pdi_number: selectedPdi.pdi_number,
-          serial_numbers: serialNumbers,
-          production_days: productionDays,
-          report_date: formatDisplayDate(reportDate),
-          module_type: moduleType,
-        })
+      const payload = {
+        company_id: selectedCompany.id,
+        company_name: selectedCompany.companyName || selectedCompany.name || 'Gautam Solar Private Limited',
+        party_name: partyName,
+        pdi_number: selectedPdi,
+        module_type: moduleType,
+        serial_numbers: serials,
+        report_date: new Date(reportDate).toLocaleDateString('en-GB'),
+        inspector_name: inspectorName,
+        inspector_designation: inspectorDesignation,
+        manufacturer_rep: manufacturerRep,
+        manufacturer_designation: manufacturerDesignation,
+        cell_manufacturer: cellManufacturer,
+        cell_efficiency: cellEfficiency,
+        production_days: productionDays
+      };
+
+      console.log('[PDI Docs v4] Generating...', `${API}/api/pdi-docs/generate`, 'serials:', serials.length);
+      const response = await axios.post(`${API}/api/pdi-docs/generate`, payload, {
+        responseType: 'blob',
+        timeout: 120000
       });
 
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${docType.name.replace(/ /g, '_')}_${selectedPdi.pdi_number}.${docType.ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        setDownloadStatus(prev => ({ ...prev, [docType.id]: 'done' }));
-      } else {
-        const errData = await res.json().catch(() => ({}));
-        setDownloadStatus(prev => ({ ...prev, [docType.id]: 'error' }));
-        setError(`${docType.name} error: ${errData.error || `Server ${res.status}`}`);
+      // Check if response is actually an error (JSON returned as blob)
+      if (response.data.type === 'application/json') {
+        const text = await response.data.text();
+        const errData = JSON.parse(text);
+        setErrorMsg(`Generation failed: ${errData.error || 'Unknown error'}`);
+        return;
       }
-    } catch (err) {
-      setDownloadStatus(prev => ({ ...prev, [docType.id]: 'error' }));
-      setError(`${docType.name} download failed: ${err.message}`);
+
+      // Download file
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `PDI_Documentation_${selectedPdi}_${new Date().toISOString().slice(0,10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      let msg;
+      if (error.response) {
+        if (error.response.data instanceof Blob) {
+          try {
+            const text = await error.response.data.text();
+            const errData = JSON.parse(text);
+            msg = errData.error || `Server error ${error.response.status}`;
+          } catch { msg = `Server error ${error.response.status}`; }
+        } else {
+          msg = error.response.data?.error || `Server error ${error.response.status}`;
+        }
+      } else {
+        msg = error.message || 'Network error';
+      }
+      console.error('[PDI Docs v4] Generate error:', msg);
+      setErrorMsg(`Generation error: ${msg}. Make sure PM2 backend is restarted on server.`);
+    } finally {
+      setGenerating(false);
     }
   };
 
-  // Download all one by one
-  const handleDownloadAll = async () => {
-    for (const doc of docTypes) {
-      await handleDownload(doc);
-      // small delay between downloads
-      await new Promise(r => setTimeout(r, 800));
-    }
-  };
-
-  const steps = [
-    { num: 1, label: 'Select PDI', icon: '🎯' },
-    { num: 2, label: 'Configure', icon: '⚙️' },
-    { num: 3, label: 'Download', icon: '📥' },
-  ];
-
-  const canProceed = () => {
-    if (step === 1) return selectedCompany && selectedPdi && serialNumbers.length > 0;
-    if (step === 2) return moduleType && reportDate;
-    return true;
-  };
-
+  // ==================== RENDER ====================
   return (
-    <div className="pdi-doc-generator">
+    <div style={{maxWidth: '1000px', margin: '0 auto', padding: '20px'}}>
       {/* Header */}
-      <div className="pdg-header">
-        <div className="pdg-header-content">
+      <div style={{
+        background: 'linear-gradient(135deg, #0D47A1, #1565C0, #1976D2)',
+        borderRadius: '16px', padding: '24px 30px', marginBottom: '24px', color: '#fff'
+      }}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
           <div>
-            <h1>📄 PDI Documentation Generator</h1>
-            <p>Generate IPQC, Witness Report, Sampling Plan, Calibration List & MOM — download individually</p>
+            <h1 style={{margin: 0, fontSize: '24px', fontWeight: 700}}>📋 PDI Documentation Generator</h1>
+            <p style={{margin: '6px 0 0', opacity: 0.9, fontSize: '14px'}}>
+              Auto-generate complete PDI package — IPQC, Witness Report, Calibration, Sampling Plan & MOM
+            </p>
           </div>
-          <div className="pdg-header-badges">
-            <span className="pdg-version">v5</span>
-            <span className={`pdg-status ${backendReady ? 'ready' : 'not-ready'}`}>
-              {backendReady === null ? '⏳ Checking...' : backendReady ? '✅ Ready' : '❌ Not Ready'}
-            </span>
+          <div style={{textAlign: 'right', fontSize: '11px', opacity: 0.8}}>
+            <div>v4</div>
+            <div style={{
+              display: 'inline-block', padding: '2px 8px', borderRadius: '10px', marginTop: '4px',
+              background: backendStatus === 'ok' ? '#4caf50' : backendStatus === 'error' ? '#f44336' : '#ff9800',
+              fontSize: '10px', fontWeight: 600
+            }}>
+              {backendStatus === 'ok' ? 'Backend OK' : backendStatus === 'error' ? 'Backend Not Ready' : 'Checking...'}
+            </div>
           </div>
         </div>
       </div>
 
-      {backendReady === false && (
-        <div className="pdg-warning">
-          ⚠️ Backend not available. Run: <code>pm2 restart pdi-backend</code>
-          <button onClick={checkBackend} className="pdg-retry-btn">Retry</button>
+      {/* Error Display */}
+      {errorMsg && (
+        <div style={{
+          background: '#fff3f3', border: '1px solid #ffcdd2', borderRadius: '10px',
+          padding: '14px 18px', marginBottom: '16px', color: '#c62828', fontSize: '13px'
+        }}>
+          <strong>⚠️ Error:</strong> {errorMsg}
+          <button onClick={() => setErrorMsg('')} style={{
+            float: 'right', background: 'none', border: 'none', color: '#c62828', cursor: 'pointer', fontWeight: 700
+          }}>✕</button>
         </div>
       )}
 
-      {/* Steps */}
-      <div className="pdg-steps">
-        {steps.map(s => (
-          <div
-            key={s.num}
-            className={`pdg-step ${step === s.num ? 'active' : ''} ${step > s.num ? 'completed' : ''}`}
-            onClick={() => s.num <= step && setStep(s.num)}
-          >
-            <span className="pdg-step-icon">{step > s.num ? '✓' : s.icon}</span>
-            <span className="pdg-step-label">{s.label}</span>
-          </div>
+      {/* Backend Not Ready Warning */}
+      {backendStatus === 'error' && (
+        <div style={{
+          background: '#fff8e1', border: '1px solid #ffe082', borderRadius: '10px',
+          padding: '14px 18px', marginBottom: '16px', color: '#f57f17', fontSize: '13px'
+        }}>
+          <strong>⚠️ Backend PDI Docs endpoint not available.</strong> Run on server: <code style={{background: '#fff', padding: '2px 6px', borderRadius: '4px'}}>pm2 restart pdi-backend</code>
+          <br/>Companies will still load (uses existing API), but Generate will fail until pm2 is restarted.
+          <button onClick={checkBackendHealth} style={{
+            marginLeft: '12px', padding: '4px 12px', background: '#f57f17', color: '#fff',
+            border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px'
+          }}>Retry</button>
+        </div>
+      )}
+
+      {/* Step Indicator */}
+      <div style={{
+        display: 'flex', gap: '4px', marginBottom: '24px', background: '#f8fafc',
+        borderRadius: '12px', padding: '8px', border: '1px solid #e2e8f0'
+      }}>
+        {[
+          {num: 1, label: 'Select PDI', icon: '🎯'},
+          {num: 2, label: 'Configure', icon: '⚙️'},
+          {num: 3, label: 'Production Days', icon: '📅'},
+          {num: 4, label: 'Generate', icon: '📥'}
+        ].map(s => (
+          <button key={s.num} onClick={() => {
+            if (s.num <= 1 || (s.num === 2 && serials.length > 0) || (s.num >= 2 && serials.length > 0)) setStep(s.num);
+          }}
+            style={{
+              flex: 1, padding: '12px 8px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+              background: step === s.num ? '#1565C0' : 'transparent',
+              color: step === s.num ? '#fff' : '#64748b',
+              fontWeight: step === s.num ? 700 : 500, fontSize: '13px',
+              transition: 'all 0.2s'
+            }}>
+            <div style={{fontSize: '18px'}}>{s.icon}</div>
+            <div>{s.label}</div>
+          </button>
         ))}
       </div>
 
-      {error && <div className="pdg-error">{error}</div>}
+      {/* ==================== STEP 1: Select Company & PDI ==================== */}
+      {step === 1 && (
+        <div style={{background: '#fff', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0'}}>
+          <h2 style={{margin: '0 0 16px', fontSize: '18px', color: '#1e293b'}}>🎯 Select Company & PDI</h2>
+          
+          {/* Company Select */}
+          <div style={{marginBottom: '16px'}}>
+            <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>
+              Company {companiesLoading ? '(loading...)' : `(${companies.length} found)`}
+            </label>
+            {companiesLoading ? (
+              <div style={{padding: '12px', background: '#f8fafc', borderRadius: '8px', color: '#64748b', textAlign: 'center'}}>
+                Loading companies...
+              </div>
+            ) : (
+              <select value={selectedCompany?.id || ''} onChange={(e) => handleCompanySelect(e.target.value)}
+                style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px'}}>
+                <option value="">-- Select Company ({companies.length} available) --</option>
+                {companies.map(c => (
+                  <option key={c.id} value={c.id}>{c.companyName || c.name} ({c.moduleWattage || c.wattage}W • {c.cellsPerModule || c.cells} cells)</option>
+                ))}
+              </select>
+            )}
+          </div>
 
-      <div className="pdg-content">
-        {/* STEP 1 */}
-        {step === 1 && (
-          <div className="pdg-step-content">
-            <h2>🎯 Select Company & PDI</h2>
-            <div className="pdg-form-group">
-              <label>Company ({companies.length} found)</label>
-              <select value={selectedCompany} onChange={(e) => handleCompanySelect(e.target.value)}>
-                <option value="">-- Select Company --</option>
-                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {/* PDI Select */}
+          {pdiList.length > 0 && (
+            <div style={{marginBottom: '16px'}}>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>PDI Number</label>
+              <select value={selectedPdi} onChange={(e) => handlePdiSelect(e.target.value)}
+                style={{width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '14px'}}>
+                <option value="">-- Select PDI --</option>
+                {pdiList.map(p => (
+                  <option key={p.pdi_number} value={p.pdi_number}>{p.pdi_number} — {p.count.toLocaleString()} serials</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {loading && <div style={{textAlign: 'center', padding: '20px', color: '#64748b'}}>Loading...</div>}
+
+          {/* Serials Summary */}
+          {serials.length > 0 && (
+            <div style={{
+              background: '#ecfdf5', borderRadius: '10px', padding: '16px', border: '1px solid #a7f3d0',
+              marginTop: '16px'
+            }}>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+                <div>
+                  <div style={{fontWeight: 700, color: '#065f46', fontSize: '16px'}}>
+                    ✅ {serials.length.toLocaleString()} Serial Numbers Loaded
+                  </div>
+                  <div style={{fontSize: '12px', color: '#047857', marginTop: '4px'}}>
+                    {serials[0]} → {serials[serials.length - 1]}
+                  </div>
+                </div>
+                <button onClick={() => setStep(2)} style={{
+                  padding: '10px 24px', background: '#059669', color: '#fff', border: 'none',
+                  borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px'
+                }}>
+                  Next: Configure →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ==================== STEP 2: Configuration ==================== */}
+      {step === 2 && (
+        <div style={{background: '#fff', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0'}}>
+          <h2 style={{margin: '0 0 16px', fontSize: '18px', color: '#1e293b'}}>⚙️ Configuration</h2>
+          
+          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
+            {/* Module Type */}
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Module Type</label>
+              <select value={moduleType} onChange={(e) => setModuleType(e.target.value)}
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px'}}>
+                {Object.entries(MODULE_TYPES).map(([key, val]) => (
+                  <option key={key} value={key}>{val.name} ({val.cells} cells)</option>
+                ))}
               </select>
             </div>
 
-            {selectedCompany && (
-              <div className="pdg-form-group">
-                <label>PDI Batch {loading ? '(loading...)' : `(${pdis.length} found)`}</label>
-                <select value={selectedPdi?.id || ''} onChange={(e) => handlePdiSelect(e.target.value)} disabled={loading}>
-                  <option value="">-- Select PDI --</option>
-                  {pdis.map(p => <option key={p.id} value={p.id}>{p.pdi_number} ({p.total_modules} modules)</option>)}
-                </select>
-              </div>
-            )}
-
-            {selectedPdi && (
-              <div className="pdg-serial-info">
-                <div className="pdg-info-card">
-                  <span className="pdg-info-label">📦 Serials Loaded</span>
-                  <span className="pdg-info-value">{serialNumbers.length}</span>
-                </div>
-                <div className="pdg-info-card">
-                  <span className="pdg-info-label">📋 PDI Number</span>
-                  <span className="pdg-info-value">{selectedPdi.pdi_number}</span>
-                </div>
-                {templateInfo && (
-                  <div className="pdg-info-card">
-                    <span className="pdg-info-label">🔍 IPQC Checkpoints</span>
-                    <span className="pdg-info-value">{templateInfo.total_stages} stages / {templateInfo.total_checkpoints} checks</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* STEP 2 */}
-        {step === 2 && (
-          <div className="pdg-step-content">
-            <h2>⚙️ Configuration</h2>
-            <div className="pdg-form-row">
-              <div className="pdg-form-group">
-                <label>Module Type</label>
-                <select value={moduleType} onChange={(e) => setModuleType(e.target.value)}>
-                  {moduleTypes.map(mt => <option key={mt} value={mt}>{mt}</option>)}
-                </select>
-              </div>
-              <div className="pdg-form-group">
-                <label>Report Date</label>
-                <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)} />
-              </div>
-              <div className="pdg-form-group">
-                <label>Production Days</label>
-                <select value={productionDays} onChange={(e) => setProductionDays(parseInt(e.target.value))}>
-                  {[1,2,3,4,5,6,7].map(d => <option key={d} value={d}>{d} {d === 1 ? 'Day' : 'Days'}</option>)}
-                </select>
-              </div>
+            {/* Party Name */}
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Party / Customer Name</label>
+              <input type="text" value={partyName} onChange={(e) => setPartyName(e.target.value)}
+                placeholder="e.g., Sterling & Wilson, NTPC"
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', boxSizing: 'border-box'}} />
             </div>
 
-            <div className="pdg-summary-preview">
-              <h3>📋 Summary</h3>
-              <table className="pdg-summary-table">
-                <tbody>
-                  <tr><td>Company</td><td>{companies.find(c => c.id === selectedCompany)?.name}</td></tr>
-                  <tr><td>PDI</td><td>{selectedPdi?.pdi_number}</td></tr>
-                  <tr><td>Modules</td><td>{serialNumbers.length}</td></tr>
-                  <tr><td>Module Type</td><td>{moduleType}</td></tr>
-                  <tr><td>Production Days</td><td>{productionDays}</td></tr>
-                  <tr><td>Report Date</td><td>{formatDisplayDate(reportDate)}</td></tr>
-                </tbody>
-              </table>
+            {/* Report Date */}
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Report Date</label>
+              <input type="date" value={reportDate} onChange={(e) => setReportDate(e.target.value)}
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', boxSizing: 'border-box'}} />
+            </div>
+
+            {/* Cell Manufacturer */}
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Cell Manufacturer</label>
+              <input type="text" value={cellManufacturer} onChange={(e) => setCellManufacturer(e.target.value)}
+                placeholder="e.g., Solar Space"
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', boxSizing: 'border-box'}} />
+            </div>
+
+            {/* Cell Efficiency */}
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Cell Efficiency (%)</label>
+              <input type="text" value={cellEfficiency} onChange={(e) => setCellEfficiency(e.target.value)}
+                placeholder="e.g., 25.7"
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', boxSizing: 'border-box'}} />
             </div>
           </div>
-        )}
 
-        {/* STEP 3: Download */}
-        {step === 3 && (
-          <div className="pdg-step-content">
-            <h2>📥 Download Documents</h2>
-            <p style={{color: '#666', marginBottom: '16px'}}>
-              Each document downloads as a separate file. Click individually or use "Download All".
-            </p>
+          {/* Separator */}
+          <hr style={{margin: '20px 0', border: 'none', borderTop: '1px solid #e2e8f0'}} />
+          <h3 style={{fontSize: '15px', color: '#334155', margin: '0 0 12px'}}>👤 Inspector & Manufacturer Details (for MOM)</h3>
 
-            <div className="pdg-download-grid">
-              {docTypes.map(doc => {
-                const status = downloadStatus[doc.id];
+          <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Inspector Name</label>
+              <input type="text" value={inspectorName} onChange={(e) => setInspectorName(e.target.value)}
+                placeholder="Customer inspector name"
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', boxSizing: 'border-box'}} />
+            </div>
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Inspector Designation</label>
+              <input type="text" value={inspectorDesignation} onChange={(e) => setInspectorDesignation(e.target.value)}
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', boxSizing: 'border-box'}} />
+            </div>
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Manufacturer Representative</label>
+              <input type="text" value={manufacturerRep} onChange={(e) => setManufacturerRep(e.target.value)}
+                placeholder="Manufacturer QA person"
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', boxSizing: 'border-box'}} />
+            </div>
+            <div>
+              <label style={{display: 'block', fontWeight: 600, fontSize: '13px', color: '#475569', marginBottom: '6px'}}>Manufacturer Designation</label>
+              <input type="text" value={manufacturerDesignation} onChange={(e) => setManufacturerDesignation(e.target.value)}
+                style={{width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #d1d5db', fontSize: '13px', boxSizing: 'border-box'}} />
+            </div>
+          </div>
+
+          <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '20px'}}>
+            <button onClick={() => setStep(1)} style={{
+              padding: '10px 24px', background: '#f1f5f9', color: '#475569', border: '1px solid #d1d5db',
+              borderRadius: '8px', fontWeight: 600, cursor: 'pointer'
+            }}>← Back</button>
+            <button onClick={() => { autoGenerateProductionDays(serials.length); setStep(3); }} style={{
+              padding: '10px 24px', background: '#1565C0', color: '#fff', border: 'none',
+              borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px'
+            }}>Next: Production Days →</button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== STEP 3: Production Days ==================== */}
+      {step === 3 && (
+        <div style={{background: '#fff', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0'}}>
+          <h2 style={{margin: '0 0 8px', fontSize: '18px', color: '#1e293b'}}>📅 Production Days Breakdown</h2>
+          <p style={{color: '#64748b', fontSize: '13px', margin: '0 0 16px'}}>
+            Total serials: <strong>{serials.length.toLocaleString()}</strong> | 
+            Days planned: <strong>{productionDays.length}</strong> | 
+            Allocated: <strong style={{color: totalProductionDaysQty === serials.length ? '#059669' : '#dc2626'}}>
+              {totalProductionDaysQty.toLocaleString()}
+            </strong>
+            {totalProductionDaysQty !== serials.length && (
+              <span style={{color: '#dc2626', fontWeight: 600}}> (Mismatch! Should be {serials.length})</span>
+            )}
+          </p>
+
+          {/* Auto-split control */}
+          <div style={{
+            background: '#f0f9ff', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px',
+            border: '1px solid #bae6fd', display: 'flex', alignItems: 'center', gap: '12px'
+          }}>
+            <span style={{fontSize: '13px', fontWeight: 600, color: '#0369a1'}}>Auto-split:</span>
+            <input type="number" value={autoSplitPerDay} onChange={(e) => setAutoSplitPerDay(parseInt(e.target.value) || 500)}
+              style={{width: '80px', padding: '6px 10px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '13px'}} />
+            <span style={{fontSize: '12px', color: '#64748b'}}>modules per day</span>
+            <button onClick={() => autoGenerateProductionDays(serials.length)} style={{
+              padding: '6px 14px', background: '#0284c7', color: '#fff', border: 'none',
+              borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer'
+            }}>Recalculate</button>
+          </div>
+
+          {/* Days Table */}
+          <table style={{width: '100%', borderCollapse: 'collapse', fontSize: '13px'}}>
+            <thead>
+              <tr style={{background: '#f1f5f9'}}>
+                <th style={{padding: '10px', textAlign: 'center', borderBottom: '2px solid #e2e8f0'}}>Day</th>
+                <th style={{padding: '10px', textAlign: 'center', borderBottom: '2px solid #e2e8f0'}}>Date</th>
+                <th style={{padding: '10px', textAlign: 'center', borderBottom: '2px solid #e2e8f0'}}>Day Shift</th>
+                <th style={{padding: '10px', textAlign: 'center', borderBottom: '2px solid #e2e8f0'}}>Night Shift</th>
+                <th style={{padding: '10px', textAlign: 'center', borderBottom: '2px solid #e2e8f0'}}>Total</th>
+                <th style={{padding: '10px', textAlign: 'center', borderBottom: '2px solid #e2e8f0'}}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {productionDays.map((day, idx) => {
+                const dayTotal = (day.day_production || 0) + (day.night_production || 0);
                 return (
-                  <div key={doc.id} className={`pdg-download-card ${status || ''}`}>
-                    <div className="pdg-download-icon">{doc.icon}</div>
-                    <div className="pdg-download-info">
-                      <div className="pdg-download-name">{doc.name}</div>
-                      <div className="pdg-download-desc">{doc.desc}</div>
-                      <div className="pdg-download-file">
-                        {doc.name.replace(/ /g, '_')}_{selectedPdi?.pdi_number}.{doc.ext}
-                      </div>
-                    </div>
-                    <button
-                      className={`pdg-download-btn ${status || ''}`}
-                      onClick={() => handleDownload(doc)}
-                      disabled={status === 'downloading' || !backendReady}
-                    >
-                      {status === 'downloading' ? (
-                        <><span className="pdg-spinner"></span> Generating...</>
-                      ) : status === 'done' ? (
-                        <>✅ Downloaded</>
-                      ) : status === 'error' ? (
-                        <>❌ Retry</>
-                      ) : (
-                        <>📥 Download</>
-                      )}
-                    </button>
-                  </div>
+                  <tr key={idx} style={{borderBottom: '1px solid #f1f5f9'}}>
+                    <td style={{padding: '8px', textAlign: 'center', fontWeight: 600}}>{idx + 1}</td>
+                    <td style={{padding: '8px', textAlign: 'center'}}>
+                      <input type="date" value={day.date} onChange={(e) => updateProductionDay(idx, 'date', e.target.value)}
+                        style={{padding: '6px', borderRadius: '6px', border: '1px solid #d1d5db', fontSize: '12px'}} />
+                    </td>
+                    <td style={{padding: '8px', textAlign: 'center'}}>
+                      <input type="number" value={day.day_production} onChange={(e) => updateProductionDay(idx, 'day_production', e.target.value)}
+                        style={{width: '80px', padding: '6px', borderRadius: '6px', border: '1px solid #d1d5db', textAlign: 'center', fontSize: '13px'}} />
+                    </td>
+                    <td style={{padding: '8px', textAlign: 'center'}}>
+                      <input type="number" value={day.night_production} onChange={(e) => updateProductionDay(idx, 'night_production', e.target.value)}
+                        style={{width: '80px', padding: '6px', borderRadius: '6px', border: '1px solid #d1d5db', textAlign: 'center', fontSize: '13px'}} />
+                    </td>
+                    <td style={{padding: '8px', textAlign: 'center', fontWeight: 700, color: '#1565C0'}}>{dayTotal}</td>
+                    <td style={{padding: '8px', textAlign: 'center'}}>
+                      <button onClick={() => removeProductionDay(idx)} style={{
+                        background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '16px'
+                      }}>✕</button>
+                    </td>
+                  </tr>
                 );
               })}
-            </div>
+            </tbody>
+            <tfoot>
+              <tr style={{background: '#ecfdf5', fontWeight: 700}}>
+                <td colSpan="2" style={{padding: '10px', textAlign: 'right'}}>TOTAL:</td>
+                <td style={{padding: '10px', textAlign: 'center'}}>
+                  {productionDays.reduce((s, d) => s + (d.day_production || 0), 0)}
+                </td>
+                <td style={{padding: '10px', textAlign: 'center'}}>
+                  {productionDays.reduce((s, d) => s + (d.night_production || 0), 0)}
+                </td>
+                <td style={{padding: '10px', textAlign: 'center', color: '#059669', fontSize: '16px'}}>
+                  {totalProductionDaysQty}
+                </td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
 
-            <div className="pdg-download-actions">
-              <button
-                className="pdg-download-all-btn"
-                onClick={handleDownloadAll}
-                disabled={Object.values(downloadStatus).some(s => s === 'downloading') || !backendReady}
-              >
-                🚀 Download All ({docTypes.length} files)
-              </button>
+          <button onClick={addProductionDay} style={{
+            marginTop: '12px', padding: '8px 16px', background: '#f1f5f9', color: '#475569',
+            border: '1px dashed #d1d5db', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', width: '100%'
+          }}>+ Add Day</button>
 
-              {Object.values(downloadStatus).filter(s => s === 'done').length > 0 && (
-                <div className="pdg-download-summary">
-                  ✅ {Object.values(downloadStatus).filter(s => s === 'done').length} of {docTypes.length} downloaded
-                </div>
-              )}
+          <div style={{display: 'flex', justifyContent: 'space-between', marginTop: '20px'}}>
+            <button onClick={() => setStep(2)} style={{
+              padding: '10px 24px', background: '#f1f5f9', color: '#475569', border: '1px solid #d1d5db',
+              borderRadius: '8px', fontWeight: 600, cursor: 'pointer'
+            }}>← Back</button>
+            <button onClick={() => setStep(4)} style={{
+              padding: '10px 24px', background: '#1565C0', color: '#fff', border: 'none',
+              borderRadius: '8px', fontWeight: 700, cursor: 'pointer', fontSize: '14px'
+            }}>Next: Review & Generate →</button>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== STEP 4: Review & Generate ==================== */}
+      {step === 4 && (
+        <div style={{background: '#fff', borderRadius: '12px', padding: '24px', border: '1px solid #e2e8f0'}}>
+          <h2 style={{margin: '0 0 16px', fontSize: '18px', color: '#1e293b'}}>📥 Review & Generate</h2>
+          
+          {/* Summary */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '20px'
+          }}>
+            {[
+              {label: 'Company', value: selectedCompany?.companyName || selectedCompany?.name, icon: '🏢'},
+              {label: 'PDI Number', value: selectedPdi, icon: '📋'},
+              {label: 'Party', value: partyName || '—', icon: '🤝'},
+              {label: 'Module', value: MODULE_TYPES[moduleType]?.name, icon: '☀️'},
+              {label: 'Total Serials', value: serials.length.toLocaleString(), icon: '🔢'},
+              {label: 'Production Days', value: productionDays.length, icon: '📅'},
+              {label: 'Date', value: new Date(reportDate).toLocaleDateString('en-GB'), icon: '📆'},
+              {label: 'Inspector', value: inspectorName || '—', icon: '👤'},
+            ].map((item, idx) => (
+              <div key={idx} style={{
+                background: '#f8fafc', borderRadius: '8px', padding: '12px', border: '1px solid #e2e8f0'
+              }}>
+                <div style={{fontSize: '18px'}}>{item.icon}</div>
+                <div style={{fontSize: '11px', color: '#64748b', fontWeight: 600, marginTop: '4px'}}>{item.label}</div>
+                <div style={{fontSize: '14px', fontWeight: 700, color: '#1e293b', marginTop: '2px'}}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* What will be generated */}
+          <div style={{
+            background: '#eff6ff', borderRadius: '10px', padding: '16px', border: '1px solid #bfdbfe', marginBottom: '20px'
+          }}>
+            <h3 style={{margin: '0 0 10px', fontSize: '14px', color: '#1e40af'}}>📑 Sheets that will be generated:</h3>
+            <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '13px'}}>
+              {[
+                '✅ IPQC Checksheet (per production day)',
+                '✅ FTR Report (Flash Test)',
+                '✅ Bifaciality Test',
+                '✅ Visual Inspection',
+                '✅ EL Inspection',
+                '✅ Safety Tests (IR/HV/GC/Wet)',
+                '✅ Dimension Measurement',
+                '✅ RFID Verification',
+                '✅ Sampling Plan (AQL)',
+                '✅ Calibration Index',
+                '✅ MOM (Completion Summary)',
+              ].map((item, idx) => (
+                <div key={idx} style={{color: '#1e40af'}}>{item}</div>
+              ))}
             </div>
           </div>
-        )}
-      </div>
 
-      {/* Navigation */}
-      <div className="pdg-navigation">
-        {step > 1 && (
-          <button className="pdg-nav-btn prev" onClick={() => setStep(step - 1)}>← Previous</button>
-        )}
-        <div className="pdg-nav-spacer"></div>
-        {step < 3 && (
-          <button className="pdg-nav-btn next" onClick={() => setStep(step + 1)} disabled={!canProceed()}>
-            Next →
-          </button>
-        )}
-      </div>
+          {/* Generate Button */}
+          <div style={{display: 'flex', justifyContent: 'space-between'}}>
+            <button onClick={() => setStep(3)} style={{
+              padding: '10px 24px', background: '#f1f5f9', color: '#475569', border: '1px solid #d1d5db',
+              borderRadius: '8px', fontWeight: 600, cursor: 'pointer'
+            }}>← Back</button>
+            
+            <button onClick={handleGenerate} disabled={generating} style={{
+              padding: '14px 40px', 
+              background: generating ? '#94a3b8' : 'linear-gradient(135deg, #059669, #10b981)',
+              color: '#fff', border: 'none', borderRadius: '10px', fontWeight: 700, cursor: generating ? 'not-allowed' : 'pointer',
+              fontSize: '16px', boxShadow: '0 4px 12px rgba(5, 150, 105, 0.3)'
+            }}>
+              {generating ? '⏳ Generating...' : '📥 Generate Complete PDI Documentation'}
+            </button>
+          </div>
+        </div>
+      )}
 
-      <div className="pdg-howto">
-        <h4>💡 How it works:</h4>
-        <p>
-          Select company → PDI → Configure → Download each document separately.
-          IPQC, Witness & Sampling are Excel files you can upload individually.
-          MOM is a professional PDF with signatures section.
-        </p>
+      {/* Info Box */}
+      <div style={{
+        marginTop: '20px', background: '#fffbeb', borderRadius: '10px', padding: '14px 18px',
+        border: '1px solid #fcd34d', fontSize: '12px', color: '#92400e'
+      }}>
+        <strong>💡 How it works:</strong> Select company → PDI → Configure details → Set production days → 
+        Click Generate. System auto-fills all IPQC checkpoints with realistic values, picks random serial samples (AQL sampling), 
+        generates FTR/test data from database, includes calibration instruments, and creates MOM with complete summary. 
+        <strong> Zero manual work — one click, complete documentation!</strong>
       </div>
     </div>
   );
