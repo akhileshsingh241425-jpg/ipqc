@@ -16,12 +16,12 @@ def get_production_days(company_id):
         # Get production days from database
         query = text("""
             SELECT DISTINCT 
-                production_date as date,
+                date,
                 COUNT(*) as record_count
             FROM production_records 
             WHERE company_id = :company_id
-            GROUP BY production_date
-            ORDER BY production_date DESC
+            GROUP BY date
+            ORDER BY date DESC
         """)
         
         result = db.session.execute(query, {'company_id': company_id}).fetchall()

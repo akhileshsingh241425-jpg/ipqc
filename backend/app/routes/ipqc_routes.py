@@ -50,14 +50,14 @@ def get_ipqc_data():
             params['company_id'] = company_id
         
         if from_date:
-            query += " AND production_date >= :from_date"
+            query += " AND date >= :from_date"
             params['from_date'] = from_date
         
         if to_date:
-            query += " AND production_date <= :to_date"
+            query += " AND date <= :to_date"
             params['to_date'] = to_date
         
-        query += " ORDER BY production_date DESC LIMIT 100"
+        query += " ORDER BY date DESC LIMIT 100"
         
         result = db.session.execute(text(query), params).fetchall()
         
