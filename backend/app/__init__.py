@@ -108,9 +108,10 @@ def create_app():
         print("[STARTUP] ✅ PDI Documentation (full) registered at /api/pdi-docs/*")
     else:
         # Fallback v5 - routes don't have prefix, register at /api/pdi-docs
+        # v5's /generate endpoint does dynamic import of full generator
         app.register_blueprint(pdi_doc_v5_bp, url_prefix='/api/pdi-docs')
-        print("[STARTUP] ⚠️ PDI docs v5 fallback at /api/pdi-docs/* (generate unavailable)")
-    
+        print("[STARTUP] ⚠️ PDI docs v5 fallback at /api/pdi-docs/* (generate uses dynamic import)")
+
     # Serve uploaded files (IPQC PDFs, FTR documents, BOM images)
     @app.route('/uploads/<path:filename>')
     def serve_uploads(filename):

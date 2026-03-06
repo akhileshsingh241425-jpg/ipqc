@@ -209,8 +209,10 @@ def parse_request_data():
 @pdi_doc_bp.route('/health', methods=['GET'])
 def health_check():
     return jsonify({
-        'success': True, 'message': 'PDI Docs API v5 running',
-        'excel_available': EXCEL_AVAILABLE, 'pdf_available': PDF_AVAILABLE
+        'success': True, 'message': 'PDI Docs API v5 running (fallback - full blueprint not loaded)',
+        'blueprint': 'v5_fallback',
+        'excel_available': EXCEL_AVAILABLE, 'pdf_available': PDF_AVAILABLE,
+        'note': 'Full generate endpoint available via dynamic import fallback'
     }), 200
 
 
@@ -241,16 +243,27 @@ def template_info():
         return jsonify({'success': True, 'total_stages': 8, 'total_checkpoints': 30}), 200
 
 
-# -------- Combined Generate (fallback) --------
-@pdi_doc_bp.route('/generate', methods=['POST'])
+# -------- Combined Generate (fallback with dynamic import) --------
+@pdi_doc_bp.route('/generate', methods=['POST', 'OPTIONS'])
 def generate_combined_fallback():
-    """Fallback endpoint: redirect to full PDI documentation generator if available."""
-    return jsonify({
-        'success': False,
-        'error': 'Full PDI Documentation generator not loaded on this server. '
-                 'Please restart the backend (pm2 restart pdi-backend) and ensure openpyxl is installed. '
-                 'Check server logs for import errors.'
-    }), 503
+    """Fallback: try dynamic import of full generator."""
+    if request.method == 'OPTIONS':
+        return '', 200
+    try:
+        # Try dynamic import of the full generator function
+        from app.routes.pdi_documentation_routes import generate_pdi_documentation
+        print("[PDI Docs v5] Dynamic import of full generator succeeded, forwarding...")
+        return generate_pdi_documentation()
+    except Exception as e:
+        print(f"[PDI Docs v5] Dynamic import of full generator FAILED: {e}")
+        import traceback as tb
+        tb.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'PDI Documentation generator not available: {str(e)}. '
+                     'Ensure openpyxl is installed (pip install openpyxl) '
+                     'and restart backend (pm2 restart pdi-backend).'
+        }), 500
 
 
 # -------- Individual Download Endpoints --------
