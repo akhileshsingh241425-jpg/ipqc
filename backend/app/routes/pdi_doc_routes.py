@@ -241,6 +241,18 @@ def template_info():
         return jsonify({'success': True, 'total_stages': 8, 'total_checkpoints': 30}), 200
 
 
+# -------- Combined Generate (fallback) --------
+@pdi_doc_bp.route('/generate', methods=['POST'])
+def generate_combined_fallback():
+    """Fallback endpoint: redirect to full PDI documentation generator if available."""
+    return jsonify({
+        'success': False,
+        'error': 'Full PDI Documentation generator not loaded on this server. '
+                 'Please restart the backend (pm2 restart pdi-backend) and ensure openpyxl is installed. '
+                 'Check server logs for import errors.'
+    }), 503
+
+
 # -------- Individual Download Endpoints --------
 
 @pdi_doc_bp.route('/download/ipqc', methods=['POST'])

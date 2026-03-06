@@ -228,7 +228,8 @@ const PDIDocGenerator = () => {
         party_name: partyName,
         pdi_number: selectedPdi,
         module_type: moduleType,
-        serial_numbers: serials,
+        fetch_serials_from_db: true,
+        serial_count: serials.length,
         report_date: new Date(reportDate).toLocaleDateString('en-GB'),
         inspector_name: inspectorName,
         inspector_designation: inspectorDesignation,
@@ -239,10 +240,11 @@ const PDIDocGenerator = () => {
         production_days: productionDays
       };
 
-      console.log('[PDI Docs v4] Generating...', `${API}/api/pdi-docs/generate`, 'serials:', serials.length);
+      console.log('[PDI Docs v4] Generating...', `${API}/api/pdi-docs/generate`, 'serials:', serials.length, '(fetching from DB)');
       const response = await axios.post(`${API}/api/pdi-docs/generate`, payload, {
         responseType: 'blob',
-        timeout: 120000
+        timeout: 300000,
+        headers: { 'Content-Type': 'application/json' }
       });
 
       // Check if response is actually an error (JSON returned as blob)

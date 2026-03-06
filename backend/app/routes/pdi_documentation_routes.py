@@ -312,6 +312,9 @@ def generate_pdi_documentation():
     
     try:
         data = request.json
+        if not data:
+            return jsonify({'success': False, 'error': 'No JSON data received'}), 400
+        
         company_id = data.get('company_id')
         company_name = data.get('company_name', 'Gautam Solar Private Limited')
         party_name = data.get('party_name', '')
@@ -332,8 +335,23 @@ def generate_pdi_documentation():
         production_days = data.get('production_days', [])
         # Each: {date: '2026-01-15', day_production: 300, night_production: 200, shift: 'Day'}
         
+        # If serial_numbers not provided, fetch from DB using company_id + pdi_number
+        fetch_from_db = data.get('fetch_serials_from_db', False)
+        if fetch_from_db and company_id and pdi_number and not serial_numbers:
+            try:
+                result = db.session.execute(text("""
+                    SELECT serial_number FROM ftr_master_serials
+                    WHERE company_id = :cid AND pdi_number = :pdi
+                    ORDER BY serial_number
+                """), {'cid': company_id, 'pdi': pdi_number})
+                serial_numbers = [row[0] for row in result.fetchall()]
+                print(f"[PDI Docs] Fetched {len(serial_numbers)} serials from DB for {pdi_number}")
+            except Exception as e:
+                print(f"[PDI Docs] DB serial fetch error: {e}")
+                return jsonify({'success': False, 'error': f'Failed to fetch serials from DB: {str(e)}'}), 500
+        
         if not serial_numbers:
-            return jsonify({'success': False, 'error': 'No serial numbers provided'}), 400
+            return jsonify({'success': False, 'error': 'No serial numbers provided or found in DB'}), 400
         
         total_qty = len(serial_numbers)
         specs = MODULE_SPECS.get(module_type, MODULE_SPECS['G2G580'])
@@ -343,25 +361,29 @@ def generate_pdi_documentation():
         ftr_data = {}
         if company_id:
             try:
-                placeholders = ','.join([f':s{i}' for i in range(len(serial_numbers))])
-                params = {f's{i}': s for i, s in enumerate(serial_numbers)}
-                params['cid'] = company_id
-                result = db.session.execute(text(f"""
-                    SELECT serial_number, pmax, isc, voc, ipm, vpm, ff, efficiency, binning
-                    FROM ftr_master_serials
-                    WHERE company_id = :cid AND serial_number IN ({placeholders})
-                """), params)
-                for row in result.fetchall():
-                    ftr_data[row[0]] = {
-                        'pmax': float(row[1]) if row[1] else None,
-                        'isc': float(row[2]) if row[2] else None,
-                        'voc': float(row[3]) if row[3] else None,
-                        'ipm': float(row[4]) if row[4] else None,
-                        'vpm': float(row[5]) if row[5] else None,
-                        'ff': float(row[6]) if row[6] else None,
-                        'efficiency': float(row[7]) if row[7] else None,
-                        'binning': row[8]
-                    }
+                # Fetch in batches to avoid parameter limit issues
+                batch_size = 500
+                for i in range(0, len(serial_numbers), batch_size):
+                    batch = serial_numbers[i:i+batch_size]
+                    placeholders = ','.join([f':s{j}' for j in range(len(batch))])
+                    params = {f's{j}': s for j, s in enumerate(batch)}
+                    params['cid'] = company_id
+                    result = db.session.execute(text(f"""
+                        SELECT serial_number, pmax, isc, voc, ipm, vpm, ff, efficiency, binning
+                        FROM ftr_master_serials
+                        WHERE company_id = :cid AND serial_number IN ({placeholders})
+                    """), params)
+                    for row in result.fetchall():
+                        ftr_data[row[0]] = {
+                            'pmax': float(row[1]) if row[1] else None,
+                            'isc': float(row[2]) if row[2] else None,
+                            'voc': float(row[3]) if row[3] else None,
+                            'ipm': float(row[4]) if row[4] else None,
+                            'vpm': float(row[5]) if row[5] else None,
+                            'ff': float(row[6]) if row[6] else None,
+                            'efficiency': float(row[7]) if row[7] else None,
+                            'binning': row[8]
+                        }
             except Exception as e:
                 print(f"[PDI Docs] FTR data fetch error: {e}")
         
