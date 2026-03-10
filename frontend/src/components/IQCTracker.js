@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 
@@ -28,13 +28,74 @@ const fmt = (n) => {
   return parseFloat(n.toFixed(3)).toLocaleString('en-IN');
 };
 
+// MRP COC APIs
+const MRP_COC_API = 'https://umanmrp.in/api/coc_api.php';
+const MRP_ASSIGNED_API = 'https://umanmrp.in/a/get_assigned_coc_records.php';
+
+// Map software company names → MRP assigned_to codes
+const COMPANY_NAME_TO_MRP = {
+  'sterlin and wilson': 'S&W',
+  's&w': 'S&W',
+  'larsen & toubro': 'L&T',
+  'l&t': 'L&T',
+  'rays power': 'Rays',
+  'rays': 'Rays',
+};
+const getMrpCompanyCode = (name) => {
+  if (!name) return '';
+  return COMPANY_NAME_TO_MRP[name.trim().toLowerCase()] || name;
+};
+
+// Match MRP "Lot X" → PDI name in our system
+const matchPdiFromLot = (mrpPdiNo, pdiList) => {
+  if (!mrpPdiNo || !pdiList || pdiList.length === 0) return null;
+  const numMatch = mrpPdiNo.match(/(\d+\.?\d*)/);
+  if (!numMatch) return null;
+  const targetNum = numMatch[1];
+  for (const pdi of pdiList) {
+    const pdiNum = (pdi.name || '').match(/(\d+\.?\d*)/);
+    if (pdiNum && pdiNum[1] === targetNum) return pdi.name;
+  }
+  return null;
+};
+
+// Map MRP material names → BOM_MATERIALS keys
+const MRP_MATERIAL_MAP = {
+  'solar cell': 'cell', 'cell': 'cell', 'cells': 'cell',
+  'front glass': 'f_glass', 'front tempered glass': 'f_glass',
+  'back glass': 'b_glass', 'back tempered glass': 'b_glass', 'rear glass': 'b_glass',
+  'glass': 'f_glass',
+  'ribbon': 'ribbon', 'interconnect ribbon': 'ribbon',
+  'flux': 'flux', 'soldering flux': 'flux',
+  'busbar-4': 'busbar4', 'busbar 4': 'busbar4', 'bus bar 4': 'busbar4', 'busbar4': 'busbar4',
+  'busbar-6': 'busbar6', 'busbar 6': 'busbar6', 'bus bar 6': 'busbar6', 'busbar6': 'busbar6',
+  'epe sheet': 'epe', 'epe': 'epe', 'eva': 'epe', 'epe foam': 'epe',
+  'frame': 'frame', 'aluminium frame': 'frame', 'aluminum frame': 'frame', 'al frame': 'frame',
+  'sealant': 'sealant', 'silicone sealant': 'sealant', 'sealent': 'sealant',
+  'potting': 'potting', 'potting material': 'potting', 'jb potting': 'potting',
+  'junction box': 'jb', 'j.box': 'jb', 'jb': 'jb', 'j box': 'jb',
+  'rfid tag': 'rfid', 'rfid': 'rfid',
+  'tape': 'tape', 'adhesive tape': 'tape',
+};
+
+const matchMaterialKey = (name) => {
+  if (!name) return null;
+  const lower = name.trim().toLowerCase();
+  if (MRP_MATERIAL_MAP[lower]) return MRP_MATERIAL_MAP[lower];
+  // Partial match
+  for (const [pattern, key] of Object.entries(MRP_MATERIAL_MAP)) {
+    if (lower.includes(pattern) || pattern.includes(lower)) return key;
+  }
+  return null;
+};
+
 function IQCTracker({ companyName, companyId, productionRecords = [] }) {
   const [pdiOffers, setPdiOffers] = useState({});
   const [ftrAssignedCounts, setFtrAssignedCounts] = useState({});
   const [ftrPdiList, setFtrPdiList] = useState([]);
   const [bomOverrides, setBomOverrides] = useState({});
 
-  // COC Inventory: {matKey: [{id, invoiceNo, date, totalQty, partyName}]}
+  // COC Inventory: {matKey: [{id, invoiceNo, date, totalQty, partyName, source, pdiNo}]}
   const [cocInventory, setCocInventory] = useState({});
   // COC Allocations: {"pdi_matKey": [{cocId, qty}]}
   const [cocAllocations, setCocAllocations] = useState({});
@@ -45,6 +106,12 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
   const [loading, setLoading] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [view, setView] = useState('overview'); // overview | detail | inventory
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
+
+  // Refs for stable access in callbacks
+  const pdisRef = useRef([]);
+  const hasSyncedRef = useRef(false);
 
   const normalizePdi = (value) => String(value || '').trim().toLowerCase();
 
@@ -74,6 +141,9 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
       return na - nb;
     });
   }, [productionRecords, ftrPdiList, ftrAssignedCounts])();
+
+  // Keep ref updated for callbacks
+  pdisRef.current = pdis;
 
   // Load saved data on mount
   const loadData = useCallback(async () => {
@@ -115,9 +185,156 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
     }
   }, [companyId]);
 
+  // Load COC data from both MRP APIs and auto-populate inventory + allocations
+  // API 1 (coc_api.php): All approved COCs → inventory / FIFO suggestions
+  // API 2 (get_assigned_coc_records.php): Assigned COCs → auto-allocate to PDIs
+  const syncMrpCoc = useCallback(async (silent = false) => {
+    if (!silent) setSyncing(true);
+    try {
+      const toDate = new Date().toISOString().split('T')[0];
+      const fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      // Fetch both APIs in parallel
+      const [api1Res, api2Res] = await Promise.all([
+        axios.post(MRP_COC_API, { from: fromDate, to: toDate }),
+        axios.get(MRP_ASSIGNED_API)
+      ]);
+
+      // API 1: All approved COCs (for inventory / FIFO suggestions)
+      const mrpRecords = Array.isArray(api1Res.data) ? api1Res.data : (api1Res.data?.data || []);
+
+      // API 2: Assigned COCs — filter by current company
+      const allAssigned = api2Res.data?.data || [];
+      const mrpCode = getMrpCompanyCode(companyName);
+      const myAssigned = allAssigned.filter(r => r.assigned_to === mrpCode);
+
+      // Step 1: Build new inventory from API 1
+      let newInventory = null;
+      let addedCount = 0;
+
+      setCocInventory(prev => {
+        const next = {};
+        Object.keys(prev).forEach(k => { next[k] = [...(prev[k] || [])]; });
+
+        const existingIdMap = new Set();
+        const existingInvMap = {};
+        Object.entries(next).forEach(([mk, items]) => {
+          existingInvMap[mk] = new Set();
+          (items || []).forEach(i => {
+            if (i.mrpId) existingIdMap.add(String(i.mrpId));
+            existingInvMap[mk].add(`${(i.invoiceNo || '').toLowerCase()}_${i.lotBatchNo || ''}`);
+          });
+        });
+
+        mrpRecords.forEach(rec => {
+          const matKey = matchMaterialKey(rec.material_name);
+          if (!matKey) return;
+          if (rec.id && existingIdMap.has(String(rec.id))) return;
+          const invNo = rec.invoice_no || '';
+          const lotBatch = rec.lot_batch_no || '';
+          if (!invNo) return;
+          if (!existingInvMap[matKey]) existingInvMap[matKey] = new Set();
+          const dupKey = `${invNo.toLowerCase()}_${lotBatch}`;
+          if (existingInvMap[matKey].has(dupKey)) return;
+
+          if (!next[matKey]) next[matKey] = [];
+          next[matKey].push({
+            id: `mrp_${rec.id || Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            mrpId: String(rec.id || ''),
+            invoiceNo: invNo,
+            date: rec.invoice_date || rec.entry_date || '',
+            totalQty: String(rec.coc_qty || rec.invoice_qty || 0),
+            partyName: rec.brand || '',
+            source: 'mrp',
+            lotBatchNo: lotBatch,
+            productType: rec.product_type || '',
+            storeName: rec.store_name || '',
+            cocDocUrl: rec.coc_document_url || '',
+            iqcDocUrl: rec.iqc_document_url || '',
+          });
+          existingInvMap[matKey].add(dupKey);
+          existingIdMap.add(String(rec.id));
+          addedCount++;
+        });
+
+        newInventory = next;
+        return next;
+      });
+
+      // Step 2: Auto-allocate from API 2 (assigned COCs → matching PDIs)
+      const currentPdis = pdisRef.current;
+      let autoCount = 0;
+
+      if (myAssigned.length > 0 && currentPdis.length > 0 && newInventory) {
+        setCocAllocations(prev => {
+          const next = {};
+          // Preserve manual allocations, remove old MRP auto-assignments
+          Object.entries(prev).forEach(([k, allocs]) => {
+            const manual = (allocs || []).filter(a => a.source !== 'mrp_assigned');
+            if (manual.length > 0) next[k] = [...manual];
+          });
+
+          myAssigned.forEach(rec => {
+            const matKey = matchMaterialKey(rec.material_name);
+            if (!matKey) return;
+            const qty = parseFloat(rec.remaining_qty) || 0;
+            if (qty <= 0) return;
+
+            // Match "Lot 5" → PDI name in our system (e.g. "PDI 5", "PDI-5")
+            const pdiName = matchPdiFromLot(rec.pdi_no, currentPdis);
+            if (!pdiName) return;
+
+            // Find matching COC in inventory by invoice_no + lot_batch_no
+            const invItems = newInventory[matKey] || [];
+            const matched = invItems.find(c =>
+              c.invoiceNo === rec.invoice_no && (c.lotBatchNo || '') === (rec.lot_batch_no || '')
+            );
+            if (!matched) return;
+
+            const k = `${pdiName}_${matKey}`;
+            if (!next[k]) next[k] = [];
+            // Don't duplicate same COC assignment
+            if (!next[k].find(a => a.cocId === matched.id && a.source === 'mrp_assigned')) {
+              next[k].push({ cocId: matched.id, qty, source: 'mrp_assigned' });
+              autoCount++;
+            }
+          });
+
+          return next;
+        });
+      }
+
+      if (!silent) {
+        const parts = [];
+        if (addedCount > 0) parts.push(`${addedCount} COC synced`);
+        if (autoCount > 0) parts.push(`${autoCount} auto-assigned to PDIs`);
+        if (parts.length > 0) {
+          setSyncMsg(`✅ ${parts.join(', ')}`);
+        } else {
+          setSyncMsg(`✅ Up to date (${mrpRecords.length} COCs, ${myAssigned.length} assigned)`);
+        }
+      }
+    } catch (e) {
+      console.error('MRP COC sync error:', e);
+      if (!silent) setSyncMsg('❌ MRP sync failed: ' + (e.message || ''));
+    } finally {
+      if (!silent) {
+        setSyncing(false);
+        setTimeout(() => setSyncMsg(''), 5000);
+      }
+    }
+  }, [companyName]);
+
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { loadFtrAssignedCounts(); }, [loadFtrAssignedCounts]);
   useEffect(() => { if (pdis.length > 0 && !activePdi) setActivePdi(pdis[0].name); }, [pdis, activePdi]);
+  // Auto-sync MRP COC when PDIs are available (runs once)
+  useEffect(() => {
+    if (!hasSyncedRef.current && pdis.length > 0) {
+      hasSyncedRef.current = true;
+      syncMrpCoc(true);
+    }
+  }, [pdis.length, syncMrpCoc]);
 
   // Save
   const saveData = async () => {
@@ -172,6 +389,13 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
     return (cocAllocations[`${pdi}_${matKey}`] || []).reduce((s, a) => s + (parseFloat(a.qty) || 0), 0);
   };
 
+  // Current allocation source (mrp_assigned or manual)
+  const getAllocSource = (pdi, matKey, cocId) => {
+    const allocs = cocAllocations[`${pdi}_${matKey}`] || [];
+    const found = allocs.find(a => a.cocId === cocId);
+    return found?.source || '';
+  };
+
   // Current allocation qty from a specific COC for a PDI+material
   const getAllocQty = (pdi, matKey, cocId) => {
     const allocs = cocAllocations[`${pdi}_${matKey}`] || [];
@@ -199,7 +423,7 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
       if (numQty <= 0) {
         if (idx >= 0) allocs.splice(idx, 1);
       } else {
-        if (idx >= 0) allocs[idx] = { cocId, qty: numQty };
+        if (idx >= 0) allocs[idx] = { ...allocs[idx], qty: numQty };
         else allocs.push({ cocId, qty: numQty });
       }
       return { ...prev, [k]: allocs };
@@ -279,9 +503,15 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px', flexWrap: 'wrap', gap: '10px' }}>
           <h3 style={{ margin: 0, color: '#1a237e', fontSize: '16px' }}>PDI Wise Offer & BOM Status</h3>
-          <button onClick={() => setView('inventory')} style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', boxShadow: '0 2px 8px rgba(255,111,0,0.3)' }}>
-            📦 COC Inventory
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {syncMsg && <span style={{ fontSize: '12px', fontWeight: '600', color: syncMsg.includes('✅') ? '#2e7d32' : syncMsg.includes('❌') ? '#c62828' : '#ef6c00' }}>{syncMsg}</span>}
+            <button onClick={() => syncMrpCoc(false)} disabled={syncing} style={{ padding: '10px 20px', background: syncing ? '#999' : 'linear-gradient(135deg, #1565c0, #1976d2)', color: 'white', border: 'none', borderRadius: '8px', cursor: syncing ? 'wait' : 'pointer', fontWeight: '700', fontSize: '13px', boxShadow: '0 2px 8px rgba(21,101,192,0.3)' }}>
+              {syncing ? '⏳ Syncing...' : '🔄 Sync MRP COC'}
+            </button>
+            <button onClick={() => setView('inventory')} style={{ padding: '10px 20px', background: 'linear-gradient(135deg, #ff6f00 0%, #ff8f00 100%)', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: '700', fontSize: '13px', boxShadow: '0 2px 8px rgba(255,111,0,0.3)' }}>
+              📦 COC Inventory
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '15px' }}>
@@ -375,7 +605,8 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
               <h4 style={{ margin: 0, fontSize: '15px' }}>{mat.label} — COC Invoices</h4>
               <span style={{ fontSize: '11px', opacity: 0.85 }}>Unit: {mat.unit} | {items.length} invoice(s)</span>
             </div>
-            <button onClick={() => addCocToInventory(activeMat)} style={{ padding: '8px 18px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}>+ Add COC Invoice</button>
+            <button onClick={() => syncMrpCoc(false)} disabled={syncing} style={{ padding: '8px 18px', background: syncing ? '#999' : '#1976d2', color: 'white', border: 'none', borderRadius: '6px', cursor: syncing ? 'wait' : 'pointer', fontWeight: '700', fontSize: '12px', marginRight: '8px' }}>{syncing ? '⏳...' : '🔄 Sync from MRP'}</button>
+            <button onClick={() => addCocToInventory(activeMat)} style={{ padding: '8px 18px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: '700', fontSize: '12px' }}>+ Add Manual</button>
           </div>
           <div style={{ padding: '15px' }}>
             {items.length === 0 ? (
@@ -386,16 +617,19 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '800px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '950px' }}>
                   <thead>
                     <tr style={{ background: '#fff3e0' }}>
                       <th style={TH2}>#</th>
+                      <th style={TH2}>Source</th>
                       <th style={TH2}>Invoice Number</th>
+                      <th style={TH2}>Lot/Batch</th>
                       <th style={TH2}>Date</th>
                       <th style={{ ...TH2, color: '#e65100' }}>Total Qty ({mat.unit})</th>
-                      <th style={{ ...TH2, color: '#1565c0' }}>Used (All PDIs)</th>
+                      <th style={{ ...TH2, color: '#1565c0' }}>Used</th>
                       <th style={{ ...TH2, color: '#2e7d32' }}>Available</th>
                       <th style={TH2}>Party / Supplier</th>
+                      <th style={{ ...TH2, textAlign: 'center' }}>Docs</th>
                       <th style={{ ...TH2, textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
@@ -405,12 +639,17 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
                       const used = getCocUsedTotal(item.id);
                       const avail = totalQty - used;
                       const pct = totalQty > 0 ? (used / totalQty * 100) : 0;
+                      const isMrp = item.source === 'mrp';
                       return (
-                        <tr key={item.id} style={{ borderBottom: '1px solid #e0e0e0' }}>
+                        <tr key={item.id} style={{ borderBottom: '1px solid #e0e0e0', background: isMrp ? '#f8fffe' : 'white' }}>
                           <td style={TD2}>{idx + 1}</td>
-                          <td style={TD2}><input type="text" value={item.invoiceNo} onChange={e => updateCocInv(activeMat, idx, 'invoiceNo', e.target.value)} placeholder="e.g. ZJAXSM20250444A" style={INP} /></td>
-                          <td style={TD2}><input type="date" value={item.date} onChange={e => updateCocInv(activeMat, idx, 'date', e.target.value)} style={{ ...INP, width: '140px' }} /></td>
-                          <td style={TD2}><input type="number" value={item.totalQty} onChange={e => updateCocInv(activeMat, idx, 'totalQty', e.target.value)} placeholder="0" style={{ ...INP, width: '120px', textAlign: 'right', fontWeight: '700' }} /></td>
+                          <td style={{ ...TD2, textAlign: 'center' }}>
+                            <span style={{ fontSize: '9px', padding: '2px 8px', borderRadius: '8px', fontWeight: '700', background: isMrp ? '#e3f2fd' : '#fff8e1', color: isMrp ? '#1565c0' : '#ef6c00' }}>{isMrp ? 'MRP' : 'Manual'}</span>
+                          </td>
+                          <td style={TD2}>{isMrp ? <span style={{ fontWeight: '600', fontSize: '12px' }}>{item.invoiceNo}</span> : <input type="text" value={item.invoiceNo} onChange={e => updateCocInv(activeMat, idx, 'invoiceNo', e.target.value)} placeholder="Invoice No." style={INP} />}</td>
+                          <td style={{ ...TD2, fontSize: '11px', color: '#666' }}>{item.lotBatchNo || '—'}</td>
+                          <td style={TD2}>{isMrp ? <span style={{ fontSize: '11px' }}>{item.date}</span> : <input type="date" value={item.date} onChange={e => updateCocInv(activeMat, idx, 'date', e.target.value)} style={{ ...INP, width: '130px' }} />}</td>
+                          <td style={{ ...TD2, textAlign: 'right' }}>{isMrp ? <span style={{ fontWeight: '700', fontSize: '13px' }}>{fmt(totalQty)}</span> : <input type="number" value={item.totalQty} onChange={e => updateCocInv(activeMat, idx, 'totalQty', e.target.value)} placeholder="0" style={{ ...INP, width: '110px', textAlign: 'right', fontWeight: '700' }} />}</td>
                           <td style={{ ...TD2, textAlign: 'right', fontWeight: '600', color: used > 0 ? '#1565c0' : '#bbb' }}>
                             {fmt(used)}
                             {totalQty > 0 && <div style={{ width: '100%', height: '3px', background: '#e0e0e0', borderRadius: '2px', marginTop: '3px' }}>
@@ -418,8 +657,15 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
                             </div>}
                           </td>
                           <td style={{ ...TD2, textAlign: 'right', fontWeight: '700', color: avail > 0 ? '#2e7d32' : avail === 0 && totalQty > 0 ? '#ff9800' : '#c62828' }}>{fmt(avail)}</td>
-                          <td style={TD2}><input type="text" value={item.partyName} onChange={e => updateCocInv(activeMat, idx, 'partyName', e.target.value)} placeholder="e.g. Tongwei, CSG, Flat" style={INP} /></td>
-                          <td style={{ ...TD2, textAlign: 'center' }}><button onClick={() => { if (window.confirm('Delete this COC invoice? All allocations from this invoice will be removed.')) deleteCocInv(activeMat, idx); }} style={{ background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', fontSize: '11px' }}>🗑️</button></td>
+                          <td style={TD2}>{isMrp ? <span style={{ fontSize: '11px' }}>{item.partyName}</span> : <input type="text" value={item.partyName} onChange={e => updateCocInv(activeMat, idx, 'partyName', e.target.value)} placeholder="Party" style={INP} />}</td>
+                          <td style={{ ...TD2, textAlign: 'center' }}>
+                            {item.cocDocUrl && <a href={item.cocDocUrl} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#1565c0', marginRight: '4px' }} title="COC Document">📄COC</a>}
+                            {item.iqcDocUrl && <a href={item.iqcDocUrl} target="_blank" rel="noreferrer" style={{ fontSize: '10px', color: '#2e7d32' }} title="IQC Document">📋IQC</a>}
+                            {!item.cocDocUrl && !item.iqcDocUrl && <span style={{ color: '#ccc', fontSize: '10px' }}>—</span>}
+                          </td>
+                          <td style={{ ...TD2, textAlign: 'center' }}>
+                            <button onClick={() => { if (window.confirm('Delete this COC invoice? All allocations will be removed.')) deleteCocInv(activeMat, idx); }} style={{ background: '#f44336', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '4px 8px', fontSize: '11px' }}>🗑️</button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -560,6 +806,7 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
                     <tr style={{ background: '#e3f2fd' }}>
                       <th style={TH2}>#</th>
                       <th style={TH2}>Invoice No.</th>
+                      <th style={{ ...TH2, fontSize: '10px' }}>Lot/Batch</th>
                       <th style={TH2}>Date</th>
                       <th style={TH2}>Party</th>
                       <th style={{ ...TH2, textAlign: 'right' }}>Total Qty</th>
@@ -575,28 +822,37 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
                       const usedOthers = getCocUsedTotal(coc.id, k);
                       const available = totalQty - usedOthers;
                       const myAlloc = getAllocQty(activePdi, activeMat, coc.id);
+                      const allocSource = getAllocSource(activePdi, activeMat, coc.id);
+                      const isMrpAssigned = allocSource === 'mrp_assigned';
                       const reserve = available - myAlloc;
                       const pct = totalQty > 0 ? ((usedOthers + myAlloc) / totalQty * 100) : 0;
                       return (
-                        <tr key={coc.id} style={{ borderBottom: '1px solid #e0e0e0', background: myAlloc > 0 ? '#f1f8e9' : 'white' }}>
+                        <tr key={coc.id} style={{ borderBottom: '1px solid #e0e0e0', background: isMrpAssigned ? '#e8f5e9' : myAlloc > 0 ? '#f1f8e9' : 'white' }}>
                           <td style={TD2}>{idx + 1}</td>
-                          <td style={{ ...TD2, fontWeight: '600', color: '#1a237e' }}>{coc.invoiceNo || '—'}</td>
+                          <td style={{ ...TD2, fontWeight: '600', color: '#1a237e' }}>
+                            {coc.invoiceNo || '—'}
+                            {coc.source === 'mrp' && <span style={{ fontSize: '8px', background: '#e3f2fd', color: '#1565c0', padding: '1px 5px', borderRadius: '6px', fontWeight: '600', marginLeft: '4px', verticalAlign: 'super' }}>MRP</span>}
+                          </td>
+                          <td style={{ ...TD2, fontSize: '10px', color: '#666' }}>{coc.lotBatchNo || '—'}</td>
                           <td style={{ ...TD2, fontSize: '11px' }}>{coc.date || '—'}</td>
                           <td style={{ ...TD2, fontSize: '11px' }}>{coc.partyName || '—'}</td>
                           <td style={{ ...TD2, textAlign: 'right', fontWeight: '600' }}>{fmt(totalQty)}</td>
                           <td style={{ ...TD2, textAlign: 'right', color: usedOthers > 0 ? '#1565c0' : '#bbb' }}>{fmt(usedOthers)}</td>
                           <td style={{ ...TD2, textAlign: 'right', fontWeight: '700', color: available > 0 ? '#2e7d32' : '#c62828' }}>{fmt(available)}</td>
                           <td style={{ ...TD2, textAlign: 'center' }}>
-                            <input type="number" value={myAlloc || ''} min="0" max={available}
-                              onChange={e => {
-                                let v = parseFloat(e.target.value) || 0;
-                                if (v > available) v = available;
-                                if (v < 0) v = 0;
-                                setAllocQty(activePdi, activeMat, coc.id, v);
-                              }}
-                              placeholder="0"
-                              disabled={available <= 0 && myAlloc <= 0}
-                              style={{ width: '110px', padding: '6px 8px', border: myAlloc > 0 ? '2px solid #4CAF50' : '1px solid #ddd', borderRadius: '5px', fontSize: '12px', textAlign: 'right', fontWeight: '700', background: myAlloc > 0 ? '#e8f5e9' : available <= 0 ? '#f5f5f5' : 'white' }} />
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                              {isMrpAssigned && <span style={{ fontSize: '8px', background: '#2e7d32', color: 'white', padding: '2px 6px', borderRadius: '6px', fontWeight: '700', whiteSpace: 'nowrap' }}>Auto</span>}
+                              <input type="number" value={myAlloc || ''} min="0" max={available}
+                                onChange={e => {
+                                  let v = parseFloat(e.target.value) || 0;
+                                  if (v > available) v = available;
+                                  if (v < 0) v = 0;
+                                  setAllocQty(activePdi, activeMat, coc.id, v);
+                                }}
+                                placeholder="0"
+                                disabled={available <= 0 && myAlloc <= 0}
+                                style={{ width: '100px', padding: '6px 8px', border: isMrpAssigned ? '2px solid #2e7d32' : myAlloc > 0 ? '2px solid #4CAF50' : '1px solid #ddd', borderRadius: '5px', fontSize: '12px', textAlign: 'right', fontWeight: '700', background: isMrpAssigned ? '#e8f5e9' : myAlloc > 0 ? '#e8f5e9' : available <= 0 ? '#f5f5f5' : 'white' }} />
+                            </div>
                           </td>
                           <td style={{ ...TD2, textAlign: 'right' }}>
                             <span style={{ fontWeight: '600', color: reserve > 0 ? '#ff9800' : reserve === 0 && myAlloc > 0 ? '#999' : '#bbb' }}>{fmt(reserve)}</span>
@@ -612,10 +868,20 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
               </div>
 
               {/* Summary */}
-              <div style={{ marginTop: '12px', padding: '12px 15px', background: rem >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                <div style={{ fontSize: '13px' }}><strong>Total Allocated:</strong> {fmt(totalAlloc)} {mat.unit} | <strong>BOM Required:</strong> {fmt(bom)} {mat.unit}</div>
-                <div style={{ fontSize: '16px', fontWeight: '800', color: rem >= 0 ? '#2e7d32' : '#c62828' }}>{rem >= 0 ? '✅' : '⚠️'} Remaining: {rem >= 0 ? '+' : ''}{fmt(rem)} {mat.unit}</div>
-              </div>
+              {(() => {
+                const mrpCount = (cocAllocations[k] || []).filter(a => a.source === 'mrp_assigned').length;
+                const manualCount = (cocAllocations[k] || []).filter(a => a.source !== 'mrp_assigned').length;
+                return (
+                  <div style={{ marginTop: '12px', padding: '12px 15px', background: rem >= 0 ? '#e8f5e9' : '#ffebee', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ fontSize: '13px' }}>
+                      <strong>Total Allocated:</strong> {fmt(totalAlloc)} {mat.unit} | <strong>BOM Required:</strong> {fmt(bom)} {mat.unit}
+                      {mrpCount > 0 && <span style={{ marginLeft: '8px', fontSize: '11px', background: '#e8f5e9', color: '#2e7d32', padding: '2px 8px', borderRadius: '8px', fontWeight: '600' }}>🔗 {mrpCount} MRP Auto</span>}
+                      {manualCount > 0 && <span style={{ marginLeft: '4px', fontSize: '11px', background: '#fff3e0', color: '#ef6c00', padding: '2px 8px', borderRadius: '8px', fontWeight: '600' }}>✏️ {manualCount} Manual</span>}
+                    </div>
+                    <div style={{ fontSize: '16px', fontWeight: '800', color: rem >= 0 ? '#2e7d32' : '#c62828' }}>{rem >= 0 ? '✅' : '⚠️'} Remaining: {rem >= 0 ? '+' : ''}{fmt(rem)} {mat.unit}</div>
+                  </div>
+                );
+              })()}
             </>
           )}
         </div>
@@ -646,7 +912,11 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
           <p style={{ margin: '4px 0 0', fontSize: '12px', opacity: 0.8 }}>{companyName} | COC Inventory → FIFO Allocation → BOM Tracking</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {syncMsg && <span style={{ fontSize: '12px', fontWeight: '600' }}>{syncMsg}</span>}
           {saveMsg && <span style={{ fontSize: '13px', fontWeight: '600' }}>{saveMsg === 'Saved!' ? '✅' : '❌'} {saveMsg}</span>}
+          <button onClick={() => syncMrpCoc(false)} disabled={syncing} style={{ padding: '10px 20px', background: syncing ? '#666' : 'linear-gradient(135deg, #ff6f00, #ff8f00)', color: 'white', border: 'none', borderRadius: '8px', cursor: syncing ? 'wait' : 'pointer', fontWeight: '700', fontSize: '13px', boxShadow: '0 2px 8px rgba(255,111,0,0.3)' }}>
+            {syncing ? '⏳ Syncing...' : '🔄 Sync MRP COC'}
+          </button>
           <button onClick={saveData} disabled={saving} style={{ padding: '10px 24px', background: saving ? '#666' : '#4CAF50', color: 'white', border: 'none', borderRadius: '8px', cursor: saving ? 'wait' : 'pointer', fontWeight: '700', fontSize: '14px', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
             {saving ? '⏳ Saving...' : '💾 Save All'}
           </button>
