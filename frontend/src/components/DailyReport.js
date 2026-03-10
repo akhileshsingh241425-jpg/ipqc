@@ -135,6 +135,7 @@ function DailyReport() {
   // eslint-disable-next-line no-unused-vars
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
   const [pdiFilter, setPdiFilter] = useState('all'); // 'all', 'done', 'pending'
+  const [ftrPdiModules, setFtrPdiModules] = useState({}); // PDI name -> FTR assigned module count
   const [showCocUploadModal, setShowCocUploadModal] = useState(false);
   const [selectedPdiRecords, setSelectedPdiRecords] = useState([]);
   const [availableCocData, setAvailableCocData] = useState([]);
@@ -180,7 +181,8 @@ function DailyReport() {
     includeKPIMetrics: true,
     includeProductionDetails: true,
     includeDayWiseSummary: true,
-    includeBomMaterials: true
+    includeBomMaterials: true,
+    includeIqcSummary: true
   });
 
   // Cell Efficiency Received Entry states
@@ -212,6 +214,27 @@ function DailyReport() {
   useEffect(() => {
     loadCompanies();
   }, []);
+
+  // Load FTR assigned module counts per PDI when company selected
+  useEffect(() => {
+    const loadFtrPdiModules = async () => {
+      if (!selectedCompany?.id) { setFtrPdiModules({}); return; }
+      try {
+        const API_BASE_URL = getAPIBaseURL();
+        const res = await axios.get(`${API_BASE_URL}/api/ftr/company/${selectedCompany.id}`);
+        const assignments = Array.isArray(res.data?.pdi_assignments) ? res.data.pdi_assignments : [];
+        const mapped = {};
+        assignments.forEach((item) => {
+          if (item?.pdi_number) mapped[item.pdi_number] = parseInt(item?.count, 10) || 0;
+        });
+        setFtrPdiModules(mapped);
+      } catch (e) {
+        console.log('FTR PDI modules not loaded:', e.message);
+        setFtrPdiModules({});
+      }
+    };
+    loadFtrPdiModules();
+  }, [selectedCompany?.id]);
 
   // Save pdiProductionOverrides to localStorage whenever it changes
   useEffect(() => {
@@ -2461,7 +2484,11 @@ function DailyReport() {
           stage: rej.stage
         })),
         remarks: reportData.remarks || '',
-        report_options: reportOptions
+        report_options: reportOptions,
+        iqc_summary: Object.keys(ftrPdiModules).length > 0 ? Object.entries(ftrPdiModules).map(([pdi, count]) => ({
+          pdi_number: pdi,
+          ftr_assigned_modules: count
+        })) : []
       };
 
       const API_BASE = getAPIBase();
@@ -2560,7 +2587,11 @@ function DailyReport() {
         end_date: pdfDateRange.endDate,
         cells_received_qty: selectedCompany.cellsReceivedQty || 0,
         cells_received_mw: selectedCompany.cellsReceivedMW || 0,
-        report_options: reportOptions
+        report_options: reportOptions,
+        iqc_summary: Object.keys(ftrPdiModules).length > 0 ? Object.entries(ftrPdiModules).map(([pdi, count]) => ({
+          pdi_number: pdi,
+          ftr_assigned_modules: count
+        })) : []
       };
 
       const API_BASE = getAPIBase();
@@ -3503,6 +3534,7 @@ function DailyReport() {
                         <th style={{ width: '80px' }}>DATE</th>
                         <th style={{ width: '120px' }}>RUNNING ORDER</th>
                         <th style={{ width: '60px' }}>PDI</th>
+                        <th style={{ width: '70px', backgroundColor: '#e8eaf6' }}>FTR Modules</th>
                         <th style={{ width: '130px' }}>SERIAL START</th>
                         <th style={{ width: '130px' }}>SERIAL END</th>
                         <th style={{ width: '50px' }}>COUNT</th>
@@ -3559,6 +3591,12 @@ function DailyReport() {
                               }}>
                                 {record.pdi || '-'}
                               </div>
+                            </td>
+                            <td style={{ textAlign: 'center', backgroundColor: '#e8eaf6', fontWeight: '700', fontSize: '11px' }}>
+                              {record.pdi && ftrPdiModules[record.pdi] !== undefined
+                                ? <span style={{ color: '#1a237e' }}>{ftrPdiModules[record.pdi].toLocaleString()}</span>
+                                : <span style={{ color: '#bbb' }}>—</span>
+                              }
                             </td>
                             <td>
                               <input
@@ -6074,6 +6112,16 @@ function DailyReport() {
                     style={{ marginRight: '10px', width: '18px', height: '18px' }}
                   />
                   <span style={{ fontSize: '14px', fontWeight: 'bold' }}>📦 BOM Materials & Documents</span>
+                </label>
+
+                <label style={{ display: 'flex', alignItems: 'center', padding: '10px', backgroundColor: '#e8eaf6', borderRadius: '5px', cursor: 'pointer', gridColumn: '1 / -1' }}>
+                  <input
+                    type="checkbox"
+                    checked={reportOptions.includeIqcSummary}
+                    onChange={(e) => setReportOptions({ ...reportOptions, includeIqcSummary: e.target.checked })}
+                    style={{ marginRight: '10px', width: '18px', height: '18px' }}
+                  />
+                  <span style={{ fontSize: '14px', fontWeight: 'bold' }}>📋 IQC Summary (FTR Assigned Modules per PDI)</span>
                 </label>
               </div>
             </div>

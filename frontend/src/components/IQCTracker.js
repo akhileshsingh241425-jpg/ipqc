@@ -32,6 +32,8 @@ const EMPTY_COC = { invoiceNo: '', date: '', qty: '', partyName: '' };
 
 function IQCTracker({ companyName, companyId, productionRecords = [] }) {
   const [pdiOffers, setPdiOffers] = useState({});
+  const [ftrAssignedCounts, setFtrAssignedCounts] = useState({});
+  const [ftrPdiList, setFtrPdiList] = useState([]);
   const [bomOverrides, setBomOverrides] = useState({});
   const [cocMapping, setCocMapping] = useState({});
   const [activePdi, setActivePdi] = useState(null);
@@ -41,22 +43,40 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
   const [saveMsg, setSaveMsg] = useState('');
   const [view, setView] = useState('overview');
 
-  // Build PDI list from production records
+  const normalizePdi = (value) => String(value || '').trim().toLowerCase();
+
+  // Build PDI list (FTR assigned + non-assigned production PDIs)
   const pdis = useCallback(() => {
-    const map = {};
+    const productionMap = {};
     (productionRecords || []).forEach(r => {
       const p = r.pdi;
       if (!p || !p.trim()) return;
-      if (!map[p]) map[p] = { name: p, produced: 0, records: 0 };
-      map[p].produced += (r.dayProduction || 0) + (r.nightProduction || 0);
-      map[p].records += 1;
+      if (!productionMap[p]) productionMap[p] = { name: p, produced: 0, records: 0 };
+      productionMap[p].produced += (r.dayProduction || 0) + (r.nightProduction || 0);
+      productionMap[p].records += 1;
     });
-    return Object.values(map).sort((a, b) => {
+
+    const allPdiNames = new Set([
+      ...Object.keys(productionMap),
+      ...(Array.isArray(ftrPdiList) ? ftrPdiList.map(x => x.name).filter(Boolean) : [])
+    ]);
+
+    return Array.from(allPdiNames).map((name) => {
+      const prod = productionMap[name] || { produced: 0, records: 0 };
+      const assignedCount = ftrAssignedCounts[normalizePdi(name)];
+      return {
+        name,
+        produced: prod.produced,
+        records: prod.records,
+        assigned: assignedCount,
+        isFtrAssigned: assignedCount !== undefined
+      };
+    }).sort((a, b) => {
       const na = parseInt(a.name.replace(/\D/g, '')) || 0;
       const nb = parseInt(b.name.replace(/\D/g, '')) || 0;
       return na - nb;
     });
-  }, [productionRecords])();
+  }, [productionRecords, ftrPdiList, ftrAssignedCounts])();
 
   // Load saved data on mount
   const loadData = useCallback(async () => {
@@ -74,7 +94,34 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
     finally { setLoading(false); }
   }, [companyId]);
 
+  // Load FTR assigned module counts (source of truth for PDI offered qty)
+  const loadFtrAssignedCounts = useCallback(async () => {
+    if (!companyId) return;
+    try {
+      const res = await axios.get(`${API_BASE_URL}/ftr/company/${companyId}`);
+      const assignments = Array.isArray(res.data?.pdi_assignments) ? res.data.pdi_assignments : [];
+      const mapped = {};
+
+      assignments.forEach((item) => {
+        const pdiName = item?.pdi_number;
+        if (!pdiName) return;
+        mapped[normalizePdi(pdiName)] = parseInt(item?.count, 10) || 0;
+      });
+
+      setFtrPdiList(assignments.map((item) => ({
+        name: item?.pdi_number,
+        count: parseInt(item?.count, 10) || 0
+      })).filter((item) => item.name));
+      setFtrAssignedCounts(mapped);
+    } catch (e) {
+      console.error('Failed to load FTR assigned counts:', e);
+      setFtrPdiList([]);
+      setFtrAssignedCounts({});
+    }
+  }, [companyId]);
+
   useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { loadFtrAssignedCounts(); }, [loadFtrAssignedCounts]);
   useEffect(() => { if (pdis.length > 0 && !activePdi) setActivePdi(pdis[0].name); }, [pdis, activePdi]);
 
   // Save
@@ -83,6 +130,7 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
     setSaving(true); setSaveMsg('');
     try {
       await axios.put(`${API_BASE_URL}/companies/${companyId}/iqc-data`, { pdiOffers, bomOverrides, cocMapping });
+      await loadFtrAssignedCounts();
       setSaveMsg('Saved!');
       setTimeout(() => setSaveMsg(''), 3000);
     } catch (e) { setSaveMsg('Save failed'); console.error(e); }
@@ -90,7 +138,12 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
   };
 
   // Helpers
-  const getOffer = (pdi) => pdiOffers[pdi] || 0;
+  const getOffer = (pdi) => {
+    const normalized = normalizePdi(pdi);
+    if (ftrAssignedCounts[normalized] !== undefined) return ftrAssignedCounts[normalized];
+    return pdiOffers[pdi] || 0;
+  };
+  const hasFtrAssignedOffer = (pdi) => ftrAssignedCounts[normalizePdi(pdi)] !== undefined;
   const getBom = (pdi, mk) => {
     const m = BOM_MATERIALS.find(x => x.key === mk);
     if (!m) return 0;
@@ -176,17 +229,28 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
                   </div>
                   <div style={{ marginBottom: '12px' }}>
                     <label style={{ fontSize: '11px', color: '#666', display: 'block', marginBottom: '4px' }}>PDI Offer Qty (Modules)</label>
-                    <input type="number" value={pdiOffers[pdi.name] || ''} onChange={e => { e.stopPropagation(); setPdiOffers(p => ({ ...p, [pdi.name]: parseInt(e.target.value) || 0 })); }}
+                    <input type="number" value={getOffer(pdi.name) || ''} onChange={e => { e.stopPropagation(); if (hasFtrAssignedOffer(pdi.name)) return; setPdiOffers(p => ({ ...p, [pdi.name]: parseInt(e.target.value) || 0 })); }}
                       onClick={e => e.stopPropagation()} placeholder={`e.g. ${pdi.produced}`}
+                      disabled={hasFtrAssignedOffer(pdi.name)}
                       style={{ width: '100%', padding: '8px 12px', border: '2px solid #c5cae9', borderRadius: '6px', fontSize: '14px', fontWeight: '600', boxSizing: 'border-box' }} />
+                    {hasFtrAssignedOffer(pdi.name) && (
+                      <div style={{ fontSize: '10px', color: '#2e7d32', marginTop: '4px' }}>From FTR assigned modules</div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', color: '#666' }}>COC: <strong>{matWithCoc}/{BOM_MATERIALS.length}</strong></span>
-                    <span style={{ fontSize: '10px', padding: '3px 10px', borderRadius: '10px', fontWeight: '600',
-                      background: matWithCoc === BOM_MATERIALS.length ? '#e8f5e9' : matWithCoc > 0 ? '#fff3e0' : '#ffebee',
-                      color: matWithCoc === BOM_MATERIALS.length ? '#2e7d32' : matWithCoc > 0 ? '#e65100' : '#c62828' }}>
-                      {matWithCoc === BOM_MATERIALS.length ? 'Complete' : matWithCoc > 0 ? 'Partial' : 'Pending'}
-                    </span>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      {!hasFtrAssignedOffer(pdi.name) && (
+                        <span style={{ fontSize: '10px', padding: '3px 10px', borderRadius: '10px', fontWeight: '600', background: '#fff8e1', color: '#ef6c00' }}>
+                          Manual Entry
+                        </span>
+                      )}
+                      <span style={{ fontSize: '10px', padding: '3px 10px', borderRadius: '10px', fontWeight: '600',
+                        background: matWithCoc === BOM_MATERIALS.length ? '#e8f5e9' : matWithCoc > 0 ? '#fff3e0' : '#ffebee',
+                        color: matWithCoc === BOM_MATERIALS.length ? '#2e7d32' : matWithCoc > 0 ? '#e65100' : '#c62828' }}>
+                        {matWithCoc === BOM_MATERIALS.length ? 'Complete' : matWithCoc > 0 ? 'Partial' : 'Pending'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -216,8 +280,10 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <label style={{ fontSize: '12px', color: '#666' }}>Offer Qty:</label>
-            <input type="number" value={pdiOffers[activePdi] || ''} onChange={e => setPdiOffers(p => ({ ...p, [activePdi]: parseInt(e.target.value) || 0 }))}
-              placeholder="Enter offered modules" style={{ width: '150px', padding: '8px', border: '2px solid #1976d2', borderRadius: '6px', fontWeight: '700', fontSize: '14px' }} />
+            <input type="number" value={getOffer(activePdi) || ''} onChange={e => { if (hasFtrAssignedOffer(activePdi)) return; setPdiOffers(p => ({ ...p, [activePdi]: parseInt(e.target.value) || 0 })); }}
+              placeholder="Enter offered modules" disabled={hasFtrAssignedOffer(activePdi)} style={{ width: '150px', padding: '8px', border: '2px solid #1976d2', borderRadius: '6px', fontWeight: '700', fontSize: '14px' }} />
+            {hasFtrAssignedOffer(activePdi) && <span style={{ fontSize: '11px', color: '#2e7d32' }}>From FTR</span>}
+            {!hasFtrAssignedOffer(activePdi) && <span style={{ fontSize: '11px', color: '#ef6c00' }}>Manual allowed (not assigned in FTR)</span>}
           </div>
         </div>
 
