@@ -35,15 +35,26 @@ const MRP_ASSIGNED_API = 'https://umanmrp.in/a/get_assigned_coc_records.php';
 // Map software company names → MRP assigned_to codes
 const COMPANY_NAME_TO_MRP = {
   'sterlin and wilson': 'S&W',
+  'sterlin & wilson': 'S&W',
+  'sterlin': 'S&W',
   's&w': 'S&W',
   'larsen & toubro': 'L&T',
+  'larsen and toubro': 'L&T',
   'l&t': 'L&T',
   'rays power': 'Rays',
+  'rays power infra': 'Rays',
   'rays': 'Rays',
 };
 const getMrpCompanyCode = (name) => {
   if (!name) return '';
-  return COMPANY_NAME_TO_MRP[name.trim().toLowerCase()] || name;
+  const lower = name.trim().toLowerCase();
+  // Exact match first
+  if (COMPANY_NAME_TO_MRP[lower]) return COMPANY_NAME_TO_MRP[lower];
+  // Partial match
+  for (const [pattern, code] of Object.entries(COMPANY_NAME_TO_MRP)) {
+    if (lower.includes(pattern) || pattern.includes(lower)) return code;
+  }
+  return name;
 };
 
 // Match MRP "Lot X" → PDI name in our system
@@ -192,7 +203,7 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
     if (!silent) setSyncing(true);
     try {
       const toDate = new Date().toISOString().split('T')[0];
-      const fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const fromDate = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
       // Fetch both APIs in parallel
       const [api1Res, api2Res] = await Promise.all([
@@ -208,36 +219,36 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
       const mrpCode = getMrpCompanyCode(companyName);
       const myAssigned = allAssigned.filter(r => r.assigned_to === mrpCode);
 
-      // Step 1: Build new inventory from API 1
-      let newInventory = null;
+      console.log(`[IQC Sync] Company: "${companyName}" → MRP code: "${mrpCode}"`);
+      console.log(`[IQC Sync] API1: ${mrpRecords.length} COCs | API2: ${allAssigned.length} total, ${myAssigned.length} for ${mrpCode}`);
+      console.log(`[IQC Sync] PDIs in system:`, pdisRef.current.map(p => p.name));
+      console.log(`[IQC Sync] API2 unique companies:`, [...new Set(allAssigned.map(r => r.assigned_to))]);
+
+      // ── Step 1: Build inventory from API 1 ──
+      // Read current state via updater, build newInventory, return it
+      let builtInventory = null;
       let addedCount = 0;
 
       setCocInventory(prev => {
         const next = {};
-        Object.keys(prev).forEach(k => { next[k] = [...(prev[k] || [])]; });
-
-        const existingIdMap = new Set();
-        const existingInvMap = {};
-        Object.entries(next).forEach(([mk, items]) => {
-          existingInvMap[mk] = new Set();
-          (items || []).forEach(i => {
-            if (i.mrpId) existingIdMap.add(String(i.mrpId));
-            existingInvMap[mk].add(`${(i.invoiceNo || '').toLowerCase()}_${i.lotBatchNo || ''}`);
-          });
+        // Keep existing manual entries (source !== 'mrp')
+        Object.entries(prev).forEach(([mk, items]) => {
+          next[mk] = (items || []).filter(i => i.source !== 'mrp');
         });
 
+        // Add ALL MRP records fresh (avoids stale duplicates)
         mrpRecords.forEach(rec => {
           const matKey = matchMaterialKey(rec.material_name);
           if (!matKey) return;
-          if (rec.id && existingIdMap.has(String(rec.id))) return;
           const invNo = rec.invoice_no || '';
           const lotBatch = rec.lot_batch_no || '';
           if (!invNo) return;
-          if (!existingInvMap[matKey]) existingInvMap[matKey] = new Set();
-          const dupKey = `${invNo.toLowerCase()}_${lotBatch}`;
-          if (existingInvMap[matKey].has(dupKey)) return;
 
           if (!next[matKey]) next[matKey] = [];
+          // Dedup within batch
+          const dupKey = `${invNo.toLowerCase()}_${lotBatch}`;
+          if (next[matKey].find(i => `${(i.invoiceNo || '').toLowerCase()}_${i.lotBatchNo || ''}` === dupKey)) return;
+
           next[matKey].push({
             id: `mrp_${rec.id || Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             mrpId: String(rec.id || ''),
@@ -252,56 +263,62 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
             cocDocUrl: rec.coc_document_url || '',
             iqcDocUrl: rec.iqc_document_url || '',
           });
-          existingInvMap[matKey].add(dupKey);
-          existingIdMap.add(String(rec.id));
           addedCount++;
         });
 
-        newInventory = next;
+        builtInventory = next;
         return next;
       });
 
-      // Step 2: Auto-allocate from API 2 (assigned COCs → matching PDIs)
+      // ── Step 2: Auto-allocate from API 2 ──
       const currentPdis = pdisRef.current;
       let autoCount = 0;
+      let skipReasons = { noMatKey: 0, zeroQty: 0, noPdiMatch: 0, noInvMatch: 0, duplicate: 0 };
 
-      if (myAssigned.length > 0 && currentPdis.length > 0 && newInventory) {
+      if (myAssigned.length > 0 && currentPdis.length > 0 && builtInventory) {
         setCocAllocations(prev => {
           const next = {};
           // Preserve manual allocations, remove old MRP auto-assignments
-          Object.entries(prev).forEach(([k, allocs]) => {
+          Object.entries(prev).forEach(([allocKey, allocs]) => {
             const manual = (allocs || []).filter(a => a.source !== 'mrp_assigned');
-            if (manual.length > 0) next[k] = [...manual];
+            if (manual.length > 0) next[allocKey] = [...manual];
           });
 
           myAssigned.forEach(rec => {
             const matKey = matchMaterialKey(rec.material_name);
-            if (!matKey) return;
+            if (!matKey) { skipReasons.noMatKey++; return; }
             const qty = parseFloat(rec.remaining_qty) || 0;
-            if (qty <= 0) return;
+            if (qty <= 0) { skipReasons.zeroQty++; return; }
 
-            // Match "Lot 5" → PDI name in our system (e.g. "PDI 5", "PDI-5")
+            // Match "Lot 5" / "Lot-5" → PDI name in our system
             const pdiName = matchPdiFromLot(rec.pdi_no, currentPdis);
-            if (!pdiName) return;
+            if (!pdiName) { skipReasons.noPdiMatch++; console.log(`[IQC Sync] No PDI match for "${rec.pdi_no}" (material: ${rec.material_name})`); return; }
 
             // Find matching COC in inventory by invoice_no + lot_batch_no
-            const invItems = newInventory[matKey] || [];
-            const matched = invItems.find(c =>
+            const invItems = builtInventory[matKey] || [];
+            let matched = invItems.find(c =>
               c.invoiceNo === rec.invoice_no && (c.lotBatchNo || '') === (rec.lot_batch_no || '')
             );
-            if (!matched) return;
-
-            const k = `${pdiName}_${matKey}`;
-            if (!next[k]) next[k] = [];
-            // Don't duplicate same COC assignment
-            if (!next[k].find(a => a.cocId === matched.id && a.source === 'mrp_assigned')) {
-              next[k].push({ cocId: matched.id, qty, source: 'mrp_assigned' });
-              autoCount++;
+            // Fallback: match by invoice_no only
+            if (!matched) {
+              matched = invItems.find(c => c.invoiceNo === rec.invoice_no);
             }
+            if (!matched) { skipReasons.noInvMatch++; console.log(`[IQC Sync] No inventory match for invoice "${rec.invoice_no}" lot "${rec.lot_batch_no}" mat "${matKey}"`); return; }
+
+            const allocKey = `${pdiName}_${matKey}`;
+            if (!next[allocKey]) next[allocKey] = [];
+            // Don't duplicate same COC assignment
+            if (next[allocKey].find(a => a.cocId === matched.id && a.source === 'mrp_assigned')) { skipReasons.duplicate++; return; }
+
+            next[allocKey].push({ cocId: matched.id, qty, source: 'mrp_assigned' });
+            autoCount++;
           });
 
+          console.log(`[IQC Sync] Auto-assigned: ${autoCount} | Skipped:`, skipReasons);
           return next;
         });
+      } else {
+        console.log(`[IQC Sync] Skip auto-assign: myAssigned=${myAssigned.length}, pdis=${currentPdis.length}, inventory=${!!builtInventory}`);
       }
 
       if (!silent) {
@@ -328,13 +345,13 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { loadFtrAssignedCounts(); }, [loadFtrAssignedCounts]);
   useEffect(() => { if (pdis.length > 0 && !activePdi) setActivePdi(pdis[0].name); }, [pdis, activePdi]);
-  // Auto-sync MRP COC when PDIs are available (runs once)
+  // Auto-sync MRP COC after data loaded + PDIs available (runs once per company)
   useEffect(() => {
-    if (!hasSyncedRef.current && pdis.length > 0) {
+    if (!hasSyncedRef.current && pdis.length > 0 && !loading) {
       hasSyncedRef.current = true;
       syncMrpCoc(true);
     }
-  }, [pdis.length, syncMrpCoc]);
+  }, [pdis.length, syncMrpCoc, loading]);
 
   // Save
   const saveData = async () => {
