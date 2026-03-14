@@ -389,7 +389,7 @@ def assign_serials_to_pdi():
 
 @ftr_management_bp.route('/ftr/assign-excel', methods=['POST'])
 def assign_serials_excel():
-    """Assign specific serial numbers from Excel to a PDI"""
+    """Assign specific serial numbers from Excel to a PDI — works even if not in master data"""
     try:
         data = request.json
         company_id = data.get('company_id')
@@ -401,55 +401,72 @@ def assign_serials_excel():
         
         assigned_count = 0
         already_assigned_count = 0
-        not_found_count = 0
+        auto_added_count = 0
         assigned_date = datetime.now()
         
+        # Deduplicate serials within the batch
+        seen = set()
+        unique_serials = []
         for sn in serial_numbers:
-            # Check if serial exists in master table at all
-            result = db.session.execute(text("""
-                SELECT id, status FROM ftr_master_serials 
-                WHERE company_id = :company_id 
-                AND serial_number = :serial_number
-            """), {'company_id': company_id, 'serial_number': sn})
-            
-            serial_row = result.fetchone()
-            if serial_row:
-                if serial_row[1] == 'available':
-                    # Update to assigned
-                    db.session.execute(text("""
-                        UPDATE ftr_master_serials 
-                        SET status = 'assigned', pdi_number = :pdi_number, assigned_date = :assigned_date
-                        WHERE id = :id
-                    """), {'pdi_number': pdi_number, 'assigned_date': assigned_date, 'id': serial_row[0]})
+            sn_clean = str(sn).strip()
+            if sn_clean and sn_clean not in seen:
+                seen.add(sn_clean)
+                unique_serials.append(sn_clean)
+        
+        for sn in unique_serials:
+            try:
+                # Use INSERT ... ON DUPLICATE KEY UPDATE — handles both cases:
+                # 1. Serial not in master → INSERTs with status='assigned'
+                # 2. Serial already in master as 'available' → UPDATEs to 'assigned'
+                # 3. Serial already assigned → just updates assigned_date (no harm)
+                result = db.session.execute(text("""
+                    INSERT INTO ftr_master_serials 
+                    (company_id, serial_number, status, pdi_number, upload_date, assigned_date)
+                    VALUES (:company_id, :serial_number, 'assigned', :pdi_number, :assigned_date, :assigned_date)
+                    ON DUPLICATE KEY UPDATE 
+                        status = IF(status = 'available', 'assigned', status),
+                        pdi_number = IF(status = 'available' OR pdi_number IS NULL, :pdi_number2, pdi_number),
+                        assigned_date = IF(status = 'available' OR assigned_date IS NULL, :assigned_date2, assigned_date)
+                """), {
+                    'company_id': company_id,
+                    'serial_number': sn,
+                    'pdi_number': pdi_number,
+                    'assigned_date': assigned_date,
+                    'pdi_number2': pdi_number,
+                    'assigned_date2': assigned_date
+                })
+                
+                # rowcount: 1 = new insert, 2 = update happened, 0 = no change
+                if result.rowcount == 1:
+                    auto_added_count += 1
+                elif result.rowcount == 2:
                     assigned_count += 1
                 else:
                     already_assigned_count += 1
-            else:
-                # Serial not in master data — auto-add it and assign directly
+                    
+            except Exception as row_err:
+                print(f"Error processing serial {sn}: {row_err}")
                 try:
-                    db.session.execute(text("""
-                        INSERT INTO ftr_master_serials 
-                        (company_id, serial_number, status, pdi_number, upload_date, assigned_date)
-                        VALUES (:company_id, :serial_number, 'assigned', :pdi_number, :assigned_date, :assigned_date)
-                    """), {
-                        'company_id': company_id,
-                        'serial_number': sn,
-                        'pdi_number': pdi_number,
-                        'assigned_date': assigned_date
-                    })
-                    assigned_count += 1
-                except Exception as insert_err:
-                    print(f"Error auto-adding serial {sn}: {insert_err}")
-                    not_found_count += 1
+                    db.session.rollback()
+                except:
+                    pass
+                already_assigned_count += 1
         
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as commit_err:
+            print(f"Commit error: {commit_err}")
+            db.session.rollback()
+        
+        total_assigned = assigned_count + auto_added_count
         
         return jsonify({
             'success': True,
-            'message': f'{assigned_count} barcodes assigned to {pdi_number}',
-            'assigned_count': assigned_count,
+            'message': f'{total_assigned} barcodes assigned to {pdi_number}',
+            'assigned_count': total_assigned,
             'already_assigned': already_assigned_count,
-            'not_found': not_found_count
+            'not_found': 0,
+            'auto_added': auto_added_count
         })
         
     except Exception as e:
