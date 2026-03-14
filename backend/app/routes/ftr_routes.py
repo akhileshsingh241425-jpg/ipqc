@@ -2038,12 +2038,12 @@ def get_pdi_production_status(company_id):
             "pdi_wise": pdi_wise,
             "extra_dispatched": {
                 "count": extra_dispatched_count,
-                "serials": extra_dispatched_serials[:500],
+                "serials": extra_dispatched_serials,
                 "pallet_groups": extra_pallet_list
             },
             "extra_packed": {
                 "count": extra_packed_count,
-                "serials": extra_packed_serials[:500],
+                "serials": extra_packed_serials,
                 "pallet_groups": extra_packed_pallet_list
             }
         })

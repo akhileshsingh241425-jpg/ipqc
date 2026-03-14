@@ -140,6 +140,7 @@ const DispatchTracker = () => {
     let allSerials = [];
     const companyName = selectedCompany?.companyName || 'Company';
     
+    // PDI-wise serials
     productionData.pdi_wise.forEach(pdi => {
       if (type === 'dispatched' || type === 'all') {
         (pdi.dispatched_serials || []).forEach(s => {
@@ -178,6 +179,36 @@ const DispatchTracker = () => {
         });
       }
     });
+
+    // Extra Packed — packed but not in any PDI
+    if (type === 'packed' || type === 'all') {
+      const ep = productionData?.extra_packed || {};
+      (ep.serials || []).forEach(s => {
+        allSerials.push({
+          'PDI Number': 'Extra (No PDI)',
+          'Serial Number': s.serial,
+          'Status': 'Extra Packed',
+          'Pallet No': s.pallet_no || '',
+          'Dispatch Party': s.party_name || s.sub_party || '',
+          'Date': ''
+        });
+      });
+    }
+
+    // Extra Dispatched — dispatched but not in any PDI
+    if (type === 'dispatched' || type === 'all') {
+      const ed = productionData?.extra_dispatched || {};
+      (ed.serials || []).forEach(s => {
+        allSerials.push({
+          'PDI Number': 'Extra (No PDI)',
+          'Serial Number': s.serial,
+          'Status': 'Extra Dispatched',
+          'Pallet No': s.pallet_no || '',
+          'Dispatch Party': s.dispatch_party || s.sub_party || '',
+          'Date': s.date || ''
+        });
+      });
+    }
     
     if (allSerials.length === 0) {
       alert('No serials to export!');

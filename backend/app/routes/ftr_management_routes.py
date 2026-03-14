@@ -425,7 +425,22 @@ def assign_serials_excel():
                 else:
                     already_assigned_count += 1
             else:
-                not_found_count += 1
+                # Serial not in master data — auto-add it and assign directly
+                try:
+                    db.session.execute(text("""
+                        INSERT INTO ftr_master_serials 
+                        (company_id, serial_number, status, pdi_number, upload_date, assigned_date)
+                        VALUES (:company_id, :serial_number, 'assigned', :pdi_number, :assigned_date, :assigned_date)
+                    """), {
+                        'company_id': company_id,
+                        'serial_number': sn,
+                        'pdi_number': pdi_number,
+                        'assigned_date': assigned_date
+                    })
+                    assigned_count += 1
+                except Exception as insert_err:
+                    print(f"Error auto-adding serial {sn}: {insert_err}")
+                    not_found_count += 1
         
         db.session.commit()
         

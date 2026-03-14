@@ -602,7 +602,7 @@ const FTRManagement = () => {
             
             let summaryParts = [`✅ Assigned: ${uploadedCount}`];
             if (alreadyAssignedCount > 0) summaryParts.push(`⚠️ Already assigned: ${alreadyAssignedCount}`);
-            if (notFoundCount > 0) summaryParts.push(`❌ Not found in master: ${notFoundCount}`);
+            if (notFoundCount > 0) summaryParts.push(`📝 Auto-added (not in master): ${notFoundCount}`);
             if (failedCount > 0) summaryParts.push(`🔴 Failed: ${failedCount}`);
             alert(summaryParts.join('\n'));
             
