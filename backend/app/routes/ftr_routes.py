@@ -1572,18 +1572,17 @@ def get_pdi_production_status(company_id):
                     print(f"[PDI Production] Packing API data: status={data.get('status')}, count={len(data.get('data', []))}")
                     if data.get('status') == 'success' or data.get('data'):
                         items = data.get('data', [])
-                        party_count = 0
                         for item in items:
                             barcode = item.get('barcode', '').strip().upper()
                             if barcode:
+                                packed_party = item.get('packed_party', '') or party_name
                                 packed_lookup[barcode] = {
                                     'pallet_no': item.get('pallet_no', ''),
                                     'running_order': item.get('running_order', ''),
-                                    'party_name': party_name,
+                                    'party_name': packed_party,
                                     'status': 'Packed'
                                 }
-                                party_count += 1
-                        party_fetch_counts[party_name] = party_count
+                                party_fetch_counts[packed_party] = party_fetch_counts.get(packed_party, 0) + 1
                         if items:
                             print(f"[PDI Production] Sample MRP barcode: {items[0].get('barcode', 'N/A')}")
                     else:
