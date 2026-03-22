@@ -16,6 +16,7 @@ const QMSAssistant = ({ isOpen, onClose }) => {
   const [isExtracting, setIsExtracting] = useState(false);
   const [aiStatus, setAiStatus] = useState(null);
   const [typingText, setTypingText] = useState('');
+  // eslint-disable-next-line no-unused-vars
   const [isTypingAnim, setIsTypingAnim] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const chatEndRef = useRef(null);
@@ -222,7 +223,7 @@ const QMSAssistant = ({ isOpen, onClose }) => {
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/^### (.*$)/gm, '<h4 class="qa2-h4">$1</h4>')
       .replace(/^## (.*$)/gm, '<h3 class="qa2-h3">$1</h3>')
-      .replace(/^[•\-] (.*$)/gm, '<div class="qa2-bullet"><span class="qa2-bdot">•</span><span>$1</span></div>')
+      .replace(/^[•-] (.*$)/gm, '<div class="qa2-bullet"><span class="qa2-bdot">•</span><span>$1</span></div>')
       .replace(/^(\d+)\. (.*$)/gm, '<div class="qa2-numlist"><span class="qa2-nnum">$1.</span><span>$2</span></div>')
       .replace(/^---$/gm, '<hr class="qa2-hr"/>')
       .replace(/\n/g, '<br/>');

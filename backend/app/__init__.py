@@ -1,4 +1,4 @@
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, jsonify
 from flask_cors import CORS
 import os
 import threading
@@ -129,10 +129,12 @@ def create_app():
         pdf_folder = os.path.join(os.path.dirname(__file__), '..', 'generated_pdfs')
         return send_from_directory(pdf_folder, filename)
     
-    # Serve React frontend
+    # Serve React frontend (but never for /api/* - those must be handled by blueprints)
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def serve_frontend(path):
+        if path.startswith('api/'):
+            return jsonify({'error': 'API endpoint not found', 'path': f'/{path}'}), 404
         static_folder = os.path.join(os.path.dirname(__file__), '..', 'static')
         if path and os.path.exists(os.path.join(static_folder, path)):
             return send_from_directory(static_folder, path)

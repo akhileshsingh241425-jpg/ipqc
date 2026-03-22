@@ -136,7 +136,9 @@ const FTRManagement = () => {
           
           // Extract serial numbers with details
           const allSerials = [];
+          // eslint-disable-next-line no-unused-vars
           let okCount = 0;
+          // eslint-disable-next-line no-unused-vars
           let rejectedCount = 0;
           let emptyRowCount = 0;
           
@@ -563,6 +565,7 @@ const FTRManagement = () => {
           const totalBatches = Math.ceil(serialNumbers.length / BATCH_SIZE);
           let uploadedCount = 0;
           let alreadyAssignedCount = 0;
+          // eslint-disable-next-line no-unused-vars
           let notFoundCount = 0;
           let failedCount = 0;
           

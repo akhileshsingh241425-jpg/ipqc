@@ -31,6 +31,7 @@ const MATERIAL_NAME_MAP = {
 };
 
 // Helper function to get display name
+// eslint-disable-next-line no-unused-vars
 const getDisplayMaterialName = (dbName) => MATERIAL_NAME_MAP[dbName] || dbName;
 
 // BOM Materials by Wattage (based on PHP logic)
@@ -1980,7 +1981,6 @@ function DailyReport() {
   const calculateRequiredCocs = async (pdiNumber, wattage) => {
     try {
       setLoadingRequiredCocs(true);
-      const API_BASE = getAPIBase();
 
       // Get PDI records
       const pdiRecords = selectedCompany.productionRecords.filter(r => r.pdi === pdiNumber);
@@ -2547,6 +2547,7 @@ function DailyReport() {
         sum + (r.dayProduction || 0) + (r.nightProduction || 0), 0
       );
 
+      // eslint-disable-next-line no-unused-vars
       const totalMW = ((totalProduction * parseFloat(selectedCompany.moduleWattage)) / 1000000).toFixed(2);
 
       const payload = {

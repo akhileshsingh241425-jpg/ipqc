@@ -395,6 +395,7 @@ function IQCTracker({ companyName, companyId, productionRecords = [] }) {
   };
 
   // Available qty for a COC (total - used by others)
+  // eslint-disable-next-line no-unused-vars
   const getCocAvailable = (matKey, cocId, excludeKey = null) => {
     const inv = (cocInventory[matKey] || []).find(c => c.id === cocId);
     if (!inv) return 0;

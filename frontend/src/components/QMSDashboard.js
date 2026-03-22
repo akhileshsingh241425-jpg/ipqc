@@ -243,6 +243,7 @@ function formatDate(dateStr) {
 // ═══════════════════════════════════════════════
 const QMSDashboard = () => {
   const [documents, setDocuments] = useState([]);
+  // eslint-disable-next-line no-unused-vars
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES);
   const [stats, setStats] = useState({ total: 0, approved: 0, draft: 0, under_review: 0, obsolete: 0 });
   const [categoryCounts, setCategoryCounts] = useState({});
