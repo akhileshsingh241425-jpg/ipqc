@@ -1556,6 +1556,7 @@ def get_pdi_production_status(company_id):
         
         # Fetch packed serials from packing API
         packed_lookup = {}  # serial -> {pallet_no, running_order, ...}
+        party_fetch_counts = {}  # party_name -> count of barcodes fetched
         print(f"[PDI Production] Fetching packing data for: {packing_party_names}")
         
         for party_name in packing_party_names:
@@ -1571,6 +1572,7 @@ def get_pdi_production_status(company_id):
                     print(f"[PDI Production] Packing API data: status={data.get('status')}, count={len(data.get('data', []))}")
                     if data.get('status') == 'success' or data.get('data'):
                         items = data.get('data', [])
+                        party_count = 0
                         for item in items:
                             barcode = item.get('barcode', '').strip().upper()
                             if barcode:
@@ -1580,6 +1582,8 @@ def get_pdi_production_status(company_id):
                                     'party_name': party_name,
                                     'status': 'Packed'
                                 }
+                                party_count += 1
+                        party_fetch_counts[party_name] = party_count
                         if items:
                             print(f"[PDI Production] Sample MRP barcode: {items[0].get('barcode', 'N/A')}")
             except Exception as e:
@@ -1919,7 +1923,9 @@ def get_pdi_production_status(company_id):
             'sample_mrp_barcodes': sample_mrp_barcodes,
             'sample_packed_barcodes': sample_packed_barcodes,
             'sample_local_serials': sample_local_serials,
-            'dispatch_api_error': dispatch_api_error
+            'dispatch_api_error': dispatch_api_error,
+            'packing_party_names': packing_party_names,
+            'party_fetch_counts': party_fetch_counts
         }
 
         # 8. Build combined PDI-wise results
