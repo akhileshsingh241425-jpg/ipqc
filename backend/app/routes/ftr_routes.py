@@ -1586,8 +1586,13 @@ def get_pdi_production_status(company_id):
                         party_fetch_counts[party_name] = party_count
                         if items:
                             print(f"[PDI Production] Sample MRP barcode: {items[0].get('barcode', 'N/A')}")
+                    else:
+                        party_fetch_counts[party_name] = 0
+                else:
+                    party_fetch_counts[party_name] = 0
             except Exception as e:
                 print(f"[PDI Production] Packing API error ({party_name}): {e}")
+                party_fetch_counts[party_name] = 0
         
         print(f"[PDI Production] Total packed serials: {len(packed_lookup)}")
 

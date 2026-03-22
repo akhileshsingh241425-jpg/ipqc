@@ -397,18 +397,25 @@ const DispatchTracker = () => {
                     Packed API: <strong>{productionData.debug_info.live_packed_count || 0}</strong> | 
                     Packed Matches: <strong>{productionData.debug_info.packed_matches || 0}</strong>
                   </div>
-                  {productionData.debug_info.party_fetch_counts && Object.keys(productionData.debug_info.party_fetch_counts).length > 0 && (
-                    <div style={{marginTop: '8px', borderTop: '1px solid #bae6fd', paddingTop: '8px'}}>
-                      <strong style={{color: '#0369a1'}}>📋 Party-wise Packing Data:</strong>
+                  {/* Party-wise fetch info */}
+                  <div style={{marginTop: '8px', borderTop: '1px solid #bae6fd', paddingTop: '8px'}}>
+                    <strong style={{color: '#0369a1'}}>📋 Party-wise Packing Data Fetch:</strong>
+                    {productionData.debug_info.packing_party_names?.length > 0 ? (
                       <div style={{marginTop: '4px', display: 'flex', flexWrap: 'wrap', gap: '6px'}}>
-                        {Object.entries(productionData.debug_info.party_fetch_counts).map(([party, count]) => (
-                          <span key={party} style={{background: count > 0 ? '#dcfce7' : '#fee2e2', border: `1px solid ${count > 0 ? '#86efac' : '#fca5a5'}`, borderRadius: '6px', padding: '2px 8px', fontSize: '11px', color: count > 0 ? '#166534' : '#991b1b'}}>
-                            {party}: <strong>{count.toLocaleString()}</strong>
-                          </span>
-                        ))}
+                        {productionData.debug_info.packing_party_names.map((party) => {
+                          const count = (productionData.debug_info.party_fetch_counts || {})[party];
+                          const hasData = count !== undefined && count > 0;
+                          return (
+                            <span key={party} style={{background: hasData ? '#dcfce7' : '#fee2e2', border: `1px solid ${hasData ? '#86efac' : '#fca5a5'}`, borderRadius: '6px', padding: '3px 10px', fontSize: '11px', color: hasData ? '#166534' : '#991b1b'}}>
+                              {party}: <strong>{count !== undefined ? count.toLocaleString() : '?'}</strong>
+                            </span>
+                          );
+                        })}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div style={{marginTop: '4px', color: '#991b1b', fontSize: '11px'}}>No party names mapped for this company</div>
+                    )}
+                  </div>
                 </div>
               )}
 
